@@ -39,6 +39,17 @@ type RedisConfig struct {
 	Port     int    `mapstructure:"port"`
 	Password string `mapstructure:"password"`
 	DB       int    `mapstructure:"db"`
+	// 连接池配置
+	PoolSize     int `mapstructure:"pool_size"`
+	MinIdleConns int `mapstructure:"min_idle_conns"`
+	MaxRetries   int `mapstructure:"max_retries"`
+	// 超时配置（秒）
+	DialTimeout         int `mapstructure:"dial_timeout"`
+	ReadTimeout         int `mapstructure:"read_timeout"`
+	WriteTimeout        int `mapstructure:"write_timeout"`
+	PoolTimeout         int `mapstructure:"pool_timeout"`
+	IdleTimeout         int `mapstructure:"idle_timeout"`
+	IdleCheckFrequency  int `mapstructure:"idle_check_frequency"`
 }
 
 // LogConfig 日志配置
@@ -122,6 +133,17 @@ func setDefaults() {
 	viper.SetDefault("redis.host", "localhost")
 	viper.SetDefault("redis.port", 6379)
 	viper.SetDefault("redis.db", 0)
+	// Redis连接池默认配置
+	viper.SetDefault("redis.pool_size", 20)
+	viper.SetDefault("redis.min_idle_conns", 5)
+	viper.SetDefault("redis.max_retries", 3)
+	// Redis超时默认配置（秒）
+	viper.SetDefault("redis.dial_timeout", 10)
+	viper.SetDefault("redis.read_timeout", 5)
+	viper.SetDefault("redis.write_timeout", 5)
+	viper.SetDefault("redis.pool_timeout", 10)
+	viper.SetDefault("redis.idle_timeout", 300)
+	viper.SetDefault("redis.idle_check_frequency", 60)
 
 	// 日志默认配置
 	viper.SetDefault("log.level", "info")
