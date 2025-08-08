@@ -1,0 +1,43 @@
+# 数据采集子系统配置文件
+
+# 服务器配置
+server:
+  port: 8080
+  mode: debug  # debug, release
+
+# 数据库配置
+database:
+  host: localhost
+  port: 3306
+  user: root
+  password: ""  # 建议通过环境变量 DCS_DATABASE_PASSWORD 设置
+  dbname: trading_data
+  charset: utf8mb4
+
+# Redis配置
+redis:
+  host: localhost
+  port: 6379
+  password: ""  # 建议通过环境变量 DCS_REDIS_PASSWORD 设置
+  db: 0
+
+# 日志配置
+log:
+  level: info    # debug, info, warn, error
+  format: json   # json, text
+  output: stdout # stdout, file
+
+# Tushare配置
+tushare:
+  token: ""  # 建议通过环境变量 DCS_TUSHARE_TOKEN 设置
+  base_url: "http://api.tushare.pro"
+
+# 爬虫配置
+crawler:
+  user_agent: "Mozilla/5.0 (compatible; DataCollector/1.0)"
+  delay: 1000        # 请求延迟(毫秒)
+  parallelism: 2     # 并发数
+  target_urls:
+    - "https://finance.sina.com.cn/"
+    - "https://www.eastmoney.com/"
+    - "https://www.cninfo.com.cn/"
