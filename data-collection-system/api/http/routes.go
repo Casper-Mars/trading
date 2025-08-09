@@ -5,6 +5,8 @@ import (
 
 	"data-collection-system/api/http/handlers"
 	"data-collection-system/api/http/middleware"
+	mysqldao "data-collection-system/repo/mysql"
+	"data-collection-system/service/query"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -21,6 +23,11 @@ func SetupRoutes(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 	r.Use(middleware.CORS())
 	r.Use(middleware.RequestID())
 
+	// 创建DAO管理器和查询服务
+	daoManager := mysqldao.NewDAOManager(db)
+	queryService := query.NewQueryService(daoManager)
+	queryHandler := handlers.NewQueryHandler(queryService)
+
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -34,20 +41,48 @@ func SetupRoutes(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 	{
 		// 数据查询相关路由
 		data := v1.Group("/data")
+		data.Use(middleware.ValidateParams()) // 添加参数验证中间件
 		{
-			data.GET("/stocks", handlers.GetStocks(db))
-			data.GET("/stocks/:symbol", handlers.GetStockBySymbol(db))
-			data.GET("/market/:symbol", handlers.GetMarketData(db, rdb))
-			data.GET("/financial/:symbol", handlers.GetFinancialData(db, rdb))
-			data.GET("/news", handlers.GetNews(db, rdb))
-			data.GET("/macro", handlers.GetMacroData(db, rdb))
+			// 股票数据路由
+			stocks := data.Group("/stocks")
+			{
+				stocks.GET("/", queryHandler.GetStocks)
+				stocks.GET("/:symbol", middleware.ValidateStockSymbol(), queryHandler.GetStockBySymbol)
+			}
+
+			// 行情数据路由
+			market := data.Group("/market")
+			{
+				market.GET("/", queryHandler.GetMarketData)
+				market.GET("/:symbol/latest", middleware.ValidateStockSymbol(), queryHandler.GetLatestMarketData)
+			}
+
+			// 财务数据路由
+			financial := data.Group("/financial")
+			{
+				financial.GET("/", queryHandler.GetFinancialData)
+				financial.GET("/:symbol/latest", middleware.ValidateStockSymbol(), queryHandler.GetLatestFinancialData)
+			}
+
+			// 新闻数据路由
+			data.GET("/news", queryHandler.GetNews)
+
+			// 宏观数据路由
+			data.GET("/macro", queryHandler.GetMacroData)
 		}
 
 		// 任务管理相关路由
 		tasks := v1.Group("/tasks")
+		tasks.Use(middleware.SecurityCheck()) // 添加安全检查中间件
 		{
 			tasks.GET("/", handlers.GetTasks(db))
-			tasks.POST("/", handlers.CreateTask(db))
+			tasks.POST("/", middleware.ValidateJSON(struct {
+				Name        string                 `json:"name" binding:"required"`
+				Type        string                 `json:"type" binding:"required"`
+				Description string                 `json:"description"`
+				Config      map[string]interface{} `json:"config"`
+				Schedule    string                 `json:"schedule"`
+			}{}), handlers.CreateTask(db))
 			tasks.PUT("/:id", handlers.UpdateTask(db))
 			tasks.DELETE("/:id", handlers.DeleteTask(db))
 			tasks.POST("/:id/run", handlers.RunTask(db))
