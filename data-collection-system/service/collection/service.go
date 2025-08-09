@@ -12,18 +12,19 @@ import (
 
 // Service 数据采集业务服务
 type Service struct {
-	tushareService *TushareService
-	// newsService    *NewsService    // 新闻采集服务（预留）
-	// crawlerService *CrawlerService // 爬虫采集服务（预留）
+	tushareService  *TushareService
+	newsCrawler     *NewsCrawlerService // 新闻爬虫服务
+	newsScheduler   *NewsScheduler      // 新闻调度器
 }
 
 // Config 采集服务配置
 type Config struct {
-	TushareToken string `yaml:"tushare_token"`
-	TushareURL   string `yaml:"tushare_url"`
-	RateLimit    int    `yaml:"rate_limit"`
-	RetryCount   int    `yaml:"retry_count"`
-	Timeout      int    `yaml:"timeout"`
+	TushareToken string                `yaml:"tushare_token"`
+	TushareURL   string                `yaml:"tushare_url"`
+	RateLimit    int                   `yaml:"rate_limit"`
+	RetryCount   int                   `yaml:"retry_count"`
+	Timeout      int                   `yaml:"timeout"`
+	NewsCrawler  *NewsCrawlerConfig    `yaml:"news_crawler"`  // 新闻爬虫配置
 }
 
 // NewService 创建数据采集服务
@@ -33,6 +34,7 @@ func NewService(
 	marketRepo MarketRepository,
 	financialRepo FinancialRepository,
 	macroRepo MacroRepository,
+	newsRepo NewsRepository, // 新闻数据仓库
 ) (*Service, error) {
 	// 创建Tushare采集器
 	tushareCollector, err := tushare.NewCollector(&tushare.Config{
@@ -55,8 +57,21 @@ func NewService(
 		macroRepo,
 	)
 
+	// 创建新闻爬虫服务
+	var newsCrawler *NewsCrawlerService
+	var newsScheduler *NewsScheduler
+	if config.NewsCrawler != nil {
+		newsCrawler = NewNewsCrawlerService(config.NewsCrawler, newsRepo)
+		
+		// 创建新闻调度器
+		newsSources := GetDefaultNewsSources() // 获取默认新闻源配置
+		newsScheduler = NewNewsScheduler(newsCrawler, newsSources, nil) // logger可以后续注入
+	}
+
 	return &Service{
 		tushareService: tushareService,
+		newsCrawler:    newsCrawler,
+		newsScheduler:  newsScheduler,
 	}, nil
 }
 
@@ -293,7 +308,104 @@ func (s *Service) GetSupportedTaskTypes() []string {
 		"today_data",     // 今日综合数据
 		"weekly_data",    // 周度综合数据
 		"monthly_data",   // 月度综合数据
+		"news_crawl",     // 新闻爬取
+		"news_crawl_all", // 全量新闻爬取
 	}
+}
+
+// ==================== 新闻爬虫相关方法 ====================
+
+// StartNewsScheduler 启动新闻调度器
+func (s *Service) StartNewsScheduler(ctx context.Context) error {
+	if s.newsScheduler == nil {
+		return fmt.Errorf("新闻调度器未初始化")
+	}
+	return s.newsScheduler.Start(ctx)
+}
+
+// StopNewsScheduler 停止新闻调度器
+func (s *Service) StopNewsScheduler() {
+	if s.newsScheduler != nil {
+		s.newsScheduler.Stop()
+	}
+}
+
+// CrawlNews 爬取指定新闻源
+func (s *Service) CrawlNews(ctx context.Context, sourceName string) error {
+	if s.newsCrawler == nil {
+		return fmt.Errorf("新闻爬虫服务未初始化")
+	}
+	
+	// 查找新闻源
+	newsSources := GetDefaultNewsSources()
+	for _, source := range newsSources {
+		if source.Name == sourceName {
+			return s.newsCrawler.CrawlNewsSource(ctx, source)
+		}
+	}
+	
+	return fmt.Errorf("未找到新闻源: %s", sourceName)
+}
+
+// CrawlAllNews 爬取所有新闻源
+func (s *Service) CrawlAllNews(ctx context.Context) error {
+	if s.newsCrawler == nil {
+		return fmt.Errorf("新闻爬虫服务未初始化")
+	}
+	
+	newsSources := GetDefaultNewsSources()
+	return s.newsCrawler.CrawlMultipleSources(ctx, newsSources)
+}
+
+// TriggerNewsCrawl 手动触发新闻爬取
+func (s *Service) TriggerNewsCrawl(ctx context.Context, sourceName string) error {
+	if s.newsScheduler == nil {
+		return fmt.Errorf("新闻调度器未初始化")
+	}
+	return s.newsScheduler.TriggerCrawl(ctx, sourceName)
+}
+
+// TriggerNewsCrawlAll 手动触发全量新闻爬取
+func (s *Service) TriggerNewsCrawlAll(ctx context.Context) error {
+	if s.newsScheduler == nil {
+		return fmt.Errorf("新闻调度器未初始化")
+	}
+	return s.newsScheduler.TriggerCrawlAll(ctx)
+}
+
+// GetNewsSchedulerStatus 获取新闻调度器状态
+func (s *Service) GetNewsSchedulerStatus() map[string]interface{} {
+	if s.newsScheduler == nil {
+		return map[string]interface{}{
+			"initialized": false,
+			"message":     "新闻调度器未初始化",
+		}
+	}
+	return s.newsScheduler.GetStatus()
+}
+
+// AddNewsSource 添加新闻源
+func (s *Service) AddNewsSource(source *NewsSource) error {
+	if s.newsScheduler == nil {
+		return fmt.Errorf("新闻调度器未初始化")
+	}
+	return s.newsScheduler.AddNewsSource(source)
+}
+
+// UpdateNewsSource 更新新闻源配置
+func (s *Service) UpdateNewsSource(name string, source *NewsSource) error {
+	if s.newsScheduler == nil {
+		return fmt.Errorf("新闻调度器未初始化")
+	}
+	return s.newsScheduler.UpdateNewsSource(name, source)
+}
+
+// RemoveNewsSource 移除新闻源
+func (s *Service) RemoveNewsSource(name string) error {
+	if s.newsScheduler == nil {
+		return fmt.Errorf("新闻调度器未初始化")
+	}
+	return s.newsScheduler.RemoveNewsSource(name)
 }
 
 // ExecuteCollectionTask 执行采集任务
@@ -340,6 +452,18 @@ func (s *Service) ExecuteCollectionTask(ctx context.Context, taskType string, pa
 
 	case "monthly_data":
 		return s.CollectMonthlyData(ctx)
+
+	case "news_crawl":
+		// 爬取指定新闻源
+		sourceName, ok := params["source_name"].(string)
+		if !ok || sourceName == "" {
+			return fmt.Errorf("新闻爬取任务需要指定source_name参数")
+		}
+		return s.CrawlNews(ctx, sourceName)
+
+	case "news_crawl_all":
+		// 爬取所有新闻源
+		return s.CrawlAllNews(ctx)
 
 	default:
 		return fmt.Errorf("不支持的采集任务类型: %s", taskType)

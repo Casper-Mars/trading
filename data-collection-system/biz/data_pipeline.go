@@ -23,12 +23,12 @@ type DataPipeline struct {
 
 // PipelineStats 管道统计信息
 type PipelineStats struct {
-	TotalTasks     int64     `json:"total_tasks"`
-	SuccessTasks   int64     `json:"success_tasks"`
-	FailedTasks    int64     `json:"failed_tasks"`
-	LastRunTime    time.Time `json:"last_run_time"`
-	LastSuccessTime time.Time `json:"last_success_time"`
-	AverageRunTime time.Duration `json:"average_run_time"`
+	TotalTasks      int64         `json:"total_tasks"`
+	SuccessTasks    int64         `json:"success_tasks"`
+	FailedTasks     int64         `json:"failed_tasks"`
+	LastRunTime     time.Time     `json:"last_run_time"`
+	LastSuccessTime time.Time     `json:"last_success_time"`
+	AverageRunTime  time.Duration `json:"average_run_time"`
 }
 
 // NewDataPipeline 创建数据管道业务编排服务

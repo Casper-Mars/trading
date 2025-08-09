@@ -42,6 +42,7 @@ type NewsData struct {
 	ID                uint64         `gorm:"primaryKey;autoIncrement" json:"id"`
 	Title             string         `gorm:"type:varchar(500);not null" json:"title" binding:"required"`
 	Content           string         `gorm:"type:text" json:"content"`
+	URL               string         `gorm:"type:varchar(1000);uniqueIndex:idx_url;not null" json:"url" binding:"required"`
 	Source            string         `gorm:"type:varchar(100)" json:"source"`
 	PublishTime       time.Time      `gorm:"type:datetime;not null;index:idx_publish_time" json:"publish_time" binding:"required"`
 	Category          string         `gorm:"type:varchar(50);index:idx_category" json:"category"`

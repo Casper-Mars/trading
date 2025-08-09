@@ -30,13 +30,18 @@ const (
 	ErrCodeOperationFailed
 
 	// 数据采集错误 (3000-3999)
-	ErrCodeCollection ErrorCode = 3000 + iota
-	ErrCodeDataSourceUnavailable
-	ErrCodeDataParsingFailed
-	ErrCodeDataValidationFailed
-	ErrCodeRateLimitExceeded
-	ErrCodeAPIKeyInvalid
-	ErrCodeQuotaExceeded
+ErrCodeCollection ErrorCode = 3000 + iota
+ErrCodeDataSourceUnavailable
+ErrCodeDataParsingFailed
+ErrCodeDataValidationFailed
+ErrCodeRateLimitExceeded
+ErrCodeAPIKeyInvalid
+ErrCodeQuotaExceeded
+ErrCodeCrawlerFailed
+ErrCodeDatabaseError
+ErrCodeInvalidOperation
+ErrCodeNotFound
+ErrCodeAlreadyExists
 )
 
 // AppError 应用错误结构

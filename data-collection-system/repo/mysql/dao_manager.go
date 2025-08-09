@@ -11,6 +11,7 @@ type daoManager struct {
 	marketDAO    MarketDataDAO
 	financialDAO FinancialDataDAO
 	newsDAO      NewsDataDAO
+	newsRepo     NewsRepository  // 新爬虫系统的新闻仓库
 	macroDAO     MacroDataDAO
 	taskDAO      DataTaskDAO
 }
@@ -23,6 +24,7 @@ func NewDAOManager(db *gorm.DB) DAOManager {
 		marketDAO:    NewMarketDataDAO(db),
 		financialDAO: NewFinancialDataDAO(db),
 		newsDAO:      NewNewsDataDAO(db),
+		newsRepo:     NewNewsRepository(db),  // 新爬虫系统的新闻仓库
 		macroDAO:     NewMacroDataDAO(db),
 		taskDAO:      NewDataTaskDAO(db),
 	}
@@ -46,6 +48,11 @@ func (d *daoManager) FinancialData() FinancialDataDAO {
 // NewsData 获取新闻数据DAO
 func (d *daoManager) NewsData() NewsDataDAO {
 	return d.newsDAO
+}
+
+// News 获取新闻仓库（新爬虫系统）
+func (d *daoManager) News() NewsRepository {
+	return d.newsRepo
 }
 
 // MacroData 获取宏观数据DAO
