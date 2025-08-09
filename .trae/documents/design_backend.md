@@ -501,22 +501,24 @@ data-collection-system/
 │   └── grpc/              # gRPC接口(预留)
 │
 ├── biz/                   # 业务编排层 (Business Layer)
-│   ├── collection/        # 数据采集业务
-│   │   ├── service.go     # 采集业务服务
+│   └── collection.go      # 数据采集业务
+├── service/               # 服务层 (Service Layer)
+│   ├── collection/        # 数据采集服务
+│   │   ├── service.go     # 采集服务
 │   │   ├── tushare.go     # Tushare数据采集
 │   │   ├── news.go        # 新闻数据采集
 │   │   └── validator.go   # 数据验证器
-│   ├── processing/        # 数据加工业务
+│   ├── processing/        # 数据处理服务
 │   │   ├── service.go     # 加工业务服务
 │   │   ├── cleaner.go     # 数据清洗
 │   │   ├── nlp.go         # NLP处理
 │   │   └── enricher.go    # 数据增强
-│   ├── query/             # 数据查询业务
+│   ├── query/             # 数据查询服务
 │   │   ├── service.go     # 查询业务服务
 │   │   ├── stock.go       # 股票数据查询
 │   │   ├── news.go        # 新闻数据查询
 │   │   └── aggregator.go  # 数据聚合
-│   └── task/              # 任务管理业务
+│   ├── task/              # 任务管理服务
 │       ├── service.go     # 任务业务服务
 │       ├── scheduler.go   # 任务调度
 │       └── monitor.go     # 任务监控
@@ -561,7 +563,8 @@ data-collection-system/
 **简洁架构分层设计**
 
 * **api/**：接口层，负责外部接口适配，包括HTTP接口和定时任务
-* **biz/**：业务逻辑层，按业务领域划分的核心业务服务
+* **biz/**：业务逻辑层，负责业务流程编排和跨领域协调
+* **module/**：模块层，按业务领域划分的核心业务服务
 * **repo/**：数据仓库层，负责数据持久化和外部数据源访问
 * **model/**：数据模型层，定义核心业务实体和数据结构
 * **pkg/**：公共组件层，提供通用的技术组件和工具
@@ -576,26 +579,28 @@ data-collection-system/
    - 中间件处理（认证、限流、日志等）
 
 2. **业务逻辑层 (biz/)**
-   - **collection/**: 数据采集业务服务（Tushare、新闻爬虫等）
-   - **processing/**: 数据加工业务服务（清洗、标准化、NLP等）
-   - **query/**: 数据查询业务服务（股票、新闻、聚合查询等）
-   - **task/**: 任务管理业务服务（调度、监控等）
    - 业务流程编排和跨领域协调
    - 复杂业务场景的工作流管理
 
-3. **数据仓库层 (repo/)**
+3. **服务层 (service/)**
+   - **collection/**: 数据采集服务，包含数据采集服务、Tushare采集、新闻采集等
+   - **processing/**: 数据处理服务，包含数据清洗、NLP处理、数据增强等
+   - **query/**: 数据查询服务，包含股票查询、新闻查询、数据聚合等
+   - **task/**: 任务管理服务，包含任务调度、任务监控等
+
+4. **数据仓库层 (repo/)**
    - **mysql/**: MySQL数据访问，包含各业务实体的DAO实现
    - **redis/**: Redis缓存访问，提供缓存操作和会话管理
    - **external/**: 外部数据源访问，包含Tushare、爬虫、NLP等客户端
    - 数据持久化实现
    - 外部服务集成
 
-4. **数据模型层 (model/)**
+5. **数据模型层 (model/)**
    - 定义核心业务实体：股票、新闻、市场数据、财务数据、任务等
    - 数据传输对象(DTO)和值对象(VO)
    - 业务规则和约束定义
 
-5. **公共组件层 (pkg/)**
+6. **公共组件层 (pkg/)**
    - **config/**: 配置管理组件
    - **logger/**: 日志组件
    - **errors/**: 错误处理组件
