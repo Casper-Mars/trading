@@ -581,12 +581,14 @@ data-collection-system/
 2. **业务逻辑层 (biz/)**
    - 业务流程编排和跨领域协调
    - 复杂业务场景的工作流管理
+   - 任务执行编排，组合多个service完成具体业务
+   - 跨服务的事务管理和数据一致性保证
 
 3. **服务层 (service/)**
    - **collection/**: 数据采集服务，包含数据采集服务、Tushare采集、新闻采集等
    - **processing/**: 数据处理服务，包含数据清洗、NLP处理、数据增强等
    - **query/**: 数据查询服务，包含股票查询、新闻查询、数据聚合等
-   - **task/**: 任务管理服务，包含任务调度、任务监控等
+   - **task/**: 任务管理服务，只负责任务的CRUD操作，不包含业务执行逻辑
 
 4. **数据仓库层 (repo/)**
    - **mysql/**: MySQL数据访问，包含各业务实体的DAO实现
@@ -623,7 +625,7 @@ data-collection-system/
 #### 7.2.1 业务层服务实现
 
 ```go
-// biz/collection/service.go
+// service/collection/service.go
 package collection
 
 import (
@@ -690,7 +692,7 @@ func (s *Service) CollectNewsData(ctx context.Context, sources []string, keyword
     return nil
 }
 
-// biz/processing/service.go
+// service/processing/service.go
 package processing
 
 import (
@@ -763,8 +765,62 @@ type NLPResult struct {
 #### 7.2.2 任务管理业务服务
 
 ```go
-// biz/task/service.go
+// service/task/service.go
 package task
+
+import (
+    "context"
+    "time"
+    
+    "data-collection-system/model"
+    "data-collection-system/repo/mysql"
+)
+
+// 任务管理业务服务 - 只负责任务的CRUD操作
+type Service struct {
+    taskRepo mysql.TaskRepository
+}
+
+func NewService(taskRepo mysql.TaskRepository) *Service {
+    return &Service{
+        taskRepo: taskRepo,
+    }
+}
+
+// 创建任务
+func (s *Service) CreateTask(ctx context.Context, task *model.Task) error {
+    task.CreatedAt = time.Now()
+    task.UpdatedAt = time.Now()
+    return s.taskRepo.CreateTask(ctx, task)
+}
+
+// 获取任务
+func (s *Service) GetTask(ctx context.Context, taskID int64) (*model.Task, error) {
+    return s.taskRepo.GetTaskByID(ctx, taskID)
+}
+
+// 更新任务状态
+func (s *Service) UpdateTaskStatus(ctx context.Context, taskID int64, status model.TaskStatus, message string) error {
+    return s.taskRepo.UpdateTaskStatus(ctx, taskID, status, message)
+}
+
+// 获取任务列表
+func (s *Service) GetTasks(ctx context.Context, status model.TaskStatus, limit int) ([]*model.Task, error) {
+    return s.taskRepo.GetTasksByStatus(ctx, status, limit)
+}
+
+// 删除任务
+func (s *Service) DeleteTask(ctx context.Context, taskID int64) error {
+    return s.taskRepo.DeleteTask(ctx, taskID)
+}
+
+```
+
+#### 7.2.3 业务编排层 - 任务执行服务
+
+```go
+// biz/task_executor.go
+package biz
 
 import (
     "context"
@@ -772,28 +828,32 @@ import (
     "time"
     
     "data-collection-system/model"
-    "data-collection-system/repo/mysql"
-    "data-collection-system/biz/collection"
-    "data-collection-system/biz/processing"
+    "data-collection-system/service/collection"
+    "data-collection-system/service/processing"
+    "data-collection-system/service/task"
 )
 
-// 任务管理业务服务
-type Service struct {
-    taskRepo       mysql.TaskRepository
-    collectionSvc  *collection.Service
-    processingSvc  *processing.Service
+// 任务执行编排服务 - 负责任务执行的业务编排
+type TaskExecutor struct {
+    taskSvc       *task.Service
+    collectionSvc *collection.Service
+    processingSvc *processing.Service
 }
 
-func NewService(taskRepo mysql.TaskRepository, collectionSvc *collection.Service, processingSvc *processing.Service) *Service {
-    return &Service{
-        taskRepo:      taskRepo,
+func NewTaskExecutor(
+    taskSvc *task.Service,
+    collectionSvc *collection.Service,
+    processingSvc *processing.Service,
+) *TaskExecutor {
+    return &TaskExecutor{
+        taskSvc:       taskSvc,
         collectionSvc: collectionSvc,
         processingSvc: processingSvc,
     }
 }
 
 // 创建数据采集任务
-func (s *Service) CreateCollectionTask(ctx context.Context, name string, symbols []string, dataType model.StockDataType, schedule string) error {
+func (e *TaskExecutor) CreateCollectionTask(ctx context.Context, name string, symbols []string, dataType model.StockDataType, schedule string) error {
     task := &model.Task{
         Name:        name,
         Type:        model.TaskTypeCollection,
@@ -805,15 +865,13 @@ func (s *Service) CreateCollectionTask(ctx context.Context, name string, symbols
         },
         ScheduleTime: time.Now(),
         MaxRetries:   3,
-        CreatedAt:    time.Now(),
-        UpdatedAt:    time.Now(),
     }
     
-    return s.taskRepo.CreateTask(ctx, task)
+    return e.taskSvc.CreateTask(ctx, task)
 }
 
 // 创建数据处理任务
-func (s *Service) CreateProcessingTask(ctx context.Context, name string, limit int, schedule string) error {
+func (e *TaskExecutor) CreateProcessingTask(ctx context.Context, name string, limit int, schedule string) error {
     task := &model.Task{
         Name:        name,
         Type:        model.TaskTypeProcessing,
@@ -824,46 +882,44 @@ func (s *Service) CreateProcessingTask(ctx context.Context, name string, limit i
         },
         ScheduleTime: time.Now(),
         MaxRetries:   3,
-        CreatedAt:    time.Now(),
-        UpdatedAt:    time.Now(),
     }
     
-    return s.taskRepo.CreateTask(ctx, task)
+    return e.taskSvc.CreateTask(ctx, task)
 }
 
 // 执行任务
-func (s *Service) ExecuteTask(ctx context.Context, taskID int64) error {
-    task, err := s.taskRepo.GetTaskByID(ctx, taskID)
+func (e *TaskExecutor) ExecuteTask(ctx context.Context, taskID int64) error {
+    task, err := e.taskSvc.GetTask(ctx, taskID)
     if err != nil {
         return fmt.Errorf("failed to get task: %w", err)
     }
     
     // 更新任务状态为运行中
-    if err := s.taskRepo.UpdateTaskStatus(ctx, taskID, model.TaskStatusRunning, "Task started"); err != nil {
+    if err := e.taskSvc.UpdateTaskStatus(ctx, taskID, model.TaskStatusRunning, "Task started"); err != nil {
         return fmt.Errorf("failed to update task status: %w", err)
     }
     
     var execErr error
     switch task.Type {
     case model.TaskTypeCollection:
-        execErr = s.executeCollectionTask(ctx, task)
+        execErr = e.executeCollectionTask(ctx, task)
     case model.TaskTypeProcessing:
-        execErr = s.executeProcessingTask(ctx, task)
+        execErr = e.executeProcessingTask(ctx, task)
     default:
         execErr = fmt.Errorf("unknown task type: %v", task.Type)
     }
     
     // 更新任务状态
     if execErr != nil {
-        s.taskRepo.UpdateTaskStatus(ctx, taskID, model.TaskStatusFailed, execErr.Error())
+        e.taskSvc.UpdateTaskStatus(ctx, taskID, model.TaskStatusFailed, execErr.Error())
         return execErr
     }
     
-    return s.taskRepo.UpdateTaskStatus(ctx, taskID, model.TaskStatusCompleted, "Task completed successfully")
+    return e.taskSvc.UpdateTaskStatus(ctx, taskID, model.TaskStatusCompleted, "Task completed successfully")
 }
 
 // 执行采集任务
-func (s *Service) executeCollectionTask(ctx context.Context, task *model.Task) error {
+func (e *TaskExecutor) executeCollectionTask(ctx context.Context, task *model.Task) error {
     symbols, ok := task.Config["symbols"].([]string)
     if !ok {
         return fmt.Errorf("invalid symbols config")
@@ -874,17 +930,17 @@ func (s *Service) executeCollectionTask(ctx context.Context, task *model.Task) e
         return fmt.Errorf("invalid dataType config")
     }
     
-    return s.collectionSvc.CollectStockData(ctx, symbols, dataType)
+    return e.collectionSvc.CollectStockData(ctx, symbols, dataType)
 }
 
 // 执行处理任务
-func (s *Service) executeProcessingTask(ctx context.Context, task *model.Task) error {
+func (e *TaskExecutor) executeProcessingTask(ctx context.Context, task *model.Task) error {
     limit, ok := task.Config["limit"].(int)
     if !ok {
         limit = 100 // 默认值
     }
     
-    return s.processingSvc.ProcessNewsData(ctx, limit)
+    return e.processingSvc.ProcessNewsData(ctx, limit)
 }
 ```
 
