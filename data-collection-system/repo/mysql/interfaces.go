@@ -54,7 +54,8 @@ type StockRepository interface {
 	BatchCreate(ctx context.Context, stocks []*model.Stock) error
 	GetByID(ctx context.Context, id uint64) (*model.Stock, error)
 	GetBySymbol(ctx context.Context, symbol string) (*model.Stock, error)
-	List(ctx context.Context, page, pageSize int) ([]*model.Stock, int64, error)
+	List(ctx context.Context, offset, limit int) ([]*model.Stock, error)
+	ListWithPagination(ctx context.Context, page, pageSize int) ([]*model.Stock, int64, error)
 	Update(ctx context.Context, stock *model.Stock) error
 	Delete(ctx context.Context, id uint64) error
 	GetByExchange(ctx context.Context, exchange string) ([]*model.Stock, error)
@@ -71,7 +72,9 @@ type MarketDataRepository interface {
 	BatchCreate(ctx context.Context, dataList []*model.MarketData) error
 	GetByID(ctx context.Context, id uint64) (*model.MarketData, error)
 	GetBySymbolAndTime(ctx context.Context, symbol string, tradeTime time.Time, period string) (*model.MarketData, error)
+	GetBySymbolAndDate(ctx context.Context, symbol string, date time.Time) (*model.MarketData, error)
 	GetByTimeRange(ctx context.Context, symbol string, startTime, endTime time.Time, period string) ([]*model.MarketData, error)
+	GetByDateRange(ctx context.Context, symbol string, startDate, endDate time.Time) ([]*model.MarketData, error)
 	GetLatest(ctx context.Context, symbol string, period string) (*model.MarketData, error)
 	Update(ctx context.Context, data *model.MarketData) error
 	Delete(ctx context.Context, id uint64) error
@@ -85,6 +88,7 @@ type FinancialDataRepository interface {
 	BatchCreate(ctx context.Context, dataList []*model.FinancialData) error
 	GetByID(ctx context.Context, id uint64) (*model.FinancialData, error)
 	GetBySymbolAndReport(ctx context.Context, symbol string, reportDate time.Time, reportType string) (*model.FinancialData, error)
+	GetBySymbolAndPeriod(ctx context.Context, symbol string, reportDate time.Time, reportType string) (*model.FinancialData, error)
 	GetBySymbol(ctx context.Context, symbol string, limit int) ([]*model.FinancialData, error)
 	GetByReportType(ctx context.Context, reportType string, limit int) ([]*model.FinancialData, error)
 	GetLatest(ctx context.Context, symbol string) (*model.FinancialData, error)
@@ -99,9 +103,11 @@ type MacroDataRepository interface {
 	BatchCreate(ctx context.Context, dataList []*model.MacroData) error
 	GetByID(ctx context.Context, id uint64) (*model.MacroData, error)
 	GetByIndicatorAndDate(ctx context.Context, indicatorCode string, dataDate time.Time) (*model.MacroData, error)
-	GetByIndicator(ctx context.Context, indicatorCode string, limit int) ([]*model.MacroData, error)
+	GetByIndicator(ctx context.Context, indicatorCode string, startDate, endDate time.Time) ([]*model.MacroData, error)
+	GetByIndicatorWithLimit(ctx context.Context, indicatorCode string, limit int) ([]*model.MacroData, error)
 	GetByPeriodType(ctx context.Context, periodType string, limit int) ([]*model.MacroData, error)
 	GetByTimeRange(ctx context.Context, indicatorCode string, startDate, endDate time.Time) ([]*model.MacroData, error)
+	GetLatest(ctx context.Context, indicatorCode string) (*model.MacroData, error)
 	Update(ctx context.Context, data *model.MacroData) error
 	Delete(ctx context.Context, id uint64) error
 	Count(ctx context.Context) (int64, error)
@@ -121,6 +127,35 @@ type DataTaskRepository interface {
 	Count(ctx context.Context) (int64, error)
 }
 
+// StockMatchingStats 股票匹配统计信息
+type StockMatchingStats struct {
+	NewsWithStocks int64   `json:"news_with_stocks"`
+	TotalNews      int64   `json:"total_news"`
+	MatchingRate   float64 `json:"matching_rate"`
+}
+
+// ImportanceStats 重要程度统计信息
+type ImportanceStats struct {
+	TotalCount    int64   `json:"total_count"`
+	VeryLowCount  int64   `json:"very_low_count"`
+	LowCount      int64   `json:"low_count"`
+	MediumCount   int64   `json:"medium_count"`
+	HighCount     int64   `json:"high_count"`
+	VeryHighCount int64   `json:"very_high_count"`
+	VeryLowRate   float64 `json:"very_low_rate"`
+	LowRate       float64 `json:"low_rate"`
+	MediumRate    float64 `json:"medium_rate"`
+	HighRate      float64 `json:"high_rate"`
+	VeryHighRate  float64 `json:"very_high_rate"`
+}
+
+// DuplicationStats 去重统计信息
+type DuplicationStats struct {
+	TotalNews         int64   `json:"total_news"`
+	DuplicateNews     int64   `json:"duplicate_news"`
+	DeduplicationRate float64 `json:"deduplication_rate"`
+}
+
 // NewsRepository 新闻数据仓库接口（新爬虫系统）
 type NewsRepository interface {
 	Create(ctx context.Context, news *model.NewsData) error
@@ -128,7 +163,9 @@ type NewsRepository interface {
 	GetByID(ctx context.Context, id uint) (*model.NewsData, error)
 	GetByURL(ctx context.Context, url string) (*model.NewsData, error)
 	Exists(ctx context.Context, url string) (bool, error)
+	ExistsByURL(ctx context.Context, url string) (bool, error)
 	List(ctx context.Context, params *NewsQueryParams) ([]*model.NewsData, int64, error)
+	GetByTimeRange(ctx context.Context, startTime, endTime time.Time, limit, offset int) ([]*model.NewsData, error)
 	Update(ctx context.Context, news *model.NewsData) error
 	Delete(ctx context.Context, id uint) error
 	Search(ctx context.Context, params *NewsSearchParams) ([]*model.NewsData, int64, error)
@@ -138,6 +175,10 @@ type NewsRepository interface {
 	GetBySource(ctx context.Context, source string, limit int, offset int) ([]*model.NewsData, int64, error)
 	GetStats(ctx context.Context) (*NewsStats, error)
 	CleanExpired(ctx context.Context, days int) (int64, error)
+	// 新增统计方法
+	GetStockMatchingStats(ctx context.Context) (*StockMatchingStats, error)
+	GetImportanceStats(ctx context.Context) (*ImportanceStats, error)
+	GetDuplicationStats(ctx context.Context) (*DuplicationStats, error)
 }
 
 // RepositoryManager 数据仓库管理器接口

@@ -24,7 +24,7 @@ func SetupRoutes(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 	r.Use(middleware.RequestID())
 
 	// 创建Repository管理器和查询服务
-	repoManager := mysqldao.NewRepositoryManager(db)
+	repoManager := mysqldao.NewRepositoryManager(db, rdb)
 	
 	// 创建查询服务
 	queryService := query.NewQueryService(repoManager)

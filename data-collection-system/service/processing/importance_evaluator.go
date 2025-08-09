@@ -9,14 +9,14 @@ import (
 	"time"
 
 	"data-collection-system/model"
+	dao "data-collection-system/repo/mysql"
 
 	"github.com/go-redis/redis/v8"
-	"gorm.io/gorm"
 )
 
 // ImportanceEvaluator 新闻重要程度评估器
 type ImportanceEvaluator struct {
-	db          *gorm.DB
+	newsRepo    dao.NewsRepository
 	redisClient *redis.Client
 	// 关键词权重映射
 	keywordWeights map[string]float64
@@ -28,9 +28,9 @@ type ImportanceEvaluator struct {
 }
 
 // NewImportanceEvaluator 创建重要程度评估器
-func NewImportanceEvaluator(db *gorm.DB, redisClient *redis.Client) *ImportanceEvaluator {
+func NewImportanceEvaluator(newsRepo dao.NewsRepository, redisClient *redis.Client) *ImportanceEvaluator {
 	evaluator := &ImportanceEvaluator{
-		db:             db,
+		newsRepo:       newsRepo,
 		redisClient:    redisClient,
 		keywordWeights: make(map[string]float64),
 		sourceWeights:  make(map[string]float64),
@@ -402,50 +402,9 @@ func (ie *ImportanceEvaluator) BatchEvaluateImportance(ctx context.Context, news
 }
 
 // GetImportanceStats 获取重要程度统计信息
-func (ie *ImportanceEvaluator) GetImportanceStats(ctx context.Context) (*ImportanceStats, error) {
-	stats := &ImportanceStats{}
-	
-	// 统计各级别新闻数量
-	var results []struct {
-		ImportanceLevel int8  `json:"importance_level"`
-		Count           int64 `json:"count"`
-	}
-	
-	err := ie.db.Model(&model.NewsData{}).
-		Select("importance_level, COUNT(*) as count").
-		Group("importance_level").
-		Find(&results).Error
-	if err != nil {
-		return nil, fmt.Errorf("failed to get importance stats: %w", err)
-	}
-	
-	// 填充统计数据
-	for _, result := range results {
-		switch result.ImportanceLevel {
-		case model.ImportanceLevelVeryLow:
-			stats.VeryLowCount = result.Count
-		case model.ImportanceLevelLow:
-			stats.LowCount = result.Count
-		case model.ImportanceLevelMedium:
-			stats.MediumCount = result.Count
-		case model.ImportanceLevelHigh:
-			stats.HighCount = result.Count
-		case model.ImportanceLevelVeryHigh:
-			stats.VeryHighCount = result.Count
-		}
-		stats.TotalCount += result.Count
-	}
-	
-	// 计算分布比例
-	if stats.TotalCount > 0 {
-		stats.VeryLowRate = float64(stats.VeryLowCount) / float64(stats.TotalCount)
-		stats.LowRate = float64(stats.LowCount) / float64(stats.TotalCount)
-		stats.MediumRate = float64(stats.MediumCount) / float64(stats.TotalCount)
-		stats.HighRate = float64(stats.HighCount) / float64(stats.TotalCount)
-		stats.VeryHighRate = float64(stats.VeryHighCount) / float64(stats.TotalCount)
-	}
-	
-	return stats, nil
+func (ie *ImportanceEvaluator) GetImportanceStats(ctx context.Context) (*dao.ImportanceStats, error) {
+	// 直接使用NewsRepository的GetImportanceStats方法
+	return ie.newsRepo.GetImportanceStats(ctx)
 }
 
 // UpdateKeywordWeight 更新关键词权重
@@ -459,16 +418,3 @@ func (ie *ImportanceEvaluator) UpdateSourceWeight(source string, weight float64)
 }
 
 // ImportanceStats 重要程度统计信息
-type ImportanceStats struct {
-	TotalCount    int64   `json:"total_count"`
-	VeryLowCount  int64   `json:"very_low_count"`
-	LowCount      int64   `json:"low_count"`
-	MediumCount   int64   `json:"medium_count"`
-	HighCount     int64   `json:"high_count"`
-	VeryHighCount int64   `json:"very_high_count"`
-	VeryLowRate   float64 `json:"very_low_rate"`
-	LowRate       float64 `json:"low_rate"`
-	MediumRate    float64 `json:"medium_rate"`
-	HighRate      float64 `json:"high_rate"`
-	VeryHighRate  float64 `json:"very_high_rate"`
-}

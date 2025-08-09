@@ -1,12 +1,14 @@
 package dao
 
 import (
+	"github.com/go-redis/redis/v8"
 	"gorm.io/gorm"
 )
 
-// repositoryManager 数据仓库管理器实现
+// repositoryManager 数据仓库管理器
 type repositoryManager struct {
 	db             *gorm.DB
+	redisClient    *redis.Client
 	stockRepo      StockRepository         // 股票数据仓库
 	marketDataRepo MarketDataRepository    // 行情数据仓库
 	financialRepo  FinancialDataRepository // 财务数据仓库
@@ -16,15 +18,16 @@ type repositoryManager struct {
 }
 
 // NewRepositoryManager 创建数据仓库管理器实例
-func NewRepositoryManager(db *gorm.DB) RepositoryManager {
+func NewRepositoryManager(db *gorm.DB, redisClient *redis.Client) RepositoryManager {
 	return &repositoryManager{
 		db:             db,
+		redisClient:    redisClient,
 		stockRepo:      NewStockRepository(db),
 		marketDataRepo: NewMarketDataRepository(db),
 		financialRepo:  NewFinancialDataRepository(db),
 		macroDataRepo:  NewMacroDataRepository(db),
 		dataTaskRepo:   NewDataTaskRepository(db),
-		newsRepo:       NewNewsRepository(db),
+		newsRepo:       NewNewsRepository(db, redisClient),
 	}
 }
 

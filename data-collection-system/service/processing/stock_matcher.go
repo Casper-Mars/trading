@@ -8,14 +8,14 @@ import (
 	"time"
 
 	"data-collection-system/model"
+	dao "data-collection-system/repo/mysql"
 
 	"github.com/go-redis/redis/v8"
-	"gorm.io/gorm"
 )
 
 // StockMatcher 股票匹配器
 type StockMatcher struct {
-	db          *gorm.DB
+	stockRepo   dao.StockRepository
 	redisClient *redis.Client
 	// 缓存股票信息
 	stockCache map[string]*model.Stock // symbol -> stock
@@ -27,9 +27,9 @@ type StockMatcher struct {
 }
 
 // NewStockMatcher 创建股票匹配器
-func NewStockMatcher(db *gorm.DB, redisClient *redis.Client) *StockMatcher {
+func NewStockMatcher(stockRepo dao.StockRepository, redisClient *redis.Client) *StockMatcher {
 	matcher := &StockMatcher{
-		db:          db,
+		stockRepo:   stockRepo,
 		redisClient: redisClient,
 		stockCache:  make(map[string]*model.Stock),
 		nameCache:   make(map[string]*model.Stock),
@@ -53,8 +53,7 @@ func (sm *StockMatcher) initializeCache() {
 	ctx := context.Background()
 
 	// 从数据库加载所有活跃股票
-	var stocks []*model.Stock
-	err := sm.db.Where("status = ?", model.StockStatusActive).Find(&stocks).Error
+	stocks, err := sm.stockRepo.GetActiveStocks(ctx)
 	if err != nil {
 		fmt.Printf("Failed to load stocks for cache: %v\n", err)
 		return

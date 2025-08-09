@@ -66,8 +66,17 @@ func (r *stockRepository) GetBySymbol(ctx context.Context, symbol string) (*mode
 	return &stock, nil
 }
 
-// List 分页获取股票列表
-func (r *stockRepository) List(ctx context.Context, page, pageSize int) ([]*model.Stock, int64, error) {
+// List 获取股票列表（TushareService使用）
+func (r *stockRepository) List(ctx context.Context, offset, limit int) ([]*model.Stock, error) {
+	var stocks []*model.Stock
+	if err := r.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&stocks).Error; err != nil {
+		return nil, errors.Wrap(err, errors.ErrCodeDatabase, "failed to list stocks")
+	}
+	return stocks, nil
+}
+
+// ListWithPagination 分页获取股票列表
+func (r *stockRepository) ListWithPagination(ctx context.Context, page, pageSize int) ([]*model.Stock, int64, error) {
 	var stocks []*model.Stock
 	var total int64
 

@@ -88,6 +88,18 @@ func (r *marketDataRepository) GetLatest(ctx context.Context, symbol string, per
 	return &data, nil
 }
 
+// GetLatestByPeriod 根据周期获取最新的行情数据
+func (r *marketDataRepository) GetLatestByPeriod(ctx context.Context, symbol string, period string) (*model.MarketData, error) {
+	var data model.MarketData
+	if err := r.db.WithContext(ctx).Where("symbol = ? AND period = ?", symbol, period).Order("trade_time DESC").First(&data).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New(errors.ErrCodeDataNotFound, "market data not found")
+		}
+		return nil, errors.Wrap(err, errors.ErrCodeDatabase, "failed to get latest market data")
+	}
+	return &data, nil
+}
+
 // Update 更新行情数据
 func (r *marketDataRepository) Update(ctx context.Context, data *model.MarketData) error {
 	if err := r.db.WithContext(ctx).Save(data).Error; err != nil {
@@ -110,6 +122,27 @@ func (r *marketDataRepository) DeleteByTimeRange(ctx context.Context, symbol str
 		return errors.Wrap(err, errors.ErrCodeDatabase, "failed to delete market data by time range")
 	}
 	return nil
+}
+
+// GetBySymbolAndDate 根据股票代码和日期获取行情数据
+func (r *marketDataRepository) GetBySymbolAndDate(ctx context.Context, symbol string, date time.Time) (*model.MarketData, error) {
+	var data model.MarketData
+	if err := r.db.WithContext(ctx).Where("symbol = ? AND DATE(trade_time) = DATE(?)", symbol, date).First(&data).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New(errors.ErrCodeDataNotFound, "market data not found")
+		}
+		return nil, errors.Wrap(err, errors.ErrCodeDatabase, "failed to get market data by symbol and date")
+	}
+	return &data, nil
+}
+
+// GetByDateRange 根据日期范围获取行情数据（TushareService使用）
+func (r *marketDataRepository) GetByDateRange(ctx context.Context, symbol string, startDate, endDate time.Time) ([]*model.MarketData, error) {
+	var dataList []*model.MarketData
+	if err := r.db.WithContext(ctx).Where("symbol = ? AND trade_time >= ? AND trade_time <= ?", symbol, startDate, endDate).Find(&dataList).Error; err != nil {
+		return nil, errors.Wrap(err, errors.ErrCodeDatabase, "failed to get market data by date range")
+	}
+	return dataList, nil
 }
 
 // Count 获取行情数据总数

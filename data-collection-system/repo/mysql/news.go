@@ -8,18 +8,21 @@ import (
 	"data-collection-system/model"
 	"data-collection-system/pkg/errors"
 
+	"github.com/go-redis/redis/v8"
 	"gorm.io/gorm"
 )
 
 // newsRepository 新闻数据仓库实现
 type newsRepository struct {
-	db *gorm.DB
+	db          *gorm.DB
+	redisClient *redis.Client
 }
 
 // NewNewsRepository 创建新闻数据仓库
-func NewNewsRepository(db *gorm.DB) NewsRepository {
+func NewNewsRepository(db *gorm.DB, redisClient *redis.Client) NewsRepository {
 	return &newsRepository{
-		db: db,
+		db:          db,
+		redisClient: redisClient,
 	}
 }
 
@@ -101,6 +104,46 @@ func (r *newsRepository) Exists(ctx context.Context, url string) (bool, error) {
 		return false, errors.Wrap(err, errors.ErrCodeDatabase, "检查新闻存在性失败")
 	}
 	return count > 0, nil
+}
+
+// ExistsByURL 根据URL检查新闻是否存在（NewsCrawlerService使用）
+func (r *newsRepository) ExistsByURL(ctx context.Context, url string) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.NewsData{}).Where("url = ?", url).Count(&count).Error
+	if err != nil {
+		return false, errors.Wrap(err, errors.ErrCodeDatabase, "检查新闻存在性失败")
+	}
+	return count > 0, nil
+}
+
+// GetByTimeRange 根据时间范围获取新闻
+func (r *newsRepository) GetByTimeRange(ctx context.Context, startTime, endTime time.Time, limit, offset int) ([]*model.NewsData, error) {
+	query := r.db.WithContext(ctx).Model(&model.NewsData{})
+	
+	// 时间范围条件
+	if !startTime.IsZero() {
+		query = query.Where("published_at >= ?", startTime)
+	}
+	if !endTime.IsZero() {
+		query = query.Where("published_at <= ?", endTime)
+	}
+	
+	// 排序和分页
+	query = query.Order("published_at DESC")
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+	
+	// 执行查询
+	var newsList []*model.NewsData
+	if err := query.Find(&newsList).Error; err != nil {
+		return nil, errors.Wrap(err, errors.ErrCodeDatabase, "根据时间范围查询新闻失败")
+	}
+	
+	return newsList, nil
 }
 
 // List 分页查询新闻
@@ -417,4 +460,104 @@ func (r *newsRepository) CleanExpired(ctx context.Context, days int) (int64, err
 	}
 
 	return result.RowsAffected, nil
+}
+
+// GetStockMatchingStats 获取股票匹配统计信息
+func (r *newsRepository) GetStockMatchingStats(ctx context.Context) (*StockMatchingStats, error) {
+	stats := &StockMatchingStats{}
+	
+	// 统计有关联股票的新闻数量
+	err := r.db.WithContext(ctx).Model(&model.NewsData{}).
+		Where("JSON_LENGTH(related_stocks) > 0").
+		Count(&stats.NewsWithStocks).Error
+	if err != nil {
+		return nil, errors.Wrap(err, errors.ErrCodeDatabase, "统计关联股票新闻数量失败")
+	}
+	
+	// 统计总新闻数量
+	err = r.db.WithContext(ctx).Model(&model.NewsData{}).Count(&stats.TotalNews).Error
+	if err != nil {
+		return nil, errors.Wrap(err, errors.ErrCodeDatabase, "统计总新闻数量失败")
+	}
+	
+	// 计算匹配率
+	if stats.TotalNews > 0 {
+		stats.MatchingRate = float64(stats.NewsWithStocks) / float64(stats.TotalNews)
+	}
+	
+	return stats, nil
+}
+
+// GetImportanceStats 获取重要程度统计信息
+func (r *newsRepository) GetImportanceStats(ctx context.Context) (*ImportanceStats, error) {
+	stats := &ImportanceStats{}
+	
+	// 统计各级别新闻数量
+	var results []struct {
+		ImportanceLevel int8  `json:"importance_level"`
+		Count           int64 `json:"count"`
+	}
+	
+	err := r.db.WithContext(ctx).Model(&model.NewsData{}).
+		Select("importance_level, COUNT(*) as count").
+		Group("importance_level").
+		Find(&results).Error
+	if err != nil {
+		return nil, errors.Wrap(err, errors.ErrCodeDatabase, "获取重要程度统计失败")
+	}
+	
+	// 填充统计数据
+	for _, result := range results {
+		switch result.ImportanceLevel {
+		case model.ImportanceLevelVeryLow:
+			stats.VeryLowCount = result.Count
+		case model.ImportanceLevelLow:
+			stats.LowCount = result.Count
+		case model.ImportanceLevelMedium:
+			stats.MediumCount = result.Count
+		case model.ImportanceLevelHigh:
+			stats.HighCount = result.Count
+		case model.ImportanceLevelVeryHigh:
+			stats.VeryHighCount = result.Count
+		}
+		stats.TotalCount += result.Count
+	}
+	
+	// 计算分布比例
+	if stats.TotalCount > 0 {
+		stats.VeryLowRate = float64(stats.VeryLowCount) / float64(stats.TotalCount)
+		stats.LowRate = float64(stats.LowCount) / float64(stats.TotalCount)
+		stats.MediumRate = float64(stats.MediumCount) / float64(stats.TotalCount)
+		stats.HighRate = float64(stats.HighCount) / float64(stats.TotalCount)
+		stats.VeryHighRate = float64(stats.VeryHighCount) / float64(stats.TotalCount)
+	}
+	
+	return stats, nil
+}
+
+// GetDuplicationStats 获取去重统计信息
+func (r *newsRepository) GetDuplicationStats(ctx context.Context) (*DuplicationStats, error) {
+	stats := &DuplicationStats{}
+
+	// 统计总新闻数量
+	err := r.db.WithContext(ctx).Model(&model.NewsData{}).Count(&stats.TotalNews).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to count total news: %w", err)
+	}
+
+	// 统计重复新闻数量（通过Redis）
+	if r.redisClient != nil {
+		keys, err := r.redisClient.Keys(ctx, "news:duplicate:*").Result()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get duplicate keys: %w", err)
+		}
+		stats.DuplicateNews = int64(len(keys))
+	}
+
+	// 计算去重率
+	if stats.TotalNews > 0 {
+		stats.DeduplicationRate = float64(stats.DuplicateNews) / float64(stats.TotalNews)
+	}
+
+	return stats, nil
 }

@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"data-collection-system/model"
+	"data-collection-system/pkg/config"
+	dao "data-collection-system/repo/mysql"
 	"data-collection-system/repo/external/tushare"
 )
 
@@ -29,39 +31,47 @@ type Config struct {
 
 // NewService 创建数据采集服务
 func NewService(
-	config *Config,
-	stockRepo StockRepository,
-	marketRepo MarketRepository,
-	financialRepo FinancialRepository,
-	macroRepo MacroRepository,
-	newsRepo NewsRepository, // 新闻数据仓库
+	config *config.Config,
+	repoManager dao.RepositoryManager,
 ) (*Service, error) {
+	// 从配置中获取Tushare配置
+	tushareConfig := &Config{
+		TushareToken: config.Tushare.Token,
+		TushareURL:   config.Tushare.BaseURL,
+		RateLimit:    200, // 默认限流200次/分钟
+		RetryCount:   3,   // 默认重试3次
+		Timeout:      30,  // 默认超时30秒
+		NewsCrawler:  nil, // 暂时不启用新闻爬虫
+	}
 	// 创建Tushare采集器
 	tushareCollector, err := tushare.NewCollector(&tushare.Config{
-		Token:      config.TushareToken,
-		BaseURL:    config.TushareURL,
-		RateLimit:  config.RateLimit,
-		RetryCount: config.RetryCount,
-		Timeout:    time.Duration(config.Timeout) * time.Second,
+		Token:      tushareConfig.TushareToken,
+		BaseURL:    tushareConfig.TushareURL,
+		RateLimit:  tushareConfig.RateLimit,
+		RetryCount: tushareConfig.RetryCount,
+		Timeout:    time.Duration(tushareConfig.Timeout) * time.Second,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("创建Tushare采集器失败: %w", err)
 	}
 
+	// 直接使用RepositoryManager接口
+	repoMgr := repoManager
+
 	// 创建Tushare业务服务
 	tushareService := NewTushareService(
 		tushareCollector,
-		stockRepo,
-		marketRepo,
-		financialRepo,
-		macroRepo,
+		repoMgr.Stock(),        // stockRepo
+		repoMgr.MarketData(),   // marketRepo
+		repoMgr.FinancialData(), // financialRepo
+		repoMgr.MacroData(),    // macroRepo
 	)
 
 	// 创建新闻爬虫服务
 	var newsCrawler *NewsCrawlerService
 	var newsScheduler *NewsScheduler
-	if config.NewsCrawler != nil {
-		newsCrawler = NewNewsCrawlerService(config.NewsCrawler, newsRepo)
+	if tushareConfig.NewsCrawler != nil {
+		newsCrawler = NewNewsCrawlerService(tushareConfig.NewsCrawler, repoMgr.News()) // newsRepo
 
 		// 创建新闻调度器
 		newsSources := GetDefaultNewsSources()                          // 获取默认新闻源配置

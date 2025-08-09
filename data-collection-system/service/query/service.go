@@ -314,7 +314,7 @@ func (s *QueryService) GetMacroData(ctx context.Context, params *MacroDataQueryP
 			endDate = time.Now()
 		}
 		// 根据指标代码查询
-		macroData, err = s.repoManager.MacroData().GetByIndicator(ctx, params.IndicatorCode, limit)
+		macroData, err = s.repoManager.MacroData().GetByIndicatorWithLimit(ctx, params.IndicatorCode, limit)
 	case params.PeriodType != "":
 		// 根据周期类型查询
 		macroData, err = s.repoManager.MacroData().GetByPeriodType(ctx, params.PeriodType, limit)

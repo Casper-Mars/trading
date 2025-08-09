@@ -112,6 +112,18 @@ func (r *financialDataRepository) Update(ctx context.Context, data *model.Financ
 	return nil
 }
 
+// GetBySymbolAndPeriod 根据股票代码和期间获取财务数据（TushareService使用）
+func (r *financialDataRepository) GetBySymbolAndPeriod(ctx context.Context, symbol string, reportDate time.Time, reportType string) (*model.FinancialData, error) {
+	var data model.FinancialData
+	if err := r.db.WithContext(ctx).Where("symbol = ? AND report_date = ? AND report_type = ?", symbol, reportDate, reportType).First(&data).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New(errors.ErrCodeDataNotFound, "financial data not found")
+		}
+		return nil, errors.Wrap(err, errors.ErrCodeDatabase, "failed to get financial data by symbol and period")
+	}
+	return &data, nil
+}
+
 // Delete 删除财务数据
 func (r *financialDataRepository) Delete(ctx context.Context, id uint64) error {
 	if err := r.db.WithContext(ctx).Delete(&model.FinancialData{}, id).Error; err != nil {

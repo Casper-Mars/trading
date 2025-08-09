@@ -34,7 +34,7 @@ type MarketRepository interface {
 	BatchCreate(ctx context.Context, data []*model.MarketData) error
 	GetBySymbolAndDate(ctx context.Context, symbol string, date time.Time) (*model.MarketData, error)
 	GetByDateRange(ctx context.Context, symbol string, startDate, endDate time.Time) ([]*model.MarketData, error)
-	GetLatest(ctx context.Context, symbol string) (*model.MarketData, error)
+	GetLatest(ctx context.Context, symbol string, period string) (*model.MarketData, error)
 }
 
 // FinancialRepository 财务数据仓储接口

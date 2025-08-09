@@ -11,14 +11,14 @@ import (
 	"time"
 
 	"data-collection-system/model"
+	dao "data-collection-system/repo/mysql"
 
 	"github.com/go-redis/redis/v8"
-	"gorm.io/gorm"
 )
 
 // NewsDeduplicator 新闻去重器
 type NewsDeduplicator struct {
-	db          *gorm.DB
+	newsRepo    dao.NewsRepository
 	redisClient *redis.Client
 	// 文本预处理正则表达式
 	cleanRegex *regexp.Regexp
@@ -27,9 +27,9 @@ type NewsDeduplicator struct {
 }
 
 // NewNewsDeduplicator 创建新闻去重器
-func NewNewsDeduplicator(db *gorm.DB, redisClient *redis.Client) *NewsDeduplicator {
+func NewNewsDeduplicator(newsRepo dao.NewsRepository, redisClient *redis.Client) *NewsDeduplicator {
 	deduplicator := &NewsDeduplicator{
-		db:          db,
+		newsRepo:    newsRepo,
 		redisClient: redisClient,
 		stopWords:   make(map[string]bool),
 	}
@@ -89,26 +89,41 @@ func (nd *NewsDeduplicator) DetectDuplicates(ctx context.Context, news *model.Ne
 
 // findDuplicatesByURL 基于URL查找重复新闻
 func (nd *NewsDeduplicator) findDuplicatesByURL(ctx context.Context, news *model.NewsData) ([]*model.NewsData, error) {
-	var duplicates []*model.NewsData
-
-	err := nd.db.Where("url = ? AND id != ?", news.URL, news.ID).Find(&duplicates).Error
+	// 通过URL查找重复新闻
+	existing, err := nd.newsRepo.GetByURL(ctx, news.URL)
 	if err != nil {
 		return nil, err
 	}
-
-	return duplicates, nil
+	
+	// 如果找到相同URL的新闻且不是同一条新闻，则认为是重复
+	if existing != nil && existing.ID != news.ID {
+		return []*model.NewsData{existing}, nil
+	}
+	
+	return []*model.NewsData{}, nil
 }
 
 // findDuplicatesByTitle 基于标题相似度查找重复新闻
 func (nd *NewsDeduplicator) findDuplicatesByTitle(ctx context.Context, news *model.NewsData) ([]*model.NewsData, error) {
-	var candidates []*model.NewsData
+	// 查找相似标题的新闻
+	titleWords := strings.Fields(news.Title)
+	if len(titleWords) < 3 {
+		return []*model.NewsData{}, nil // 标题太短，跳过
+	}
 
-	// 查找同一时间段内的新闻（前后24小时）
-	startTime := news.PublishTime.Add(-24 * time.Hour)
-	endTime := news.PublishTime.Add(24 * time.Hour)
+	// 使用主要关键词进行搜索
+	keyword := titleWords[0]
+	if len(titleWords) > 1 {
+		keyword = titleWords[1] // 通常第二个词更有意义
+	}
 
-	err := nd.db.Where("publish_time BETWEEN ? AND ? AND id != ?", startTime, endTime, news.ID).
-		Find(&candidates).Error
+	// 使用搜索接口查找相关新闻
+	searchParams := &dao.NewsSearchParams{
+		Keyword: keyword,
+		Limit:   100, // 限制搜索结果数量
+		Offset:  0,
+	}
+	candidates, _, err := nd.newsRepo.Search(ctx, searchParams)
 	if err != nil {
 		return nil, err
 	}
@@ -126,17 +141,24 @@ func (nd *NewsDeduplicator) findDuplicatesByTitle(ctx context.Context, news *mod
 
 // findDuplicatesByContent 基于内容相似度查找重复新闻
 func (nd *NewsDeduplicator) findDuplicatesByContent(ctx context.Context, news *model.NewsData) ([]*model.NewsData, error) {
-	var candidates []*model.NewsData
-
 	// 查找同一时间段内的新闻（前后12小时）
 	startTime := news.PublishTime.Add(-12 * time.Hour)
 	endTime := news.PublishTime.Add(12 * time.Hour)
 
-	err := nd.db.Where("publish_time BETWEEN ? AND ? AND id != ?", startTime, endTime, news.ID).
-		Find(&candidates).Error
+	// 使用时间范围查询
+	candidates, err := nd.newsRepo.GetByTimeRange(ctx, startTime, endTime, 1000, 0)
 	if err != nil {
 		return nil, err
 	}
+
+	// 过滤掉当前新闻本身
+	filteredCandidates := make([]*model.NewsData, 0)
+	for _, candidate := range candidates {
+		if candidate.ID != news.ID {
+			filteredCandidates = append(filteredCandidates, candidate)
+		}
+	}
+	candidates = filteredCandidates
 
 	duplicates := make([]*model.NewsData, 0)
 	for _, candidate := range candidates {
@@ -350,35 +372,7 @@ func (nd *NewsDeduplicator) IsDuplicate(ctx context.Context, newsID uint64) (boo
 }
 
 // GetDuplicationStats 获取去重统计信息
-func (nd *NewsDeduplicator) GetDuplicationStats(ctx context.Context) (*DuplicationStats, error) {
-	stats := &DuplicationStats{}
-
-	// 统计总新闻数量
-	err := nd.db.Model(&model.NewsData{}).Count(&stats.TotalNews).Error
-	if err != nil {
-		return nil, fmt.Errorf("failed to count total news: %w", err)
-	}
-
-	// 统计重复新闻数量（通过Redis）
-	if nd.redisClient != nil {
-		keys, err := nd.redisClient.Keys(ctx, "news:duplicate:*").Result()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get duplicate keys: %w", err)
-		}
-		stats.DuplicateNews = int64(len(keys))
-	}
-
-	// 计算去重率
-	if stats.TotalNews > 0 {
-		stats.DeduplicationRate = float64(stats.DuplicateNews) / float64(stats.TotalNews)
-	}
-
-	return stats, nil
-}
-
-// DuplicationStats 去重统计信息
-type DuplicationStats struct {
-	TotalNews         int64   `json:"total_news"`
-	DuplicateNews     int64   `json:"duplicate_news"`
-	DeduplicationRate float64 `json:"deduplication_rate"`
+func (nd *NewsDeduplicator) GetDuplicationStats(ctx context.Context) (*dao.DuplicationStats, error) {
+	// 直接使用NewsRepository的GetDuplicationStats方法
+	return nd.newsRepo.GetDuplicationStats(ctx)
 }

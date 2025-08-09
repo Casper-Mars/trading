@@ -66,8 +66,17 @@ func (r *macroDataRepository) GetByIndicatorAndDate(ctx context.Context, indicat
 	return &data, nil
 }
 
-// GetByIndicator 根据指标代码获取宏观数据列表
-func (r *macroDataRepository) GetByIndicator(ctx context.Context, indicatorCode string, limit int) ([]*model.MacroData, error) {
+// GetByIndicator 根据指标代码和日期范围获取宏观数据列表（TushareService使用）
+func (r *macroDataRepository) GetByIndicator(ctx context.Context, indicatorCode string, startDate, endDate time.Time) ([]*model.MacroData, error) {
+	var dataList []*model.MacroData
+	if err := r.db.WithContext(ctx).Where("indicator_code = ? AND data_date >= ? AND data_date <= ?", indicatorCode, startDate, endDate).Order("data_date DESC").Find(&dataList).Error; err != nil {
+		return nil, errors.Wrap(err, errors.ErrCodeDatabase, "failed to get macro data by indicator")
+	}
+	return dataList, nil
+}
+
+// GetByIndicatorWithLimit 根据指标代码获取宏观数据列表（带限制）
+func (r *macroDataRepository) GetByIndicatorWithLimit(ctx context.Context, indicatorCode string, limit int) ([]*model.MacroData, error) {
 	var dataList []*model.MacroData
 	query := r.db.WithContext(ctx).Where("indicator_code = ?", indicatorCode).Order("data_date DESC")
 	if limit > 0 {
@@ -116,6 +125,18 @@ func (r *macroDataRepository) Delete(ctx context.Context, id uint64) error {
 		return errors.Wrap(err, errors.ErrCodeDatabase, "failed to delete macro data")
 	}
 	return nil
+}
+
+// GetLatest 获取指定指标的最新宏观数据
+func (r *macroDataRepository) GetLatest(ctx context.Context, indicatorCode string) (*model.MacroData, error) {
+	var data model.MacroData
+	if err := r.db.WithContext(ctx).Where("indicator_code = ?", indicatorCode).Order("data_date DESC").First(&data).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New(errors.ErrCodeDataNotFound, "macro data not found")
+		}
+		return nil, errors.Wrap(err, errors.ErrCodeDatabase, "failed to get latest macro data")
+	}
+	return &data, nil
 }
 
 // Count 获取宏观数据总数

@@ -8,21 +8,24 @@ import (
 
 	"data-collection-system/model"
 	"data-collection-system/pkg/config"
+	dao "data-collection-system/repo/mysql"
 
 	"github.com/go-redis/redis/v8"
-	"gorm.io/gorm"
 )
 
-// NewsRepository 新闻数据仓库接口
-type NewsRepository interface {
-	GetByTimeRange(ctx context.Context, startTime, endTime time.Time, limit, offset int) ([]*model.NewsData, error)
-	Update(ctx context.Context, news *model.NewsData) error
+// StockMatchingStats 股票匹配统计信息
+type StockMatchingStats struct {
+	NewsWithStocks int64   `json:"news_with_stocks"`
+	TotalNews      int64   `json:"total_news"`
+	MatchingRate   float64 `json:"matching_rate"`
 }
+
+
 
 // ProcessingService 数据处理服务
 type ProcessingService struct {
-	db                   *gorm.DB
-	newsRepo             NewsRepository
+	newsRepo             dao.NewsRepository
+	stockRepo            dao.StockRepository
 	cleaner              *DataCleaner
 	validator            *DataValidator
 	deduper              *DataDeduplicator
@@ -35,8 +38,8 @@ type ProcessingService struct {
 
 // NewProcessingService 创建数据处理服务实例
 func NewProcessingService(
-	db *gorm.DB,
-	newsRepo NewsRepository,
+	newsRepo dao.NewsRepository,
+	stockRepo dao.StockRepository,
 	cfg *config.Config,
 	redisClient *redis.Client,
 ) *ProcessingService {
@@ -44,17 +47,17 @@ func NewProcessingService(
 	nlpProcessor := NewBaiduNLPProcessor(&cfg.BaiduAI, redisClient)
 	
 	// 创建股票匹配器
-	stockMatcher := NewStockMatcher(db, redisClient)
+	stockMatcher := NewStockMatcher(stockRepo, redisClient)
 	
 	// 创建新闻去重器
-	newsDeduplicator := NewNewsDeduplicator(db, redisClient)
+	newsDeduplicator := NewNewsDeduplicator(newsRepo, redisClient)
 	
 	// 创建重要程度评估器
-	importanceEvaluator := NewImportanceEvaluator(db, redisClient)
+	importanceEvaluator := NewImportanceEvaluator(newsRepo, redisClient)
 
 	return &ProcessingService{
-		db:                   db,
 		newsRepo:             newsRepo,
+		stockRepo:            stockRepo,
 		cleaner:              NewDataCleaner(),
 		validator:            NewDataValidator(),
 		deduper:              NewDataDeduplicator(),
@@ -342,8 +345,7 @@ func (s *ProcessingService) associateIndustries(ctx context.Context, news *model
 	
 	// 根据关联的股票获取行业信息
 	for _, symbol := range stockSymbols {
-		var stock model.Stock
-		err := s.db.Where("symbol = ? AND status = ?", symbol, model.StockStatusActive).First(&stock).Error
+		stock, err := s.stockRepo.GetBySymbol(ctx, symbol)
 		if err != nil {
 			continue // 跳过无法找到的股票
 		}
@@ -376,29 +378,9 @@ func (s *ProcessingService) RefreshStockCache() {
 }
 
 // GetStockMatchingStats 获取股票匹配统计信息
-func (s *ProcessingService) GetStockMatchingStats(ctx context.Context) (*StockMatchingStats, error) {
-	stats := &StockMatchingStats{}
-	
-	// 统计有关联股票的新闻数量
-	err := s.db.Model(&model.NewsData{}).
-		Where("JSON_LENGTH(related_stocks) > 0").
-		Count(&stats.NewsWithStocks).Error
-	if err != nil {
-		return nil, fmt.Errorf("failed to count news with stocks: %w", err)
-	}
-	
-	// 统计总新闻数量
-	err = s.db.Model(&model.NewsData{}).Count(&stats.TotalNews).Error
-	if err != nil {
-		return nil, fmt.Errorf("failed to count total news: %w", err)
-	}
-	
-	// 计算匹配率
-	if stats.TotalNews > 0 {
-		stats.MatchingRate = float64(stats.NewsWithStocks) / float64(stats.TotalNews)
-	}
-	
-	return stats, nil
+func (s *ProcessingService) GetStockMatchingStats(ctx context.Context) (*dao.StockMatchingStats, error) {
+	// 调用NewsRepository的统计方法
+	return s.newsRepo.GetStockMatchingStats(ctx)
 }
 
 // ProcessNewsWithAssociation 处理新闻并进行完整的关联分析
@@ -413,43 +395,15 @@ func (s *ProcessingService) ProcessNewsWithAssociation(ctx context.Context, news
 }
 
 // GetDuplicationStats 获取去重统计信息
-func (s *ProcessingService) GetDuplicationStats(ctx context.Context) (map[string]interface{}, error) {
-	stats, err := s.newsDeduplicator.GetDuplicationStats(ctx)
-	if err != nil {
-		return nil, err
-	}
-	
-	result := map[string]interface{}{
-		"total_news":         stats.TotalNews,
-		"duplicate_news":     stats.DuplicateNews,
-		"deduplication_rate": stats.DeduplicationRate,
-	}
-	
-	return result, nil
+func (s *ProcessingService) GetDuplicationStats(ctx context.Context) (*dao.DuplicationStats, error) {
+	// 调用NewsRepository的统计方法
+	return s.newsRepo.GetDuplicationStats(ctx)
 }
 
 // GetImportanceStats 获取重要程度统计信息
-func (s *ProcessingService) GetImportanceStats(ctx context.Context) (map[string]interface{}, error) {
-	stats, err := s.importanceEvaluator.GetImportanceStats(ctx)
-	if err != nil {
-		return nil, err
-	}
-	
-	result := map[string]interface{}{
-		"total_count":     stats.TotalCount,
-		"very_low_count":  stats.VeryLowCount,
-		"low_count":       stats.LowCount,
-		"medium_count":    stats.MediumCount,
-		"high_count":      stats.HighCount,
-		"very_high_count": stats.VeryHighCount,
-		"very_low_rate":   stats.VeryLowRate,
-		"low_rate":        stats.LowRate,
-		"medium_rate":     stats.MediumRate,
-		"high_rate":       stats.HighRate,
-		"very_high_rate":  stats.VeryHighRate,
-	}
-	
-	return result, nil
+func (s *ProcessingService) GetImportanceStats(ctx context.Context) (*dao.ImportanceStats, error) {
+	// 调用NewsRepository的统计方法
+	return s.newsRepo.GetImportanceStats(ctx)
 }
 
 // BatchEvaluateImportance 批量评估新闻重要程度
@@ -464,13 +418,6 @@ func (s *ProcessingService) RefreshAllCaches(ctx context.Context) error {
 	
 	log.Println("All caches refreshed successfully")
 	return nil
-}
-
-// StockMatchingStats 股票匹配统计信息
-type StockMatchingStats struct {
-	NewsWithStocks int64   `json:"news_with_stocks"`
-	TotalNews      int64   `json:"total_news"`
-	MatchingRate   float64 `json:"matching_rate"`
 }
 
 // ProcessMarketData 处理行情数据

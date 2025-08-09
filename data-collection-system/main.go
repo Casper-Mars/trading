@@ -54,7 +54,8 @@ func main() {
 	})
 
 	// 测试Redis连接
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	if err := rdb.Ping(ctx).Err(); err != nil {
 		logger.Fatal("Failed to connect to Redis: %v", err)
 	}
@@ -62,34 +63,17 @@ func main() {
 
 	logger.Info("Redis connection established successfully")
 
-	// 创建业务服务
-	_ = mysqldao.NewRepositoryManager(db) // 暂时不使用，避免编译错误
-	
-	// 创建采集服务配置
-	collectionConfig := &collection.Config{
-		TushareToken: "", // 从配置文件获取
-		TushareURL:   "http://api.tushare.pro",
-		RateLimit:    200,
-		RetryCount:   3,
-		Timeout:      30,
-		NewsCrawler:  nil, // 暂时不启用新闻爬虫
-	}
+	// 创建数据仓库管理器
+	repoManager := mysqldao.NewRepositoryManager(db, rdb)
 	
 	// 创建采集服务
-	collectionService, err := collection.NewService(
-		collectionConfig,
-		nil, // stockRepo - 需要适配器
-		nil, // marketRepo - 需要适配器
-		nil, // financialRepo - 需要适配器
-		nil, // macroRepo - 需要适配器
-		nil, // newsRepo - 需要适配器
-	)
+	collectionService, err := collection.NewService(cfg, repoManager)
 	if err != nil {
 		logger.Fatal("Failed to create collection service: %v", err)
 	}
 	
 	// 创建处理服务
-	processingService := processing.NewProcessingService(db, nil, cfg, rdb)
+	processingService := processing.NewProcessingService(repoManager.News(), repoManager.Stock(), cfg, rdb)
 	
 	// 创建任务执行器
 	taskExecutor := biz.NewTaskExecutor(collectionService, processingService)
@@ -132,7 +116,7 @@ func main() {
 	log.Println("Shutting down server...")
 
 	// 优雅关闭
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	
 	// 停止定时任务
