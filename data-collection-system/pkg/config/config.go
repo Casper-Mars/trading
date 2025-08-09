@@ -15,6 +15,7 @@ type Config struct {
 	Log      LogConfig      `mapstructure:"log"`
 	Tushare  TushareConfig  `mapstructure:"tushare"`
 	Crawler  CrawlerConfig  `mapstructure:"crawler"`
+	BaiduAI  BaiduAIConfig  `mapstructure:"baidu_ai"`
 }
 
 // ServerConfig 服务器配置
@@ -73,6 +74,20 @@ type CrawlerConfig struct {
 	TargetURLs  []string `mapstructure:"target_urls"`
 }
 
+// BaiduAIConfig 百度AI配置
+type BaiduAIConfig struct {
+	AppID     string `mapstructure:"app_id"`
+	APIKey    string `mapstructure:"api_key"`
+	SecretKey string `mapstructure:"secret_key"`
+	BaseURL   string `mapstructure:"base_url"`
+	// 缓存配置
+	CacheEnabled bool `mapstructure:"cache_enabled"`
+	CacheTTL     int  `mapstructure:"cache_ttl"`
+	// 限流配置
+	QPS          int `mapstructure:"qps"`
+	Timeout      int `mapstructure:"timeout"`
+}
+
 // Load 加载配置
 func Load() (*Config, error) {
 	viper.SetConfigName("config")
@@ -111,6 +126,15 @@ func Load() (*Config, error) {
 	}
 	if tushareToken := os.Getenv("DCS_TUSHARE_TOKEN"); tushareToken != "" {
 		config.Tushare.Token = tushareToken
+	}
+	if baiduAppID := os.Getenv("DCS_BAIDU_AI_APP_ID"); baiduAppID != "" {
+		config.BaiduAI.AppID = baiduAppID
+	}
+	if baiduAPIKey := os.Getenv("DCS_BAIDU_AI_API_KEY"); baiduAPIKey != "" {
+		config.BaiduAI.APIKey = baiduAPIKey
+	}
+	if baiduSecretKey := os.Getenv("DCS_BAIDU_AI_SECRET_KEY"); baiduSecretKey != "" {
+		config.BaiduAI.SecretKey = baiduSecretKey
 	}
 
 	return &config, nil
@@ -157,4 +181,11 @@ func setDefaults() {
 	viper.SetDefault("crawler.user_agent", "Mozilla/5.0 (compatible; DataCollector/1.0)")
 	viper.SetDefault("crawler.delay", 1000)
 	viper.SetDefault("crawler.parallelism", 2)
+
+	// 百度AI默认配置
+	viper.SetDefault("baidu_ai.base_url", "https://aip.baidubce.com")
+	viper.SetDefault("baidu_ai.cache_enabled", true)
+	viper.SetDefault("baidu_ai.cache_ttl", 3600)
+	viper.SetDefault("baidu_ai.qps", 5)
+	viper.SetDefault("baidu_ai.timeout", 30)
 }
