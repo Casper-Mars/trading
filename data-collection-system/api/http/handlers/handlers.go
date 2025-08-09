@@ -7,6 +7,7 @@ import (
 
 	"data-collection-system/pkg/response"
 	"data-collection-system/service/query"
+	"data-collection-system/service/task"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -22,6 +23,18 @@ type QueryHandler struct {
 func NewQueryHandler(queryService *query.QueryService) *QueryHandler {
 	return &QueryHandler{
 		queryService: queryService,
+	}
+}
+
+// TaskHandler 任务处理器
+type TaskHandler struct {
+	taskService *task.TaskService
+}
+
+// NewTaskHandler 创建任务处理器
+func NewTaskHandler(taskService *task.TaskService) *TaskHandler {
+	return &TaskHandler{
+		taskService: taskService,
 	}
 }
 
@@ -323,104 +336,202 @@ func (h *QueryHandler) GetMacroData(c *gin.Context) {
 }
 
 // GetTasks 获取任务列表
-func GetTasks(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// 获取查询参数
-		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-		pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-		status := c.Query("status")
-		taskType := c.Query("type")
+func (h *TaskHandler) GetTasks(c *gin.Context) {
+	ctx := context.Background()
+	
+	// 获取查询参数
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
-		// 参数验证
-		if page <= 0 {
-			page = 1
-		}
-		if pageSize <= 0 || pageSize > 100 {
-			pageSize = 20
-		}
-
-		// TODO: 实现获取任务列表逻辑
-		// 这里应该调用任务服务来获取任务列表
-		_ = status
-		_ = taskType
-		pagination := response.NewPagination(page, pageSize, 0)
-		response.SuccessPage(c, []interface{}{}, pagination)
+	// 参数验证
+	if page <= 0 {
+		page = 1
 	}
+	if pageSize <= 0 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	// 创建查询参数
+	queryParams := &task.TaskQueryParams{
+		Page:     page,
+		PageSize: pageSize,
+	}
+
+	// 获取任务列表
+	result, err := h.taskService.GetTasksWithParams(ctx, queryParams)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	pagination := response.NewPagination(page, pageSize, result.Total)
+	response.SuccessPage(c, result.Data, pagination)
 }
 
 // CreateTask 创建任务
-func CreateTask(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// 绑定请求体
-		var req struct {
-			Name        string                 `json:"name" binding:"required"`
-			Type        string                 `json:"type" binding:"required"`
-			Description string                 `json:"description"`
-			Config      map[string]interface{} `json:"config"`
-			Schedule    string                 `json:"schedule"`
-		}
-
-		if err := c.ShouldBindJSON(&req); err != nil {
-			response.BadRequest(c, "请求参数格式错误")
-			return
-		}
-
-		// TODO: 实现创建任务逻辑
-		// 这里应该调用任务服务来创建任务
-		response.Success(c, gin.H{
-			"message": "任务创建成功",
-			"task_id": "temp_task_id",
-		})
+func (h *TaskHandler) CreateTask(c *gin.Context) {
+	ctx := context.Background()
+	
+	// 绑定请求体
+	var req struct {
+		Name        string                 `json:"name" binding:"required"`
+		Type        string                 `json:"type" binding:"required"`
+		Description string                 `json:"description"`
+		Config      map[string]interface{} `json:"config"`
+		Schedule    string                 `json:"schedule"`
 	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "请求参数格式错误")
+		return
+	}
+
+	// 创建任务请求
+	createReq := &task.CreateTaskRequest{
+		Name:        req.Name,
+		Type:        req.Type,
+		Description: req.Description,
+		Config:      req.Config,
+		Schedule:    req.Schedule,
+	}
+
+	// 创建任务
+	taskResult, err := h.taskService.CreateTask(ctx, createReq)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{
+		"message": "任务创建成功",
+		"task":    taskResult,
+	})
 }
 
 // UpdateTask 更新任务
-func UpdateTask(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		id := c.Param("id")
-		// TODO: 实现更新任务逻辑
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Update task endpoint",
-			"id":      id,
-		})
+func (h *TaskHandler) UpdateTask(c *gin.Context) {
+	ctx := context.Background()
+	
+	id := c.Param("id")
+	taskID, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		response.BadRequest(c, "无效的任务ID")
+		return
 	}
+
+	// 绑定请求体
+	var req struct {
+		Name        string                 `json:"name"`
+		Type        string                 `json:"type"`
+		Description string                 `json:"description"`
+		Config      map[string]interface{} `json:"config"`
+		Schedule    string                 `json:"schedule"`
+		Status      *int8                  `json:"status"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "请求参数格式错误")
+		return
+	}
+
+	// 创建更新请求
+	updateReq := &task.UpdateTaskRequest{
+		Config: req.Config,
+		Status: req.Status,
+	}
+	if req.Name != "" {
+		updateReq.Name = &req.Name
+	}
+	if req.Type != "" {
+		updateReq.Type = &req.Type
+	}
+	if req.Description != "" {
+		updateReq.Description = &req.Description
+	}
+	if req.Schedule != "" {
+		updateReq.Schedule = &req.Schedule
+	}
+
+	// 更新任务
+	_, err = h.taskService.UpdateTask(ctx, taskID, updateReq)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{
+		"message": "任务更新成功",
+	})
 }
 
 // DeleteTask 删除任务
-func DeleteTask(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		id := c.Param("id")
-		// TODO: 实现删除任务逻辑
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Delete task endpoint",
-			"id":      id,
-		})
+func (h *TaskHandler) DeleteTask(c *gin.Context) {
+	ctx := context.Background()
+	
+	id := c.Param("id")
+	taskID, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		response.BadRequest(c, "无效的任务ID")
+		return
 	}
+
+	// 删除任务
+	err = h.taskService.DeleteTask(ctx, taskID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{
+		"message": "任务删除成功",
+	})
 }
 
 // RunTask 运行任务
-func RunTask(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		id := c.Param("id")
-		// TODO: 实现运行任务逻辑
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Run task endpoint",
-			"id":      id,
-		})
+func (h *TaskHandler) RunTask(c *gin.Context) {
+	ctx := context.Background()
+	
+	id := c.Param("id")
+	taskID, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		response.BadRequest(c, "无效的任务ID")
+		return
 	}
+
+	// 运行任务
+	err = h.taskService.RunTask(ctx, taskID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{
+		"message": "任务已启动",
+	})
 }
 
 // GetTaskStatus 获取任务状态
-func GetTaskStatus(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		id := c.Param("id")
-		// TODO: 实现获取任务状态逻辑
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Get task status endpoint",
-			"id":      id,
-			"status":  "unknown",
-		})
+func (h *TaskHandler) GetTaskStatus(c *gin.Context) {
+	ctx := context.Background()
+	
+	id := c.Param("id")
+	taskID, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		response.BadRequest(c, "无效的任务ID")
+		return
 	}
+
+	// 获取任务状态
+	status, err := h.taskService.GetTaskStatus(ctx, taskID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{
+		"task_id": taskID,
+		"status":  status,
+	})
 }
 
 // GetSystemStats 获取系统统计信息

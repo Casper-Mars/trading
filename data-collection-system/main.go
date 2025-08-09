@@ -16,6 +16,8 @@ import (
 	mysqldao "data-collection-system/repo/mysql"
 	"data-collection-system/service/collection"
 	"data-collection-system/service/processing"
+	"data-collection-system/service/query"
+	"data-collection-system/service/task"
 	"data-collection-system/pkg/config"
 	"data-collection-system/pkg/database"
 	"data-collection-system/pkg/logger"
@@ -75,6 +77,12 @@ func main() {
 	// 创建处理服务
 	processingService := processing.NewProcessingService(repoManager.News(), repoManager.Stock(), cfg, rdb)
 	
+	// 创建查询服务
+	queryService := query.NewQueryService(repoManager)
+	
+	// 创建任务服务
+	taskService := task.NewTaskService(repoManager.DataTask(), collectionService, rdb)
+	
 	// 创建任务执行器
 	taskExecutor := biz.NewTaskExecutor(collectionService, processingService)
 	
@@ -93,7 +101,7 @@ func main() {
 	}
 
 	// 创建路由
-	router := routes.SetupRoutes(db, rdb)
+	router := routes.SetupRoutes(queryService, taskService, db, rdb)
 
 	// 创建HTTP服务器
 	srv := &http.Server{

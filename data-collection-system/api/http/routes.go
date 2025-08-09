@@ -5,8 +5,8 @@ import (
 
 	"data-collection-system/api/http/handlers"
 	"data-collection-system/api/http/middleware"
-	mysqldao "data-collection-system/repo/mysql"
 	"data-collection-system/service/query"
+	"data-collection-system/service/task"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -14,7 +14,7 @@ import (
 )
 
 // SetupRoutes 设置路由
-func SetupRoutes(db *gorm.DB, rdb *redis.Client) *gin.Engine {
+func SetupRoutes(queryService *query.QueryService, taskService *task.TaskService, db *gorm.DB, rdb *redis.Client) *gin.Engine {
 	r := gin.New()
 
 	// 添加中间件
@@ -23,12 +23,9 @@ func SetupRoutes(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 	r.Use(middleware.CORS())
 	r.Use(middleware.RequestID())
 
-	// 创建Repository管理器和查询服务
-	repoManager := mysqldao.NewRepositoryManager(db, rdb)
-	
-	// 创建查询服务
-	queryService := query.NewQueryService(repoManager)
+	// 创建处理器
 	queryHandler := handlers.NewQueryHandler(queryService)
+	taskHandler := handlers.NewTaskHandler(taskService)
 
 
 	// 健康检查
@@ -104,18 +101,18 @@ func SetupRoutes(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 		tasks := v1.Group("/tasks")
 		tasks.Use(middleware.SecurityCheck()) // 添加安全检查中间件
 		{
-			tasks.GET("/", handlers.GetTasks(db))
+			tasks.GET("/", taskHandler.GetTasks)
 			tasks.POST("/", middleware.ValidateJSON(struct {
 				Name        string                 `json:"name" binding:"required"`
 				Type        string                 `json:"type" binding:"required"`
 				Description string                 `json:"description"`
 				Config      map[string]interface{} `json:"config"`
 				Schedule    string                 `json:"schedule"`
-			}{}), handlers.CreateTask(db))
-			tasks.PUT("/:id", handlers.UpdateTask(db))
-			tasks.DELETE("/:id", handlers.DeleteTask(db))
-			tasks.POST("/:id/run", handlers.RunTask(db))
-			tasks.GET("/:id/status", handlers.GetTaskStatus(db))
+			}{}), taskHandler.CreateTask)
+			tasks.PUT("/:id", taskHandler.UpdateTask)
+			tasks.DELETE("/:id", taskHandler.DeleteTask)
+			tasks.POST("/:id/run", taskHandler.RunTask)
+			tasks.GET("/:id/status", taskHandler.GetTaskStatus)
 		}
 
 		// 系统监控相关路由
