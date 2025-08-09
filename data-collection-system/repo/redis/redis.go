@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"data-collection-system/internal/config"
+	"data-collection-system/pkg/config"
 	"data-collection-system/pkg/logger"
 
 	"github.com/go-redis/redis/v8"
