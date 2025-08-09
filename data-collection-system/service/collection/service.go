@@ -12,19 +12,19 @@ import (
 
 // Service 数据采集业务服务
 type Service struct {
-	tushareService  *TushareService
-	newsCrawler     *NewsCrawlerService // 新闻爬虫服务
-	newsScheduler   *NewsScheduler      // 新闻调度器
+	tushareService *TushareService
+	newsCrawler    *NewsCrawlerService // 新闻爬虫服务
+	newsScheduler  *NewsScheduler      // 新闻调度器
 }
 
 // Config 采集服务配置
 type Config struct {
-	TushareToken string                `yaml:"tushare_token"`
-	TushareURL   string                `yaml:"tushare_url"`
-	RateLimit    int                   `yaml:"rate_limit"`
-	RetryCount   int                   `yaml:"retry_count"`
-	Timeout      int                   `yaml:"timeout"`
-	NewsCrawler  *NewsCrawlerConfig    `yaml:"news_crawler"`  // 新闻爬虫配置
+	TushareToken string             `yaml:"tushare_token"`
+	TushareURL   string             `yaml:"tushare_url"`
+	RateLimit    int                `yaml:"rate_limit"`
+	RetryCount   int                `yaml:"retry_count"`
+	Timeout      int                `yaml:"timeout"`
+	NewsCrawler  *NewsCrawlerConfig `yaml:"news_crawler"` // 新闻爬虫配置
 }
 
 // NewService 创建数据采集服务
@@ -62,9 +62,9 @@ func NewService(
 	var newsScheduler *NewsScheduler
 	if config.NewsCrawler != nil {
 		newsCrawler = NewNewsCrawlerService(config.NewsCrawler, newsRepo)
-		
+
 		// 创建新闻调度器
-		newsSources := GetDefaultNewsSources() // 获取默认新闻源配置
+		newsSources := GetDefaultNewsSources()                          // 获取默认新闻源配置
 		newsScheduler = NewNewsScheduler(newsCrawler, newsSources, nil) // logger可以后续注入
 	}
 
@@ -190,9 +190,9 @@ func (s *Service) CollectMonthlyData(ctx context.Context) error {
 	// 采集财务数据（季报、年报）
 	currentYear := time.Now().Year()
 	periods := []string{
-		fmt.Sprintf("%d0331", currentYear), // Q1
-		fmt.Sprintf("%d0630", currentYear), // Q2
-		fmt.Sprintf("%d0930", currentYear), // Q3
+		fmt.Sprintf("%d0331", currentYear),   // Q1
+		fmt.Sprintf("%d0630", currentYear),   // Q2
+		fmt.Sprintf("%d0930", currentYear),   // Q3
 		fmt.Sprintf("%d1231", currentYear-1), // 上年年报
 	}
 
@@ -335,7 +335,7 @@ func (s *Service) CrawlNews(ctx context.Context, sourceName string) error {
 	if s.newsCrawler == nil {
 		return fmt.Errorf("新闻爬虫服务未初始化")
 	}
-	
+
 	// 查找新闻源
 	newsSources := GetDefaultNewsSources()
 	for _, source := range newsSources {
@@ -343,7 +343,7 @@ func (s *Service) CrawlNews(ctx context.Context, sourceName string) error {
 			return s.newsCrawler.CrawlNewsSource(ctx, source)
 		}
 	}
-	
+
 	return fmt.Errorf("未找到新闻源: %s", sourceName)
 }
 
@@ -352,7 +352,7 @@ func (s *Service) CrawlAllNews(ctx context.Context) error {
 	if s.newsCrawler == nil {
 		return fmt.Errorf("新闻爬虫服务未初始化")
 	}
-	
+
 	newsSources := GetDefaultNewsSources()
 	return s.newsCrawler.CrawlMultipleSources(ctx, newsSources)
 }

@@ -11,8 +11,6 @@ import (
 	"gorm.io/gorm"
 )
 
-
-
 // newsRepository 新闻数据仓库实现
 type newsRepository struct {
 	db *gorm.DB

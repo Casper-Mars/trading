@@ -5,8 +5,12 @@ import (
 
 	"data-collection-system/api/http/handlers"
 	"data-collection-system/api/http/middleware"
+	"data-collection-system/biz"
 	mysqldao "data-collection-system/repo/mysql"
+	"data-collection-system/service/collection"
+	"data-collection-system/service/processing"
 	"data-collection-system/service/query"
+	"data-collection-system/pkg/config"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -27,6 +31,38 @@ func SetupRoutes(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 	daoManager := mysqldao.NewDAOManager(db)
 	queryService := query.NewQueryService(daoManager)
 	queryHandler := handlers.NewQueryHandler(queryService)
+
+	// 创建业务服务
+	// 创建默认配置
+	cfg := &config.Config{} // 使用默认配置，实际应该从配置文件加载
+	
+	// 创建采集服务配置
+	collectionConfig := &collection.Config{
+		TushareToken: "", // 从配置文件获取
+		TushareURL:   "http://api.tushare.pro",
+		RateLimit:    200,
+		RetryCount:   3,
+		Timeout:      30,
+		NewsCrawler:  nil, // 暂时不启用新闻爬虫
+	}
+	
+	// 暂时使用 nil 仓库，后续需要创建适配器来解决接口不匹配问题
+	collectionService, err := collection.NewService(
+		collectionConfig,
+		nil, // stockRepo - 需要适配器
+		nil, // marketRepo - 需要适配器
+		nil, // financialRepo - 需要适配器
+		nil, // macroRepo - 需要适配器
+		nil, // newsRepo - 需要适配器
+	)
+	if err != nil {
+		panic("Failed to create collection service: " + err.Error())
+	}
+	
+	// 暂时使用 nil 新闻仓库，后续需要创建适配器来解决接口不匹配问题
+	processingService := processing.NewProcessingService(db, nil, cfg, rdb)
+	dataPipeline := biz.NewDataPipeline(collectionService, processingService, rdb)
+	newsPipelineHandler := handlers.NewNewsPipelineHandler(dataPipeline)
 
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {
@@ -65,10 +101,27 @@ func SetupRoutes(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 			}
 
 			// 新闻数据路由
-			data.GET("/news", queryHandler.GetNews)
+		data.GET("/news", queryHandler.GetNews)
 
-			// 宏观数据路由
-			data.GET("/macro", queryHandler.GetMacroData)
+		// 宏观数据路由
+		data.GET("/macro", queryHandler.GetMacroData)
+	}
+
+	// 新闻管道相关路由
+	news := v1.Group("/news")
+	news.Use(middleware.SecurityCheck()) // 添加安全检查中间件
+	{
+		// 新闻处理管道路由
+		pipeline := news.Group("/pipeline")
+		{
+			pipeline.POST("/trigger", newsPipelineHandler.TriggerNewsProcessing)
+			pipeline.GET("/status", newsPipelineHandler.GetNewsProcessingStatus)
+			pipeline.GET("/stats", newsPipelineHandler.GetNewsStats)
+			pipeline.POST("/stats/reset", newsPipelineHandler.ResetNewsStats)
+			pipeline.POST("/stop", newsPipelineHandler.StopNewsProcessing)
+			pipeline.GET("/history", newsPipelineHandler.GetNewsProcessingHistory)
+			pipeline.GET("/config", newsPipelineHandler.GetNewsProcessingConfig)
+		}
 		}
 
 		// 任务管理相关路由

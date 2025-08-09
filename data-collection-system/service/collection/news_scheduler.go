@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"data-collection-system/pkg/errors"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -159,7 +160,7 @@ func (s *NewsScheduler) scheduleNewsSource(ctx context.Context, source *NewsSour
 			return
 		case <-ticker.C:
 			s.logger.Debug("开始定时爬取新闻源: %s", source.Name)
-			
+
 			// 执行爬取任务
 			if err := s.crawlWithRetry(ctx, source); err != nil {
 				s.errorHandler.HandleError(source.Name, err)
@@ -220,7 +221,7 @@ func (s *NewsScheduler) performHealthCheck() {
 	enabledSources := len(s.getEnabledSources())
 	s.mu.RUnlock()
 
-	s.logger.Debug("健康检查 - 运行状态: %v, 活跃定时器: %d, 启用的新闻源: %d", 
+	s.logger.Debug("健康检查 - 运行状态: %v, 活跃定时器: %d, 启用的新闻源: %d",
 		running, tickersCount, enabledSources)
 
 	// 检查是否有定时器异常停止

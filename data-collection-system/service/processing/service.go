@@ -9,6 +9,7 @@ import (
 
 	"data-collection-system/model"
 	"data-collection-system/pkg/config"
+
 	"github.com/go-redis/redis/v8"
 	"gorm.io/gorm"
 )
@@ -39,7 +40,7 @@ func NewProcessingService(
 ) *ProcessingService {
 	// 创建百度AI NLP处理器
 	nlpProcessor := NewBaiduNLPProcessor(&cfg.BaiduAI, redisClient)
-	
+
 	return &ProcessingService{
 		db:             db,
 		newsRepo:       newsRepo,
@@ -83,7 +84,7 @@ func (s *ProcessingService) ProcessNewsData(ctx context.Context, limit int) erro
 // processBatchNews 批量处理新闻数据
 func (s *ProcessingService) processBatchNews(ctx context.Context, newsList []*model.NewsData) error {
 	log.Printf("Starting batch news processing, count: %d", len(newsList))
-	
+
 	// 1. 批量数据清洗和验证
 	cleanedNews := make([]*model.NewsData, 0, len(newsList))
 	for _, news := range newsList {
@@ -93,21 +94,21 @@ func (s *ProcessingService) processBatchNews(ctx context.Context, newsList []*mo
 			log.Printf("Failed to clean news data, error: %v, news_id: %d", err, news.ID)
 			continue
 		}
-		
+
 		// 数据验证
 		if err := s.validator.ValidateNewsData(cleanedItem); err != nil {
 			log.Printf("News data validation failed, error: %v, news_id: %d", err, news.ID)
 			continue
 		}
-		
+
 		cleanedNews = append(cleanedNews, cleanedItem)
 	}
-	
+
 	// 2. 批量去重
 	deduplicatedNews := s.deduper.DeduplicateNewsData(cleanedNews)
-	log.Printf("Deduplication completed, original_count: %d, deduplicated_count: %d", 
+	log.Printf("Deduplication completed, original_count: %d, deduplicated_count: %d",
 		len(cleanedNews), len(deduplicatedNews))
-	
+
 	// 3. 批量NLP处理
 	nlpResults, err := s.nlpProcessor.ProcessBatchNews(ctx, deduplicatedNews)
 	if err != nil {
@@ -115,7 +116,7 @@ func (s *ProcessingService) processBatchNews(ctx context.Context, newsList []*mo
 		// 降级到单个处理
 		return s.processBatchNewsFallback(ctx, deduplicatedNews)
 	}
-	
+
 	// 4. 更新新闻数据并保存
 	successCount := 0
 	for i, news := range deduplicatedNews {
@@ -128,47 +129,52 @@ func (s *ProcessingService) processBatchNews(ctx context.Context, newsList []*mo
 				log.Printf("Basic stock association failed, error: %v, news_id: %d", err, news.ID)
 			}
 		}
-		
+
 		// 数据质量检查
 		qualityReport := s.qualityChecker.CheckNewsDataQuality([]*model.NewsData{news})
 		if qualityReport.QualityScore < 0.6 {
-			log.Printf("Low quality news detected, score: %f, title: %s", 
+			log.Printf("Low quality news detected, score: %f, title: %s",
 				qualityReport.QualityScore, news.Title)
 		}
-		
+
 		// 标记为已处理
 		news.MarkAsProcessed()
-		
+
 		// 更新到数据库
 		if err := s.newsRepo.Update(ctx, news); err != nil {
 			log.Printf("Failed to update processed news, error: %v, news_id: %d", err, news.ID)
 			continue
 		}
-		
+
 		successCount++
 	}
-	
-	log.Printf("Batch news processing completed, total_count: %d, success_count: %d, failure_count: %d", 
+
+	log.Printf("Batch news processing completed, total_count: %d, success_count: %d, failure_count: %d",
 		len(deduplicatedNews), successCount, len(deduplicatedNews)-successCount)
-	
+
 	return nil
 }
 
 // processBatchNewsFallback 批量处理降级方案
 func (s *ProcessingService) processBatchNewsFallback(ctx context.Context, newsList []*model.NewsData) error {
 	log.Printf("Using fallback processing for batch news, count: %d", len(newsList))
-	
+
 	for _, news := range newsList {
 		if err := s.processNewsItem(ctx, news); err != nil {
 			log.Printf("Failed to process news item in fallback, error: %v, news_id: %d", err, news.ID)
 			continue
 		}
 	}
-	
+
 	return nil
 }
 
 // processNewsItem 处理单条新闻数据
+// ProcessSingleNewsItem 处理单个新闻项
+func (s *ProcessingService) ProcessSingleNewsItem(ctx context.Context, news *model.NewsData) error {
+	return s.processNewsItem(ctx, news)
+}
+
 func (s *ProcessingService) processNewsItem(ctx context.Context, news *model.NewsData) error {
 	// 1. 数据清洗
 	cleanedNews, err := s.cleaner.CleanNewsData(news)
@@ -199,7 +205,7 @@ func (s *ProcessingService) processNewsItem(ctx context.Context, news *model.New
 	} else {
 		// 使用NLP处理结果更新新闻数据
 		s.updateNewsWithNLPResult(cleanedNews, nlpResult)
-		log.Printf("NLP processing completed, news_id: %d, sentiment_score: %f, importance_level: %s, related_stocks_count: %d, keywords_count: %d, cache_hit: %t", 
+		log.Printf("NLP processing completed, news_id: %d, sentiment_score: %f, importance_level: %s, related_stocks_count: %d, keywords_count: %d, cache_hit: %t",
 			cleanedNews.ID, nlpResult.SentimentScore, nlpResult.ImportanceLevel, len(nlpResult.RelatedStocks), len(nlpResult.Keywords), nlpResult.CacheHit)
 	}
 
@@ -228,7 +234,7 @@ func (s *ProcessingService) updateNewsWithNLPResult(news *model.NewsData, nlpRes
 	if len(nlpResult.RelatedStocks) > 0 {
 		news.RelatedStocks = model.StringSlice(nlpResult.RelatedStocks)
 	}
-	
+
 	// 更新情感分析结果
 	if nlpResult.SentimentScore != 0 {
 		news.SentimentScore = &nlpResult.SentimentScore
@@ -244,17 +250,17 @@ func (s *ProcessingService) updateNewsWithNLPResult(news *model.NewsData, nlpRes
 			news.Sentiment = &sentiment
 		}
 	}
-	
+
 	// 更新关键词 - 注意NewsData模型中没有Keywords字段，这里可能需要存储到其他地方或扩展模型
 	// if len(nlpResult.Keywords) > 0 {
 	//     news.Keywords = model.StringSlice(nlpResult.Keywords)
 	// }
-	
+
 	// 更新重要性级别
 	if nlpResult.ImportanceLevel != 0 {
 		news.ImportanceLevel = int8(nlpResult.ImportanceLevel)
 	}
-	
+
 	// 存储实体信息到扩展字段（如果模型支持）
 	if len(nlpResult.Entities) > 0 {
 		// 可以将实体信息序列化存储到某个字段中
@@ -266,7 +272,7 @@ func (s *ProcessingService) updateNewsWithNLPResult(news *model.NewsData, nlpRes
 func (s *ProcessingService) associateStocks(ctx context.Context, news *model.NewsData) error {
 	// 从新闻标题和内容中提取股票代码和公司名称
 	stockCodes := s.extractStockCodes(news.Title + " " + news.Content)
-	
+
 	// 验证股票代码是否存在
 	validStockCodes := make([]string, 0)
 	for _, code := range stockCodes {
@@ -285,14 +291,14 @@ func (s *ProcessingService) associateStocks(ctx context.Context, news *model.New
 // extractStockCodes 从文本中提取股票代码
 func (s *ProcessingService) extractStockCodes(text string) []string {
 	codes := make([]string, 0)
-	
+
 	// 简单的股票代码提取逻辑
 	// A股代码格式：6位数字
 	words := strings.Fields(text)
 	for _, word := range words {
 		// 去除标点符号
 		word = strings.Trim(word, ".,!?;:()[]{}")
-		
+
 		// 检查是否为6位数字
 		if len(word) == 6 {
 			isDigit := true

@@ -40,9 +40,21 @@ func main() {
 		}
 	}()
 
-	// TODO: 初始化Redis连接
-	var rdb *redis.Client // 暂时设为nil，后续实现Redis初始化
-	// TODO: 初始化其他依赖
+	// 初始化Redis连接
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
+		Password: cfg.Redis.Password,
+		DB:       cfg.Redis.DB,
+	})
+	
+	// 测试Redis连接
+	ctx := context.Background()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		logger.Fatal("Failed to connect to Redis: %v", err)
+	}
+	defer rdb.Close()
+	
+	logger.Info("Redis connection established successfully")
 
 	// 设置Gin模式
 	if cfg.Server.Mode == "release" {

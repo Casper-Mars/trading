@@ -9,6 +9,7 @@ import (
 
 	"data-collection-system/service/collection"
 	"data-collection-system/service/processing"
+	"github.com/go-redis/redis/v8"
 )
 
 // DataPipeline 数据管道业务编排服务
@@ -16,6 +17,7 @@ import (
 type DataPipeline struct {
 	collectionSvc *collection.Service
 	processingSvc *processing.ProcessingService
+	newsPipeline  *NewsPipeline
 	mu            sync.RWMutex
 	running       bool
 	stats         *PipelineStats
@@ -35,10 +37,15 @@ type PipelineStats struct {
 func NewDataPipeline(
 	collectionSvc *collection.Service,
 	processingSvc *processing.ProcessingService,
+	redisClient *redis.Client,
 ) *DataPipeline {
+	// 创建新闻处理管道
+	newsPipeline := NewNewsPipeline(collectionSvc, processingSvc, redisClient, nil)
+	
 	return &DataPipeline{
 		collectionSvc: collectionSvc,
 		processingSvc: processingSvc,
+		newsPipeline:  newsPipeline,
 		stats:         &PipelineStats{},
 	}
 }
@@ -152,20 +159,18 @@ func (dp *DataPipeline) executeWeeklyFullPipeline(ctx context.Context, config ma
 
 // executeNewsPipeline 执行新闻数据管道
 func (dp *DataPipeline) executeNewsPipeline(ctx context.Context, config map[string]interface{}) error {
-	log.Println("执行新闻数据管道")
+	log.Println("执行新闻数据管道 - 集成爬虫与NLP处理")
 
-	// 阶段1: 新闻数据采集（预留）
-	log.Println("阶段1: 新闻数据采集（功能待实现）")
-
-	// 阶段2: 新闻数据处理
-	log.Println("阶段2: 新闻数据处理")
-	limit, ok := config["limit"].(int)
-	if !ok {
-		limit = 200 // 默认处理200条新闻
+	// 获取新闻源配置
+	sources := []string{"sina", "163", "tencent", "eastmoney"} // 默认新闻源
+	if configSources, ok := config["sources"].([]string); ok && len(configSources) > 0 {
+		sources = configSources
 	}
 
-	if err := dp.processingSvc.ProcessNewsData(ctx, limit); err != nil {
-		return fmt.Errorf("新闻数据处理失败: %w", err)
+	// 使用专门的新闻处理管道执行完整流程
+	// 包含：新闻爬取 → 异步队列 → NLP处理 → 数据存储
+	if err := dp.newsPipeline.ExecuteNewsDataPipeline(ctx, sources); err != nil {
+		return fmt.Errorf("新闻数据管道执行失败: %w", err)
 	}
 
 	log.Println("新闻数据管道执行完成")
@@ -314,4 +319,45 @@ func (dp *DataPipeline) ExecuteCustomPipeline(ctx context.Context, steps []Pipel
 type PipelineStep struct {
 	Name    string
 	Execute func(ctx context.Context, dp *DataPipeline) error
+}
+
+// TriggerNewsProcessing 手动触发新闻处理管道
+func (dp *DataPipeline) TriggerNewsProcessing(ctx context.Context, sources []string) error {
+	if dp.newsPipeline == nil {
+		return fmt.Errorf("新闻处理管道未初始化")
+	}
+	return dp.newsPipeline.TriggerNewsProcessing(ctx, sources)
+}
+
+// GetNewsProcessingStatus 获取新闻处理状态
+func (dp *DataPipeline) GetNewsProcessingStatus() map[string]interface{} {
+	if dp.newsPipeline == nil {
+		return map[string]interface{}{
+			"error": "新闻处理管道未初始化",
+		}
+	}
+	return dp.newsPipeline.GetProcessingStatus()
+}
+
+// GetNewsStats 获取新闻处理统计信息
+func (dp *DataPipeline) GetNewsStats() *NewsPipelineStats {
+	if dp.newsPipeline == nil {
+		return nil
+	}
+	return dp.newsPipeline.GetStats()
+}
+
+// IsNewsProcessingRunning 检查新闻处理是否正在运行
+func (dp *DataPipeline) IsNewsProcessingRunning() bool {
+	if dp.newsPipeline == nil {
+		return false
+	}
+	return dp.newsPipeline.IsRunning()
+}
+
+// ResetNewsStats 重置新闻处理统计信息
+func (dp *DataPipeline) ResetNewsStats() {
+	if dp.newsPipeline != nil {
+		dp.newsPipeline.ResetStats()
+	}
 }

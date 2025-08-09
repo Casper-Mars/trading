@@ -45,12 +45,12 @@ type RedisConfig struct {
 	MinIdleConns int `mapstructure:"min_idle_conns"`
 	MaxRetries   int `mapstructure:"max_retries"`
 	// 超时配置（秒）
-	DialTimeout         int `mapstructure:"dial_timeout"`
-	ReadTimeout         int `mapstructure:"read_timeout"`
-	WriteTimeout        int `mapstructure:"write_timeout"`
-	PoolTimeout         int `mapstructure:"pool_timeout"`
-	IdleTimeout         int `mapstructure:"idle_timeout"`
-	IdleCheckFrequency  int `mapstructure:"idle_check_frequency"`
+	DialTimeout        int `mapstructure:"dial_timeout"`
+	ReadTimeout        int `mapstructure:"read_timeout"`
+	WriteTimeout       int `mapstructure:"write_timeout"`
+	PoolTimeout        int `mapstructure:"pool_timeout"`
+	IdleTimeout        int `mapstructure:"idle_timeout"`
+	IdleCheckFrequency int `mapstructure:"idle_check_frequency"`
 }
 
 // LogConfig 日志配置
@@ -84,8 +84,8 @@ type BaiduAIConfig struct {
 	CacheEnabled bool `mapstructure:"cache_enabled"`
 	CacheTTL     int  `mapstructure:"cache_ttl"`
 	// 限流配置
-	QPS          int `mapstructure:"qps"`
-	Timeout      int `mapstructure:"timeout"`
+	QPS     int `mapstructure:"qps"`
+	Timeout int `mapstructure:"timeout"`
 }
 
 // Load 加载配置

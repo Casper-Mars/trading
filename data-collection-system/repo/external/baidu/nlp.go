@@ -14,16 +14,16 @@ type SentimentRequest struct {
 // SentimentResponse 情感分析响应
 type SentimentResponse struct {
 	BaseResponse
-	Text  string           `json:"text"`
+	Text  string          `json:"text"`
 	Items []SentimentItem `json:"items"`
 }
 
 // SentimentItem 情感分析结果项
 type SentimentItem struct {
-	Sentiment     int     `json:"sentiment"`      // 0:负向，1:中性，2:正向
-	Confidence    float64 `json:"confidence"`     // 分类置信度
-	PositiveProb  float64 `json:"positive_prob"`  // 积极概率
-	NegativeProb  float64 `json:"negative_prob"`  // 消极概率
+	Sentiment    int     `json:"sentiment"`     // 0:负向，1:中性，2:正向
+	Confidence   float64 `json:"confidence"`    // 分类置信度
+	PositiveProb float64 `json:"positive_prob"` // 积极概率
+	NegativeProb float64 `json:"negative_prob"` // 消极概率
 }
 
 // AnalyzeSentiment 情感分析
@@ -67,9 +67,9 @@ type LexerResponse struct {
 
 // LexerItem 词法分析结果项
 type LexerItem struct {
-	Item string `json:"item"`  // 词汇
-	NE   string `json:"ne"`    // 命名实体类型
-	Pos  string `json:"pos"`   // 词性
+	Item string `json:"item"` // 词汇
+	NE   string `json:"ne"`   // 命名实体类型
+	Pos  string `json:"pos"`  // 词性
 }
 
 // AnalyzeLexer 词法分析
@@ -108,8 +108,8 @@ type EntityRequest struct {
 // EntityResponse 实体分析响应
 type EntityResponse struct {
 	BaseResponse
-	Text           string         `json:"text"`
-	EntityAnalysis []EntityItem   `json:"entity_analysis"`
+	Text           string       `json:"text"`
+	EntityAnalysis []EntityItem `json:"entity_analysis"`
 }
 
 // EntityItem 实体分析结果项
@@ -161,7 +161,7 @@ func (c *Client) AnalyzeEntity(ctx context.Context, text string, mention ...stri
 
 // KeywordRequest 关键词提取请求
 type KeywordRequest struct {
-	Title string `json:"title"`
+	Title   string `json:"title"`
 	Content string `json:"content"`
 }
 
@@ -218,7 +218,7 @@ type TextCorrectionResponse struct {
 
 // CorrectionItem 纠错结果项
 type CorrectionItem struct {
-	CorrectQuery string            `json:"correct_query"` // 纠错后的文本
+	CorrectQuery string             `json:"correct_query"` // 纠错后的文本
 	Details      []CorrectionDetail `json:"details"`       // 纠错详情
 }
 

@@ -9,6 +9,7 @@ import (
 
 	"data-collection-system/service/collection"
 	"data-collection-system/service/processing"
+	"github.com/go-redis/redis/v8"
 )
 
 // Orchestrator 业务编排器 - 统一管理所有业务编排服务
@@ -24,12 +25,13 @@ type Orchestrator struct {
 func NewOrchestrator(
 	collectionSvc *collection.Service,
 	processingSvc *processing.ProcessingService,
+	redisClient *redis.Client,
 ) *Orchestrator {
 	// 创建任务执行编排服务
 	taskExecutor := NewTaskExecutor(collectionSvc, processingSvc)
 
 	// 创建数据管道业务编排服务
-	dataPipeline := NewDataPipeline(collectionSvc, processingSvc)
+	dataPipeline := NewDataPipeline(collectionSvc, processingSvc, redisClient)
 
 	return &Orchestrator{
 		taskExecutor: taskExecutor,

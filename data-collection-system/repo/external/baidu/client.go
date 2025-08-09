@@ -151,8 +151,8 @@ func (c *Client) makeRequest(ctx context.Context, endpoint string, data interfac
 
 // BaseResponse 基础响应结构
 type BaseResponse struct {
-	LogID uint64 `json:"log_id"`
-	Error int    `json:"error_code,omitempty"`
+	LogID    uint64 `json:"log_id"`
+	Error    int    `json:"error_code,omitempty"`
 	ErrorMsg string `json:"error_msg,omitempty"`
 }
 

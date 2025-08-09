@@ -12,16 +12,16 @@ import (
 
 // NewsQueryParams 新闻查询参数
 type NewsQueryParams struct {
-	Page       int       `json:"page"`
-	PageSize   int       `json:"page_size"`
-	Category   string    `json:"category"`
-	Source     string    `json:"source"`
-	StartTime  time.Time `json:"start_time"`
-	EndTime    time.Time `json:"end_time"`
-	Keyword    string    `json:"keyword"`
-	OrderBy    string    `json:"order_by"`    // published_at, created_at, view_count
-	OrderDir   string    `json:"order_dir"`   // asc, desc
-	Status     int       `json:"status"`      // 0: 全部, 1: 已发布, 2: 草稿
+	Page      int       `json:"page"`
+	PageSize  int       `json:"page_size"`
+	Category  string    `json:"category"`
+	Source    string    `json:"source"`
+	StartTime time.Time `json:"start_time"`
+	EndTime   time.Time `json:"end_time"`
+	Keyword   string    `json:"keyword"`
+	OrderBy   string    `json:"order_by"`  // published_at, created_at, view_count
+	OrderDir  string    `json:"order_dir"` // asc, desc
+	Status    int       `json:"status"`    // 0: 全部, 1: 已发布, 2: 草稿
 }
 
 // NewsSearchParams 新闻搜索参数
@@ -153,7 +153,7 @@ type DAOManager interface {
 	MarketData() MarketDataDAO
 	FinancialData() FinancialDataDAO
 	NewsData() NewsDataDAO
-	News() NewsRepository  // 新爬虫系统的新闻仓库
+	News() NewsRepository // 新爬虫系统的新闻仓库
 	MacroData() MacroDataDAO
 	DataTask() DataTaskDAO
 	Close() error

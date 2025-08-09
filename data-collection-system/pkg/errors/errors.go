@@ -30,18 +30,18 @@ const (
 	ErrCodeOperationFailed
 
 	// 数据采集错误 (3000-3999)
-ErrCodeCollection ErrorCode = 3000 + iota
-ErrCodeDataSourceUnavailable
-ErrCodeDataParsingFailed
-ErrCodeDataValidationFailed
-ErrCodeRateLimitExceeded
-ErrCodeAPIKeyInvalid
-ErrCodeQuotaExceeded
-ErrCodeCrawlerFailed
-ErrCodeDatabaseError
-ErrCodeInvalidOperation
-ErrCodeNotFound
-ErrCodeAlreadyExists
+	ErrCodeCollection ErrorCode = 3000 + iota
+	ErrCodeDataSourceUnavailable
+	ErrCodeDataParsingFailed
+	ErrCodeDataValidationFailed
+	ErrCodeRateLimitExceeded
+	ErrCodeAPIKeyInvalid
+	ErrCodeQuotaExceeded
+	ErrCodeCrawlerFailed
+	ErrCodeDatabaseError
+	ErrCodeInvalidOperation
+	ErrCodeNotFound
+	ErrCodeAlreadyExists
 )
 
 // AppError 应用错误结构
@@ -178,20 +178,20 @@ func GetAppError(err error) *AppError {
 
 // 预定义的常用错误
 var (
-	ErrSystemError        = New(ErrCodeSystem, "系统错误")
-	ErrDatabaseError      = New(ErrCodeDatabase, "数据库错误")
-	ErrRedisError         = New(ErrCodeRedis, "Redis错误")
-	ErrConfigError        = New(ErrCodeConfig, "配置错误")
-	ErrNetworkError       = New(ErrCodeNetwork, "网络错误")
-	ErrTimeoutError       = New(ErrCodeTimeout, "请求超时")
-	ErrInvalidParam       = New(ErrCodeInvalidParam, "参数无效")
-	ErrDataNotFound       = New(ErrCodeDataNotFound, "数据不存在")
-	ErrDataExists         = New(ErrCodeDataExists, "数据已存在")
-	ErrPermissionDenied   = New(ErrCodePermissionDenied, "权限不足")
-	ErrOperationFailed    = New(ErrCodeOperationFailed, "操作失败")
-	ErrDataSourceError    = New(ErrCodeDataSourceUnavailable, "数据源不可用")
-	ErrDataParsingError   = New(ErrCodeDataParsingFailed, "数据解析失败")
-	ErrRateLimitError     = New(ErrCodeRateLimitExceeded, "请求频率超限")
-	ErrAPIKeyError        = New(ErrCodeAPIKeyInvalid, "API密钥无效")
-	ErrQuotaError         = New(ErrCodeQuotaExceeded, "配额已用完")
+	ErrSystemError      = New(ErrCodeSystem, "系统错误")
+	ErrDatabaseError    = New(ErrCodeDatabase, "数据库错误")
+	ErrRedisError       = New(ErrCodeRedis, "Redis错误")
+	ErrConfigError      = New(ErrCodeConfig, "配置错误")
+	ErrNetworkError     = New(ErrCodeNetwork, "网络错误")
+	ErrTimeoutError     = New(ErrCodeTimeout, "请求超时")
+	ErrInvalidParam     = New(ErrCodeInvalidParam, "参数无效")
+	ErrDataNotFound     = New(ErrCodeDataNotFound, "数据不存在")
+	ErrDataExists       = New(ErrCodeDataExists, "数据已存在")
+	ErrPermissionDenied = New(ErrCodePermissionDenied, "权限不足")
+	ErrOperationFailed  = New(ErrCodeOperationFailed, "操作失败")
+	ErrDataSourceError  = New(ErrCodeDataSourceUnavailable, "数据源不可用")
+	ErrDataParsingError = New(ErrCodeDataParsingFailed, "数据解析失败")
+	ErrRateLimitError   = New(ErrCodeRateLimitExceeded, "请求频率超限")
+	ErrAPIKeyError      = New(ErrCodeAPIKeyInvalid, "API密钥无效")
+	ErrQuotaError       = New(ErrCodeQuotaExceeded, "配额已用完")
 )

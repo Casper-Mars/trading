@@ -28,28 +28,28 @@ type NewsCrawlerService struct {
 
 // NewsCrawlerConfig 新闻爬虫配置
 type NewsCrawlerConfig struct {
-	MaxDepth        int           `yaml:"max_depth"`         // 最大爬取深度
-	Delay           time.Duration `yaml:"delay"`             // 请求延迟
-	RandomDelay     time.Duration `yaml:"random_delay"`      // 随机延迟
-	Concurrency     int           `yaml:"concurrency"`       // 并发数
-	Timeout         time.Duration `yaml:"timeout"`           // 超时时间
-	RetryCount      int           `yaml:"retry_count"`       // 重试次数
-	Debug           bool          `yaml:"debug"`             // 是否启用调试
-	RespectRobots   bool          `yaml:"respect_robots"`    // 是否遵守robots.txt
-	AllowedDomains  []string      `yaml:"allowed_domains"`   // 允许的域名
-	BlockedDomains  []string      `yaml:"blocked_domains"`   // 禁止的域名
+	MaxDepth       int           `yaml:"max_depth"`       // 最大爬取深度
+	Delay          time.Duration `yaml:"delay"`           // 请求延迟
+	RandomDelay    time.Duration `yaml:"random_delay"`    // 随机延迟
+	Concurrency    int           `yaml:"concurrency"`     // 并发数
+	Timeout        time.Duration `yaml:"timeout"`         // 超时时间
+	RetryCount     int           `yaml:"retry_count"`     // 重试次数
+	Debug          bool          `yaml:"debug"`           // 是否启用调试
+	RespectRobots  bool          `yaml:"respect_robots"`  // 是否遵守robots.txt
+	AllowedDomains []string      `yaml:"allowed_domains"` // 允许的域名
+	BlockedDomains []string      `yaml:"blocked_domains"` // 禁止的域名
 }
 
 // NewsSource 新闻源配置
 type NewsSource struct {
-	Name         string            `yaml:"name"`          // 新闻源名称
-	BaseURL      string            `yaml:"base_url"`      // 基础URL
-	ListURL      string            `yaml:"list_url"`      // 列表页URL
-	Selectors    NewsSelectors     `yaml:"selectors"`     // CSS选择器
-	Headers      map[string]string `yaml:"headers"`       // 请求头
-	Enabled      bool              `yaml:"enabled"`       // 是否启用
-	Category     string            `yaml:"category"`      // 新闻分类
-	UpdateFreq   time.Duration     `yaml:"update_freq"`   // 更新频率
+	Name       string            `yaml:"name"`        // 新闻源名称
+	BaseURL    string            `yaml:"base_url"`    // 基础URL
+	ListURL    string            `yaml:"list_url"`    // 列表页URL
+	Selectors  NewsSelectors     `yaml:"selectors"`   // CSS选择器
+	Headers    map[string]string `yaml:"headers"`     // 请求头
+	Enabled    bool              `yaml:"enabled"`     // 是否启用
+	Category   string            `yaml:"category"`    // 新闻分类
+	UpdateFreq time.Duration     `yaml:"update_freq"` // 更新频率
 }
 
 // NewsSelectors CSS选择器配置
@@ -163,7 +163,7 @@ func (s *NewsCrawlerService) setupCallbacks() {
 	// 错误回调
 	s.collector.OnError(func(r *colly.Response, err error) {
 		s.logger.Errorf("请求失败: %s, 错误: %v", r.Request.URL.String(), err)
-		
+
 		// 实现重试机制
 		if r.StatusCode == http.StatusTooManyRequests || r.StatusCode >= 500 {
 			// 延迟后重试

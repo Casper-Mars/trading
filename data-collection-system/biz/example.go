@@ -7,6 +7,7 @@ import (
 
 	"data-collection-system/service/collection"
 	"data-collection-system/service/processing"
+	"github.com/go-redis/redis/v8"
 )
 
 // ExampleUsage 展示如何使用业务编排服务的示例
@@ -56,13 +57,13 @@ func CreateExampleTaskExecutor(collectionSvc *collection.Service, processingSvc 
 }
 
 // CreateExampleDataPipeline 创建示例数据管道
-func CreateExampleDataPipeline(collectionSvc *collection.Service, processingSvc *processing.ProcessingService) *DataPipeline {
-	return NewDataPipeline(collectionSvc, processingSvc)
+func CreateExampleDataPipeline(collectionSvc *collection.Service, processingSvc *processing.ProcessingService, redisClient *redis.Client) *DataPipeline {
+	return NewDataPipeline(collectionSvc, processingSvc, redisClient)
 }
 
 // CreateExampleOrchestrator 创建示例业务编排器
-func CreateExampleOrchestrator(collectionSvc *collection.Service, processingSvc *processing.ProcessingService) *Orchestrator {
-	return NewOrchestrator(collectionSvc, processingSvc)
+func CreateExampleOrchestrator(collectionSvc *collection.Service, processingSvc *processing.ProcessingService, redisClient *redis.Client) *Orchestrator {
+	return NewOrchestrator(collectionSvc, processingSvc, redisClient)
 }
 
 // ExampleDailyDataFlow 示例：执行日度数据流程
