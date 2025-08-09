@@ -101,7 +101,7 @@ func main() {
 	}
 
 	// 创建路由
-	router := routes.SetupRoutes(queryService, taskService, db, rdb)
+	router := routes.SetupRoutes(queryService, taskService, collectionService, db, rdb)
 
 	// 创建HTTP服务器
 	srv := &http.Server{

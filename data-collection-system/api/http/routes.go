@@ -5,6 +5,7 @@ import (
 
 	"data-collection-system/api/http/handlers"
 	"data-collection-system/api/http/middleware"
+	"data-collection-system/service/collection"
 	"data-collection-system/service/query"
 	"data-collection-system/service/task"
 
@@ -14,7 +15,7 @@ import (
 )
 
 // SetupRoutes 设置路由
-func SetupRoutes(queryService *query.QueryService, taskService *task.TaskService, db *gorm.DB, rdb *redis.Client) *gin.Engine {
+func SetupRoutes(queryService *query.QueryService, taskService *task.TaskService, collectionService *collection.Service, db *gorm.DB, rdb *redis.Client) *gin.Engine {
 	r := gin.New()
 
 	// 添加中间件
@@ -26,6 +27,7 @@ func SetupRoutes(queryService *query.QueryService, taskService *task.TaskService
 	// 创建处理器
 	queryHandler := handlers.NewQueryHandler(queryService)
 	taskHandler := handlers.NewTaskHandler(taskService)
+	collectionHandler := handlers.NewCollectionHandler(collectionService)
 
 
 	// 健康检查
@@ -113,6 +115,40 @@ func SetupRoutes(queryService *query.QueryService, taskService *task.TaskService
 			tasks.DELETE("/:id", taskHandler.DeleteTask)
 			tasks.POST("/:id/run", taskHandler.RunTask)
 			tasks.GET("/:id/status", taskHandler.GetTaskStatus)
+		}
+
+		// 数据采集相关路由
+		collection := v1.Group("/collection")
+		{
+			// 股票数据采集
+			collection.POST("/stock/basic", collectionHandler.CollectStockBasicData)
+			collection.POST("/stock/daily", collectionHandler.CollectDailyMarketData)
+			collection.POST("/stock/history", collectionHandler.CollectStockHistoryData)
+			collection.POST("/stock/batch", collectionHandler.BatchCollectStockData)
+			collection.POST("/stock/sync", collectionHandler.SyncStockList)
+			collection.POST("/stock/realtime", collectionHandler.CollectRealtimeData)
+
+			// 财务数据采集
+			collection.POST("/financial", collectionHandler.CollectFinancialData)
+
+			// 宏观数据采集
+			collection.POST("/macro", collectionHandler.CollectMacroData)
+
+			// 市场情绪和资金流向数据采集
+			collection.POST("/sentiment/money-flow", collectionHandler.CollectMoneyFlowData)
+			collection.POST("/sentiment/northbound-fund", collectionHandler.CollectNorthboundFundData)
+			collection.POST("/sentiment/northbound-top-stocks", collectionHandler.CollectNorthboundTopStocksData)
+			collection.POST("/sentiment/margin-trading", collectionHandler.CollectMarginTradingData)
+			collection.POST("/sentiment/etf-basic", collectionHandler.CollectETFBasicData)
+			collection.POST("/sentiment/all", collectionHandler.CollectAllSentimentData)
+			collection.POST("/sentiment/active-stocks-money-flow", collectionHandler.CollectActiveStocksMoneyFlow)
+
+			// 综合采集任务
+			collection.POST("/today", collectionHandler.CollectTodayData)
+
+			// 采集器状态查询
+			collection.GET("/status", collectionHandler.GetCollectorStatus)
+			collection.GET("/sentiment/status", collectionHandler.GetSentimentCollectorStatus)
 		}
 
 		// 系统监控相关路由
