@@ -7,7 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"data-collection-system/internal/models"
+	"data-collection-system/model"
 )
 
 // marketDataDAO 行情数据访问层实现
@@ -21,7 +21,7 @@ func NewMarketDataDAO(db *gorm.DB) MarketDataDAO {
 }
 
 // Create 创建行情数据记录
-func (m *marketDataDAO) Create(ctx context.Context, data *models.MarketData) error {
+func (m *marketDataDAO) Create(ctx context.Context, data *model.MarketData) error {
 	if err := m.db.WithContext(ctx).Create(data).Error; err != nil {
 		return fmt.Errorf("failed to create market data: %w", err)
 	}
@@ -29,7 +29,7 @@ func (m *marketDataDAO) Create(ctx context.Context, data *models.MarketData) err
 }
 
 // BatchCreate 批量创建行情数据记录
-func (m *marketDataDAO) BatchCreate(ctx context.Context, data []*models.MarketData) error {
+func (m *marketDataDAO) BatchCreate(ctx context.Context, data []*model.MarketData) error {
 	if len(data) == 0 {
 		return nil
 	}
@@ -40,8 +40,8 @@ func (m *marketDataDAO) BatchCreate(ctx context.Context, data []*models.MarketDa
 }
 
 // GetBySymbol 根据股票代码获取行情数据
-func (m *marketDataDAO) GetBySymbol(ctx context.Context, symbol string, startDate, endDate time.Time, period string, limit, offset int) ([]*models.MarketData, error) {
-	var data []*models.MarketData
+func (m *marketDataDAO) GetBySymbol(ctx context.Context, symbol string, startDate, endDate time.Time, period string, limit, offset int) ([]*model.MarketData, error) {
+	var data []*model.MarketData
 	query := m.db.WithContext(ctx).Where("symbol = ?", symbol)
 	
 	if !startDate.IsZero() {
@@ -70,8 +70,8 @@ func (m *marketDataDAO) GetBySymbol(ctx context.Context, symbol string, startDat
 }
 
 // GetLatest 获取最新行情数据
-func (m *marketDataDAO) GetLatest(ctx context.Context, symbol string, period string) (*models.MarketData, error) {
-	var data models.MarketData
+func (m *marketDataDAO) GetLatest(ctx context.Context, symbol string, period string) (*model.MarketData, error) {
+	var data model.MarketData
 	query := m.db.WithContext(ctx).Where("symbol = ?", symbol)
 	if period != "" {
 		query = query.Where("period = ?", period)
@@ -88,8 +88,8 @@ func (m *marketDataDAO) GetLatest(ctx context.Context, symbol string, period str
 }
 
 // GetByDate 根据日期获取行情数据
-func (m *marketDataDAO) GetByDate(ctx context.Context, date time.Time, period string, limit, offset int) ([]*models.MarketData, error) {
-	var data []*models.MarketData
+func (m *marketDataDAO) GetByDate(ctx context.Context, date time.Time, period string, limit, offset int) ([]*model.MarketData, error) {
+	var data []*model.MarketData
 	query := m.db.WithContext(ctx).Where("trade_date = ?", date)
 	if period != "" {
 		query = query.Where("period = ?", period)
@@ -111,7 +111,7 @@ func (m *marketDataDAO) GetByDate(ctx context.Context, date time.Time, period st
 }
 
 // Update 更新行情数据
-func (m *marketDataDAO) Update(ctx context.Context, data *models.MarketData) error {
+func (m *marketDataDAO) Update(ctx context.Context, data *model.MarketData) error {
 	if err := m.db.WithContext(ctx).Save(data).Error; err != nil {
 		return fmt.Errorf("failed to update market data: %w", err)
 	}
@@ -120,7 +120,7 @@ func (m *marketDataDAO) Update(ctx context.Context, data *models.MarketData) err
 
 // Delete 删除行情数据记录
 func (m *marketDataDAO) Delete(ctx context.Context, id uint64) error {
-	if err := m.db.WithContext(ctx).Delete(&models.MarketData{}, id).Error; err != nil {
+	if err := m.db.WithContext(ctx).Delete(&model.MarketData{}, id).Error; err != nil {
 		return fmt.Errorf("failed to delete market data: %w", err)
 	}
 	return nil
@@ -136,7 +136,7 @@ func (m *marketDataDAO) DeleteBySymbolAndDateRange(ctx context.Context, symbol s
 		query = query.Where("trade_date <= ?", endDate)
 	}
 	
-	if err := query.Delete(&models.MarketData{}).Error; err != nil {
+	if err := query.Delete(&model.MarketData{}).Error; err != nil {
 		return fmt.Errorf("failed to delete market data by symbol and date range: %w", err)
 	}
 	return nil
@@ -145,7 +145,7 @@ func (m *marketDataDAO) DeleteBySymbolAndDateRange(ctx context.Context, symbol s
 // Count 获取行情数据总数
 func (m *marketDataDAO) Count(ctx context.Context) (int64, error) {
 	var count int64
-	if err := m.db.WithContext(ctx).Model(&models.MarketData{}).Count(&count).Error; err != nil {
+	if err := m.db.WithContext(ctx).Model(&model.MarketData{}).Count(&count).Error; err != nil {
 		return 0, fmt.Errorf("failed to count market data: %w", err)
 	}
 	return count, nil

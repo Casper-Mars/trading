@@ -7,7 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"data-collection-system/internal/models"
+	"data-collection-system/model"
 )
 
 // macroDataDAO 宏观数据访问层实现
@@ -21,7 +21,7 @@ func NewMacroDataDAO(db *gorm.DB) MacroDataDAO {
 }
 
 // Create 创建宏观数据记录
-func (m *macroDataDAO) Create(ctx context.Context, data *models.MacroData) error {
+func (m *macroDataDAO) Create(ctx context.Context, data *model.MacroData) error {
 	if err := m.db.WithContext(ctx).Create(data).Error; err != nil {
 		return fmt.Errorf("failed to create macro data: %w", err)
 	}
@@ -29,7 +29,7 @@ func (m *macroDataDAO) Create(ctx context.Context, data *models.MacroData) error
 }
 
 // BatchCreate 批量创建宏观数据记录
-func (m *macroDataDAO) BatchCreate(ctx context.Context, data []*models.MacroData) error {
+func (m *macroDataDAO) BatchCreate(ctx context.Context, data []*model.MacroData) error {
 	if len(data) == 0 {
 		return nil
 	}
@@ -40,8 +40,8 @@ func (m *macroDataDAO) BatchCreate(ctx context.Context, data []*models.MacroData
 }
 
 // GetByIndicator 根据指标代码获取宏观数据
-func (m *macroDataDAO) GetByIndicator(ctx context.Context, indicatorCode string, startDate, endDate time.Time, limit, offset int) ([]*models.MacroData, error) {
-	var data []*models.MacroData
+func (m *macroDataDAO) GetByIndicator(ctx context.Context, indicatorCode string, startDate, endDate time.Time, limit, offset int) ([]*model.MacroData, error) {
+	var data []*model.MacroData
 	query := m.db.WithContext(ctx).Where("indicator_code = ?", indicatorCode)
 	
 	if !startDate.IsZero() {
@@ -67,8 +67,8 @@ func (m *macroDataDAO) GetByIndicator(ctx context.Context, indicatorCode string,
 }
 
 // GetLatest 获取最新宏观数据
-func (m *macroDataDAO) GetLatest(ctx context.Context, indicatorCode string) (*models.MacroData, error) {
-	var data models.MacroData
+func (m *macroDataDAO) GetLatest(ctx context.Context, indicatorCode string) (*model.MacroData, error) {
+	var data model.MacroData
 	query := m.db.WithContext(ctx).Where("indicator_code = ?", indicatorCode)
 	query = query.Order("data_date DESC")
 	
@@ -82,8 +82,8 @@ func (m *macroDataDAO) GetLatest(ctx context.Context, indicatorCode string) (*mo
 }
 
 // GetByPeriodType 根据周期类型获取宏观数据
-func (m *macroDataDAO) GetByPeriodType(ctx context.Context, periodType string, limit, offset int) ([]*models.MacroData, error) {
-	var data []*models.MacroData
+func (m *macroDataDAO) GetByPeriodType(ctx context.Context, periodType string, limit, offset int) ([]*model.MacroData, error) {
+	var data []*model.MacroData
 	query := m.db.WithContext(ctx).Where("period_type = ?", periodType)
 	query = query.Order("data_date DESC")
 	
@@ -101,8 +101,8 @@ func (m *macroDataDAO) GetByPeriodType(ctx context.Context, periodType string, l
 }
 
 // GetByDateRange 根据日期范围获取宏观数据
-func (m *macroDataDAO) GetByDateRange(ctx context.Context, startDate, endDate time.Time, limit, offset int) ([]*models.MacroData, error) {
-	var data []*models.MacroData
+func (m *macroDataDAO) GetByDateRange(ctx context.Context, startDate, endDate time.Time, limit, offset int) ([]*model.MacroData, error) {
+	var data []*model.MacroData
 	query := m.db.WithContext(ctx)
 	
 	if !startDate.IsZero() {
@@ -128,7 +128,7 @@ func (m *macroDataDAO) GetByDateRange(ctx context.Context, startDate, endDate ti
 }
 
 // Update 更新宏观数据
-func (m *macroDataDAO) Update(ctx context.Context, data *models.MacroData) error {
+func (m *macroDataDAO) Update(ctx context.Context, data *model.MacroData) error {
 	if err := m.db.WithContext(ctx).Save(data).Error; err != nil {
 		return fmt.Errorf("failed to update macro data: %w", err)
 	}
@@ -137,7 +137,7 @@ func (m *macroDataDAO) Update(ctx context.Context, data *models.MacroData) error
 
 // Delete 删除宏观数据记录
 func (m *macroDataDAO) Delete(ctx context.Context, id uint64) error {
-	if err := m.db.WithContext(ctx).Delete(&models.MacroData{}, id).Error; err != nil {
+	if err := m.db.WithContext(ctx).Delete(&model.MacroData{}, id).Error; err != nil {
 		return fmt.Errorf("failed to delete macro data: %w", err)
 	}
 	return nil
@@ -146,7 +146,7 @@ func (m *macroDataDAO) Delete(ctx context.Context, id uint64) error {
 // Count 获取宏观数据总数
 func (m *macroDataDAO) Count(ctx context.Context) (int64, error) {
 	var count int64
-	if err := m.db.WithContext(ctx).Model(&models.MacroData{}).Count(&count).Error; err != nil {
+	if err := m.db.WithContext(ctx).Model(&model.MacroData{}).Count(&count).Error; err != nil {
 		return 0, fmt.Errorf("failed to count macro data: %w", err)
 	}
 	return count, nil

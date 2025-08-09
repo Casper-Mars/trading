@@ -7,7 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"data-collection-system/internal/models"
+	"data-collection-system/model"
 )
 
 // financialDataDAO 财务数据访问层实现
@@ -21,7 +21,7 @@ func NewFinancialDataDAO(db *gorm.DB) FinancialDataDAO {
 }
 
 // Create 创建财务数据记录
-func (f *financialDataDAO) Create(ctx context.Context, data *models.FinancialData) error {
+func (f *financialDataDAO) Create(ctx context.Context, data *model.FinancialData) error {
 	if err := f.db.WithContext(ctx).Create(data).Error; err != nil {
 		return fmt.Errorf("failed to create financial data: %w", err)
 	}
@@ -29,7 +29,7 @@ func (f *financialDataDAO) Create(ctx context.Context, data *models.FinancialDat
 }
 
 // BatchCreate 批量创建财务数据记录
-func (f *financialDataDAO) BatchCreate(ctx context.Context, data []*models.FinancialData) error {
+func (f *financialDataDAO) BatchCreate(ctx context.Context, data []*model.FinancialData) error {
 	if len(data) == 0 {
 		return nil
 	}
@@ -40,8 +40,8 @@ func (f *financialDataDAO) BatchCreate(ctx context.Context, data []*models.Finan
 }
 
 // GetBySymbol 根据股票代码获取财务数据
-func (f *financialDataDAO) GetBySymbol(ctx context.Context, symbol string, startDate, endDate time.Time, reportType string, limit, offset int) ([]*models.FinancialData, error) {
-	var data []*models.FinancialData
+func (f *financialDataDAO) GetBySymbol(ctx context.Context, symbol string, startDate, endDate time.Time, reportType string, limit, offset int) ([]*model.FinancialData, error) {
+	var data []*model.FinancialData
 	query := f.db.WithContext(ctx).Where("symbol = ?", symbol)
 	
 	if !startDate.IsZero() {
@@ -70,8 +70,8 @@ func (f *financialDataDAO) GetBySymbol(ctx context.Context, symbol string, start
 }
 
 // GetLatest 获取最新财务数据
-func (f *financialDataDAO) GetLatest(ctx context.Context, symbol string, reportType string) (*models.FinancialData, error) {
-	var data models.FinancialData
+func (f *financialDataDAO) GetLatest(ctx context.Context, symbol string, reportType string) (*model.FinancialData, error) {
+	var data model.FinancialData
 	query := f.db.WithContext(ctx).Where("symbol = ?", symbol)
 	if reportType != "" {
 		query = query.Where("report_type = ?", reportType)
@@ -88,8 +88,8 @@ func (f *financialDataDAO) GetLatest(ctx context.Context, symbol string, reportT
 }
 
 // GetByReportDate 根据报告日期获取财务数据
-func (f *financialDataDAO) GetByReportDate(ctx context.Context, reportDate time.Time, reportType string, limit, offset int) ([]*models.FinancialData, error) {
-	var data []*models.FinancialData
+func (f *financialDataDAO) GetByReportDate(ctx context.Context, reportDate time.Time, reportType string, limit, offset int) ([]*model.FinancialData, error) {
+	var data []*model.FinancialData
 	query := f.db.WithContext(ctx).Where("report_date = ?", reportDate)
 	if reportType != "" {
 		query = query.Where("report_type = ?", reportType)
@@ -111,7 +111,7 @@ func (f *financialDataDAO) GetByReportDate(ctx context.Context, reportDate time.
 }
 
 // Update 更新财务数据
-func (f *financialDataDAO) Update(ctx context.Context, data *models.FinancialData) error {
+func (f *financialDataDAO) Update(ctx context.Context, data *model.FinancialData) error {
 	if err := f.db.WithContext(ctx).Save(data).Error; err != nil {
 		return fmt.Errorf("failed to update financial data: %w", err)
 	}
@@ -120,7 +120,7 @@ func (f *financialDataDAO) Update(ctx context.Context, data *models.FinancialDat
 
 // Delete 删除财务数据记录
 func (f *financialDataDAO) Delete(ctx context.Context, id uint64) error {
-	if err := f.db.WithContext(ctx).Delete(&models.FinancialData{}, id).Error; err != nil {
+	if err := f.db.WithContext(ctx).Delete(&model.FinancialData{}, id).Error; err != nil {
 		return fmt.Errorf("failed to delete financial data: %w", err)
 	}
 	return nil
@@ -129,7 +129,7 @@ func (f *financialDataDAO) Delete(ctx context.Context, id uint64) error {
 // Count 获取财务数据总数
 func (f *financialDataDAO) Count(ctx context.Context) (int64, error) {
 	var count int64
-	if err := f.db.WithContext(ctx).Model(&models.FinancialData{}).Count(&count).Error; err != nil {
+	if err := f.db.WithContext(ctx).Model(&model.FinancialData{}).Count(&count).Error; err != nil {
 		return 0, fmt.Errorf("failed to count financial data: %w", err)
 	}
 	return count, nil

@@ -7,7 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"data-collection-system/internal/models"
+	"data-collection-system/model"
 )
 
 // newsDataDAO 新闻数据访问层实现
@@ -21,7 +21,7 @@ func NewNewsDataDAO(db *gorm.DB) NewsDataDAO {
 }
 
 // Create 创建新闻数据记录
-func (n *newsDataDAO) Create(ctx context.Context, news *models.NewsData) error {
+func (n *newsDataDAO) Create(ctx context.Context, news *model.NewsData) error {
 	if err := n.db.WithContext(ctx).Create(news).Error; err != nil {
 		return fmt.Errorf("failed to create news data: %w", err)
 	}
@@ -29,7 +29,7 @@ func (n *newsDataDAO) Create(ctx context.Context, news *models.NewsData) error {
 }
 
 // BatchCreate 批量创建新闻数据记录
-func (n *newsDataDAO) BatchCreate(ctx context.Context, news []*models.NewsData) error {
+func (n *newsDataDAO) BatchCreate(ctx context.Context, news []*model.NewsData) error {
 	if len(news) == 0 {
 		return nil
 	}
@@ -40,8 +40,8 @@ func (n *newsDataDAO) BatchCreate(ctx context.Context, news []*models.NewsData) 
 }
 
 // GetByTimeRange 根据时间范围获取新闻数据
-func (n *newsDataDAO) GetByTimeRange(ctx context.Context, startTime, endTime time.Time, limit, offset int) ([]*models.NewsData, error) {
-	var news []*models.NewsData
+func (n *newsDataDAO) GetByTimeRange(ctx context.Context, startTime, endTime time.Time, limit, offset int) ([]*model.NewsData, error) {
+	var news []*model.NewsData
 	query := n.db.WithContext(ctx)
 	
 	if !startTime.IsZero() {
@@ -67,8 +67,8 @@ func (n *newsDataDAO) GetByTimeRange(ctx context.Context, startTime, endTime tim
 }
 
 // GetByCategory 根据分类获取新闻数据
-func (n *newsDataDAO) GetByCategory(ctx context.Context, category string, limit, offset int) ([]*models.NewsData, error) {
-	var news []*models.NewsData
+func (n *newsDataDAO) GetByCategory(ctx context.Context, category string, limit, offset int) ([]*model.NewsData, error) {
+	var news []*model.NewsData
 	query := n.db.WithContext(ctx).Where("category = ?", category)
 	query = query.Order("publish_time DESC")
 	
@@ -86,8 +86,8 @@ func (n *newsDataDAO) GetByCategory(ctx context.Context, category string, limit,
 }
 
 // GetBySentiment 根据情感倾向获取新闻数据
-func (n *newsDataDAO) GetBySentiment(ctx context.Context, sentiment int8, limit, offset int) ([]*models.NewsData, error) {
-	var news []*models.NewsData
+func (n *newsDataDAO) GetBySentiment(ctx context.Context, sentiment int8, limit, offset int) ([]*model.NewsData, error) {
+	var news []*model.NewsData
 	query := n.db.WithContext(ctx).Where("sentiment = ?", sentiment)
 	query = query.Order("publish_time DESC")
 	
@@ -105,8 +105,8 @@ func (n *newsDataDAO) GetBySentiment(ctx context.Context, sentiment int8, limit,
 }
 
 // GetByImportance 根据重要程度获取新闻数据
-func (n *newsDataDAO) GetByImportance(ctx context.Context, minLevel int8, limit, offset int) ([]*models.NewsData, error) {
-	var news []*models.NewsData
+func (n *newsDataDAO) GetByImportance(ctx context.Context, minLevel int8, limit, offset int) ([]*model.NewsData, error) {
+	var news []*model.NewsData
 	query := n.db.WithContext(ctx).Where("importance_level >= ?", minLevel)
 	query = query.Order("importance_level DESC, publish_time DESC")
 	
@@ -124,8 +124,8 @@ func (n *newsDataDAO) GetByImportance(ctx context.Context, minLevel int8, limit,
 }
 
 // GetByRelatedStock 根据相关股票获取新闻数据
-func (n *newsDataDAO) GetByRelatedStock(ctx context.Context, symbol string, limit, offset int) ([]*models.NewsData, error) {
-	var news []*models.NewsData
+func (n *newsDataDAO) GetByRelatedStock(ctx context.Context, symbol string, limit, offset int) ([]*model.NewsData, error) {
+	var news []*model.NewsData
 	query := n.db.WithContext(ctx).Where("JSON_CONTAINS(related_stocks, ?)", fmt.Sprintf(`"%s"`, symbol))
 	query = query.Order("publish_time DESC")
 	
@@ -143,8 +143,8 @@ func (n *newsDataDAO) GetByRelatedStock(ctx context.Context, symbol string, limi
 }
 
 // SearchByKeyword 根据关键词搜索新闻数据
-func (n *newsDataDAO) SearchByKeyword(ctx context.Context, keyword string, limit, offset int) ([]*models.NewsData, error) {
-	var news []*models.NewsData
+func (n *newsDataDAO) SearchByKeyword(ctx context.Context, keyword string, limit, offset int) ([]*model.NewsData, error) {
+	var news []*model.NewsData
 	query := n.db.WithContext(ctx).Where("title LIKE ? OR content LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 	query = query.Order("publish_time DESC")
 	
@@ -162,7 +162,7 @@ func (n *newsDataDAO) SearchByKeyword(ctx context.Context, keyword string, limit
 }
 
 // Update 更新新闻数据
-func (n *newsDataDAO) Update(ctx context.Context, news *models.NewsData) error {
+func (n *newsDataDAO) Update(ctx context.Context, news *model.NewsData) error {
 	if err := n.db.WithContext(ctx).Save(news).Error; err != nil {
 		return fmt.Errorf("failed to update news data: %w", err)
 	}
@@ -171,7 +171,7 @@ func (n *newsDataDAO) Update(ctx context.Context, news *models.NewsData) error {
 
 // Delete 删除新闻数据记录
 func (n *newsDataDAO) Delete(ctx context.Context, id uint64) error {
-	if err := n.db.WithContext(ctx).Delete(&models.NewsData{}, id).Error; err != nil {
+	if err := n.db.WithContext(ctx).Delete(&model.NewsData{}, id).Error; err != nil {
 		return fmt.Errorf("failed to delete news data: %w", err)
 	}
 	return nil
@@ -180,7 +180,7 @@ func (n *newsDataDAO) Delete(ctx context.Context, id uint64) error {
 // Count 获取新闻数据总数
 func (n *newsDataDAO) Count(ctx context.Context) (int64, error) {
 	var count int64
-	if err := n.db.WithContext(ctx).Model(&models.NewsData{}).Count(&count).Error; err != nil {
+	if err := n.db.WithContext(ctx).Model(&model.NewsData{}).Count(&count).Error; err != nil {
 		return 0, fmt.Errorf("failed to count news data: %w", err)
 	}
 	return count, nil
