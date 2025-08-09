@@ -27,9 +27,11 @@ func SetupRoutes(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 	r.Use(middleware.CORS())
 	r.Use(middleware.RequestID())
 
-	// 创建DAO管理器和查询服务
-	daoManager := mysqldao.NewDAOManager(db)
-	queryService := query.NewQueryService(daoManager)
+	// 创建Repository管理器和查询服务
+	repoManager := mysqldao.NewRepositoryManager(db)
+	
+	// 创建查询服务
+	queryService := query.NewQueryService(repoManager)
 	queryHandler := handlers.NewQueryHandler(queryService)
 
 	// 创建业务服务
@@ -63,6 +65,7 @@ func SetupRoutes(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 	processingService := processing.NewProcessingService(db, nil, cfg, rdb)
 	dataPipeline := biz.NewDataPipeline(collectionService, processingService, rdb)
 	newsPipelineHandler := handlers.NewNewsPipelineHandler(dataPipeline)
+
 
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {
@@ -106,6 +109,8 @@ func SetupRoutes(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 		// 宏观数据路由
 		data.GET("/macro", queryHandler.GetMacroData)
 	}
+
+
 
 	// 新闻管道相关路由
 	news := v1.Group("/news")

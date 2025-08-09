@@ -13,6 +13,7 @@ import (
 	"data-collection-system/pkg/config"
 	"data-collection-system/pkg/logger"
 	"data-collection-system/repo/external/baidu"
+
 	"github.com/go-redis/redis/v8"
 )
 
@@ -30,7 +31,7 @@ type BaiduNLPProcessor struct {
 // NewBaiduNLPProcessor 创建百度AI NLP处理器
 func NewBaiduNLPProcessor(cfg *config.BaiduAIConfig, redisClient *redis.Client) *BaiduNLPProcessor {
 	baiduClient := baidu.NewClient(cfg)
-	
+
 	return &BaiduNLPProcessor{
 		baiduClient:      baiduClient,
 		redisClient:      redisClient,
@@ -42,14 +43,14 @@ func NewBaiduNLPProcessor(cfg *config.BaiduAIConfig, redisClient *redis.Client) 
 
 // ProcessedResult NLP处理结果
 type ProcessedResult struct {
-	RelatedStocks   []string               `json:"related_stocks"`
-	SentimentScore  float64                `json:"sentiment_score"`
-	SentimentLabel  string                 `json:"sentiment_label"`
-	Keywords        []string               `json:"keywords"`
-	Entities        map[string][]string    `json:"entities"`
-	ImportanceLevel int                    `json:"importance_level"`
-	ProcessedAt     time.Time              `json:"processed_at"`
-	CacheHit        bool                   `json:"cache_hit"`
+	RelatedStocks   []string            `json:"related_stocks"`
+	SentimentScore  float64             `json:"sentiment_score"`
+	SentimentLabel  string              `json:"sentiment_label"`
+	Keywords        []string            `json:"keywords"`
+	Entities        map[string][]string `json:"entities"`
+	ImportanceLevel int                 `json:"importance_level"`
+	ProcessedAt     time.Time           `json:"processed_at"`
+	CacheHit        bool                `json:"cache_hit"`
 }
 
 // ProcessNewsContent 处理新闻内容
@@ -60,7 +61,7 @@ func (p *BaiduNLPProcessor) ProcessNewsContent(ctx context.Context, news *model.
 
 	// 生成缓存键
 	cacheKey := p.generateCacheKey(news.Title, news.Content)
-	
+
 	// 尝试从缓存获取结果
 	if p.config.CacheEnabled {
 		if result, err := p.getFromCache(ctx, cacheKey); err == nil {
@@ -83,7 +84,7 @@ func (p *BaiduNLPProcessor) ProcessNewsContent(ctx context.Context, news *model.
 
 	// 并发处理各种NLP任务
 	errChan := make(chan error, 4)
-	
+
 	// 情感分析
 	go func() {
 		if err := p.processSentiment(ctx, combinedText, result); err != nil {
@@ -154,16 +155,16 @@ func (p *BaiduNLPProcessor) ProcessNewsContent(ctx context.Context, news *model.
 func (p *BaiduNLPProcessor) preprocessText(text string) string {
 	// 移除HTML标签
 	text = p.htmlRegex.ReplaceAllString(text, "")
-	
+
 	// 移除特殊字符
 	text = p.specialCharRegex.ReplaceAllString(text, "")
-	
+
 	// 移除多余空白
 	text = regexp.MustCompile(`\s+`).ReplaceAllString(text, " ")
-	
+
 	// 去除首尾空白
 	text = strings.TrimSpace(text)
-	
+
 	return text
 }
 
@@ -252,7 +253,7 @@ func (p *BaiduNLPProcessor) processKeywords(ctx context.Context, title, content 
 func (p *BaiduNLPProcessor) extractStocks(text string) []string {
 	stockRegex := regexp.MustCompile(`[0-9]{6}`)
 	stockCodes := stockRegex.FindAllString(text, -1)
-	
+
 	// 去重并验证
 	stockSet := make(map[string]bool)
 	for _, code := range stockCodes {
@@ -278,7 +279,7 @@ func (p *BaiduNLPProcessor) isValidStockCode(code string) bool {
 
 	validPrefixes := []string{"600", "601", "603", "605", "000", "001", "002", "003", "300", "688"}
 	firstThree := code[:3]
-	
+
 	for _, prefix := range validPrefixes {
 		if firstThree == prefix {
 			return true
@@ -381,7 +382,7 @@ func (p *BaiduNLPProcessor) ProcessBatchNews(ctx context.Context, newsList []*mo
 
 	for i, news := range newsList {
 		go func(index int, newsItem *model.NewsData) {
-			semaphore <- struct{}{} // 获取信号量
+			semaphore <- struct{}{}        // 获取信号量
 			defer func() { <-semaphore }() // 释放信号量
 
 			result, err := p.ProcessNewsContent(ctx, newsItem)

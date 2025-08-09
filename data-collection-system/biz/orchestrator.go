@@ -9,6 +9,7 @@ import (
 
 	"data-collection-system/service/collection"
 	"data-collection-system/service/processing"
+
 	"github.com/go-redis/redis/v8"
 )
 

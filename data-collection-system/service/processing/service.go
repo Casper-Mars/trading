@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"data-collection-system/model"
@@ -22,13 +21,16 @@ type NewsRepository interface {
 
 // ProcessingService 数据处理服务
 type ProcessingService struct {
-	db             *gorm.DB
-	newsRepo       NewsRepository
-	cleaner        *DataCleaner
-	validator      *DataValidator
-	deduper        *DataDeduplicator
-	qualityChecker *QualityChecker
-	nlpProcessor   *BaiduNLPProcessor
+	db                   *gorm.DB
+	newsRepo             NewsRepository
+	cleaner              *DataCleaner
+	validator            *DataValidator
+	deduper              *DataDeduplicator
+	qualityChecker       *QualityChecker
+	nlpProcessor         *BaiduNLPProcessor
+	stockMatcher         *StockMatcher
+	newsDeduplicator     *NewsDeduplicator
+	importanceEvaluator *ImportanceEvaluator
 }
 
 // NewProcessingService 创建数据处理服务实例
@@ -40,15 +42,27 @@ func NewProcessingService(
 ) *ProcessingService {
 	// 创建百度AI NLP处理器
 	nlpProcessor := NewBaiduNLPProcessor(&cfg.BaiduAI, redisClient)
+	
+	// 创建股票匹配器
+	stockMatcher := NewStockMatcher(db, redisClient)
+	
+	// 创建新闻去重器
+	newsDeduplicator := NewNewsDeduplicator(db, redisClient)
+	
+	// 创建重要程度评估器
+	importanceEvaluator := NewImportanceEvaluator(db, redisClient)
 
 	return &ProcessingService{
-		db:             db,
-		newsRepo:       newsRepo,
-		cleaner:        NewDataCleaner(),
-		validator:      NewDataValidator(),
-		deduper:        NewDataDeduplicator(),
-		qualityChecker: NewQualityChecker(),
-		nlpProcessor:   nlpProcessor,
+		db:                   db,
+		newsRepo:             newsRepo,
+		cleaner:              NewDataCleaner(),
+		validator:            NewDataValidator(),
+		deduper:              NewDataDeduplicator(),
+		qualityChecker:       NewQualityChecker(),
+		stockMatcher:         stockMatcher,
+		newsDeduplicator:     newsDeduplicator,
+		importanceEvaluator: importanceEvaluator,
+		nlpProcessor:         nlpProcessor,
 	}
 }
 
@@ -187,14 +201,27 @@ func (s *ProcessingService) processNewsItem(ctx context.Context, news *model.New
 		return fmt.Errorf("news data validation failed: %w", err)
 	}
 
-	// 3. 数据去重检查（简化处理，实际应该与数据库中的数据比较）
+	// 3. 智能去重检查
+	duplicates, err := s.newsDeduplicator.DetectDuplicates(ctx, cleanedNews)
+	if err != nil {
+		log.Printf("Failed to detect duplicates: %v, news_id: %d", err, cleanedNews.ID)
+	} else if len(duplicates) > 0 {
+		log.Printf("Found %d duplicates for news: %s", len(duplicates), cleanedNews.Title)
+		// 标记为重复并跳过处理
+		if err := s.newsDeduplicator.MarkAsDuplicate(ctx, cleanedNews.ID, duplicates[0].ID); err != nil {
+			log.Printf("Failed to mark as duplicate: %v", err)
+		}
+		return nil
+	}
+
+	// 4. 传统去重检查（备用）
 	deduplicatedList := s.deduper.DeduplicateNewsData([]*model.NewsData{cleanedNews})
 	if len(deduplicatedList) == 0 {
 		log.Printf("Duplicate news found, skipping, title: %s", cleanedNews.Title)
 		return nil
 	}
 
-	// 4. NLP处理（百度AI增强）
+	// 5. NLP处理（百度AI增强）
 	nlpResult, err := s.nlpProcessor.ProcessNewsContent(ctx, cleanedNews)
 	if err != nil {
 		log.Printf("NLP processing failed, error: %v, news_id: %d", err, cleanedNews.ID)
@@ -209,17 +236,27 @@ func (s *ProcessingService) processNewsItem(ctx context.Context, news *model.New
 			cleanedNews.ID, nlpResult.SentimentScore, nlpResult.ImportanceLevel, len(nlpResult.RelatedStocks), len(nlpResult.Keywords), nlpResult.CacheHit)
 	}
 
-	// 5. 数据质量检查
+	// 6. 重要程度评估
+	importanceLevel, err := s.importanceEvaluator.EvaluateImportance(ctx, cleanedNews)
+	if err != nil {
+		log.Printf("Failed to evaluate importance for news %d: %v", cleanedNews.ID, err)
+		// 使用默认重要程度
+		cleanedNews.ImportanceLevel = int8(model.ImportanceLevelMedium)
+	} else {
+		cleanedNews.ImportanceLevel = int8(importanceLevel)
+	}
+
+	// 7. 数据质量检查
 	qualityReport := s.qualityChecker.CheckNewsDataQuality([]*model.NewsData{cleanedNews})
 	qualityScore := qualityReport.QualityScore
 	if qualityScore < 0.6 {
 		log.Printf("Low quality news detected, score: %f, title: %s", qualityScore, cleanedNews.Title)
 	}
 
-	// 6. 标记为已处理并更新
+	// 8. 标记为已处理并更新
 	cleanedNews.MarkAsProcessed()
 
-	// 7. 更新到数据库
+	// 9. 更新到数据库
 	if err := s.newsRepo.Update(ctx, cleanedNews); err != nil {
 		return fmt.Errorf("failed to update processed news: %w", err)
 	}
@@ -270,51 +307,170 @@ func (s *ProcessingService) updateNewsWithNLPResult(news *model.NewsData, nlpRes
 
 // associateStocks 关联股票信息（基础版本，作为NLP处理失败时的备选方案）
 func (s *ProcessingService) associateStocks(ctx context.Context, news *model.NewsData) error {
-	// 从新闻标题和内容中提取股票代码和公司名称
-	stockCodes := s.extractStockCodes(news.Title + " " + news.Content)
+	// 使用智能股票匹配器进行匹配
+	matchedStocks, err := s.stockMatcher.MatchStocks(ctx, news)
+	if err != nil {
+		return fmt.Errorf("failed to match stocks: %w", err)
+	}
 
-	// 验证股票代码是否存在
-	validStockCodes := make([]string, 0)
-	for _, code := range stockCodes {
-		// TODO: 需要实现股票验证逻辑
-		validStockCodes = append(validStockCodes, code)
+	// 计算匹配置信度并过滤低置信度的匹配
+	validStocks := make([]string, 0)
+	text := news.Title + " " + news.Content
+	
+	for _, symbol := range matchedStocks {
+		confidence := s.stockMatcher.GetMatchingConfidence(text, symbol)
+		// 只保留置信度大于0.5的匹配
+		if confidence > 0.5 {
+			validStocks = append(validStocks, symbol)
+		}
 	}
 
 	// 更新新闻的关联股票信息
-	if len(validStockCodes) > 0 {
-		news.RelatedStocks = validStockCodes
+	if len(validStocks) > 0 {
+		news.RelatedStocks = validStocks
+		
+		// 同时关联相关行业
+		s.associateIndustries(ctx, news, validStocks)
 	}
 
 	return nil
 }
 
-// extractStockCodes 从文本中提取股票代码
-func (s *ProcessingService) extractStockCodes(text string) []string {
-	codes := make([]string, 0)
-
-	// 简单的股票代码提取逻辑
-	// A股代码格式：6位数字
-	words := strings.Fields(text)
-	for _, word := range words {
-		// 去除标点符号
-		word = strings.Trim(word, ".,!?;:()[]{}")
-
-		// 检查是否为6位数字
-		if len(word) == 6 {
-			isDigit := true
-			for _, char := range word {
-				if char < '0' || char > '9' {
-					isDigit = false
-					break
-				}
-			}
-			if isDigit {
-				codes = append(codes, word)
-			}
+// associateIndustries 关联相关行业
+func (s *ProcessingService) associateIndustries(ctx context.Context, news *model.NewsData, stockSymbols []string) error {
+	industries := make(map[string]bool) // 使用map去重
+	
+	// 根据关联的股票获取行业信息
+	for _, symbol := range stockSymbols {
+		var stock model.Stock
+		err := s.db.Where("symbol = ? AND status = ?", symbol, model.StockStatusActive).First(&stock).Error
+		if err != nil {
+			continue // 跳过无法找到的股票
+		}
+		
+		if stock.Industry != "" {
+			industries[stock.Industry] = true
+		}
+		if stock.Sector != "" {
+			industries[stock.Sector] = true
 		}
 	}
+	
+	// 转换为切片
+	if len(industries) > 0 {
+		relatedIndustries := make([]string, 0, len(industries))
+		for industry := range industries {
+			relatedIndustries = append(relatedIndustries, industry)
+		}
+		news.RelatedIndustries = relatedIndustries
+	}
+	
+	return nil
+}
 
-	return codes
+// RefreshStockCache 刷新股票缓存
+func (s *ProcessingService) RefreshStockCache() {
+	if s.stockMatcher != nil {
+		s.stockMatcher.RefreshCache()
+	}
+}
+
+// GetStockMatchingStats 获取股票匹配统计信息
+func (s *ProcessingService) GetStockMatchingStats(ctx context.Context) (*StockMatchingStats, error) {
+	stats := &StockMatchingStats{}
+	
+	// 统计有关联股票的新闻数量
+	err := s.db.Model(&model.NewsData{}).
+		Where("JSON_LENGTH(related_stocks) > 0").
+		Count(&stats.NewsWithStocks).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to count news with stocks: %w", err)
+	}
+	
+	// 统计总新闻数量
+	err = s.db.Model(&model.NewsData{}).Count(&stats.TotalNews).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to count total news: %w", err)
+	}
+	
+	// 计算匹配率
+	if stats.TotalNews > 0 {
+		stats.MatchingRate = float64(stats.NewsWithStocks) / float64(stats.TotalNews)
+	}
+	
+	return stats, nil
+}
+
+// ProcessNewsWithAssociation 处理新闻并进行完整的关联分析
+func (s *ProcessingService) ProcessNewsWithAssociation(ctx context.Context, newsData []*model.NewsData) error {
+	for _, news := range newsData {
+		if err := s.processNewsItem(ctx, news); err != nil {
+			log.Printf("Failed to process news %d: %v", news.ID, err)
+			continue
+		}
+	}
+	return nil
+}
+
+// GetDuplicationStats 获取去重统计信息
+func (s *ProcessingService) GetDuplicationStats(ctx context.Context) (map[string]interface{}, error) {
+	stats, err := s.newsDeduplicator.GetDuplicationStats(ctx)
+	if err != nil {
+		return nil, err
+	}
+	
+	result := map[string]interface{}{
+		"total_news":         stats.TotalNews,
+		"duplicate_news":     stats.DuplicateNews,
+		"deduplication_rate": stats.DeduplicationRate,
+	}
+	
+	return result, nil
+}
+
+// GetImportanceStats 获取重要程度统计信息
+func (s *ProcessingService) GetImportanceStats(ctx context.Context) (map[string]interface{}, error) {
+	stats, err := s.importanceEvaluator.GetImportanceStats(ctx)
+	if err != nil {
+		return nil, err
+	}
+	
+	result := map[string]interface{}{
+		"total_count":     stats.TotalCount,
+		"very_low_count":  stats.VeryLowCount,
+		"low_count":       stats.LowCount,
+		"medium_count":    stats.MediumCount,
+		"high_count":      stats.HighCount,
+		"very_high_count": stats.VeryHighCount,
+		"very_low_rate":   stats.VeryLowRate,
+		"low_rate":        stats.LowRate,
+		"medium_rate":     stats.MediumRate,
+		"high_rate":       stats.HighRate,
+		"very_high_rate":  stats.VeryHighRate,
+	}
+	
+	return result, nil
+}
+
+// BatchEvaluateImportance 批量评估新闻重要程度
+func (s *ProcessingService) BatchEvaluateImportance(ctx context.Context, newsData []*model.NewsData) error {
+	return s.importanceEvaluator.BatchEvaluateImportance(ctx, newsData)
+}
+
+// RefreshAllCaches 刷新所有缓存
+func (s *ProcessingService) RefreshAllCaches(ctx context.Context) error {
+	// 刷新股票匹配缓存
+	s.stockMatcher.RefreshCache()
+	
+	log.Println("All caches refreshed successfully")
+	return nil
+}
+
+// StockMatchingStats 股票匹配统计信息
+type StockMatchingStats struct {
+	NewsWithStocks int64   `json:"news_with_stocks"`
+	TotalNews      int64   `json:"total_news"`
+	MatchingRate   float64 `json:"matching_rate"`
 }
 
 // ProcessMarketData 处理行情数据
@@ -332,7 +488,40 @@ func (s *ProcessingService) ProcessFinancialData(ctx context.Context, limit int)
 }
 
 // GetProcessingStats 获取处理统计信息
-func (s *ProcessingService) GetProcessingStats(ctx context.Context) (*ServiceProcessingStats, error) {
+func (s *ProcessingService) GetProcessingStats(ctx context.Context) (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+	
+	// 获取股票匹配统计
+	stockStats, err := s.GetStockMatchingStats(ctx)
+	if err != nil {
+		log.Printf("Failed to get stock matching stats: %v", err)
+	} else {
+		stats["stock_matching"] = stockStats
+	}
+	
+	// 获取去重统计
+	duplicationStats, err := s.GetDuplicationStats(ctx)
+	if err != nil {
+		log.Printf("Failed to get duplication stats: %v", err)
+	} else {
+		stats["duplication"] = duplicationStats
+	}
+	
+	// 获取重要程度统计
+	importanceStats, err := s.GetImportanceStats(ctx)
+	if err != nil {
+		log.Printf("Failed to get importance stats: %v", err)
+	} else {
+		stats["importance"] = importanceStats
+	}
+	
+	return stats, nil
+}
+
+
+
+// GetServiceProcessingStats 获取服务处理统计信息
+func (s *ProcessingService) GetServiceProcessingStats(ctx context.Context) (*ServiceProcessingStats, error) {
 	// TODO: 实现统计信息获取逻辑
 	return &ServiceProcessingStats{
 		TotalProcessed:   0,

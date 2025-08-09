@@ -10,11 +10,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"data-collection-system/pkg/config"
-	"data-collection-system/pkg/logger"
-	"data-collection-system/pkg/database"
 	routes "data-collection-system/api/http"
+	"data-collection-system/pkg/config"
+	"data-collection-system/pkg/database"
+	"data-collection-system/pkg/logger"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -46,14 +47,14 @@ func main() {
 		Password: cfg.Redis.Password,
 		DB:       cfg.Redis.DB,
 	})
-	
+
 	// 测试Redis连接
 	ctx := context.Background()
 	if err := rdb.Ping(ctx).Err(); err != nil {
 		logger.Fatal("Failed to connect to Redis: %v", err)
 	}
 	defer rdb.Close()
-	
+
 	logger.Info("Redis connection established successfully")
 
 	// 设置Gin模式

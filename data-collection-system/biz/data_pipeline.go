@@ -9,6 +9,7 @@ import (
 
 	"data-collection-system/service/collection"
 	"data-collection-system/service/processing"
+
 	"github.com/go-redis/redis/v8"
 )
 
@@ -41,7 +42,7 @@ func NewDataPipeline(
 ) *DataPipeline {
 	// 创建新闻处理管道
 	newsPipeline := NewNewsPipeline(collectionSvc, processingSvc, redisClient, nil)
-	
+
 	return &DataPipeline{
 		collectionSvc: collectionSvc,
 		processingSvc: processingSvc,

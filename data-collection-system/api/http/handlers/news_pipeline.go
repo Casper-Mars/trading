@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"data-collection-system/biz"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -95,9 +96,9 @@ func (h *NewsPipelineHandler) GetNewsProcessingStatus(c *gin.Context) {
 	if stats != nil {
 		response["stats"] = gin.H{
 			"crawling": gin.H{
-				"total_crawled":     stats.TotalCrawled,
-				"success_crawled":   stats.SuccessCrawled,
-				"failed_crawled":    stats.FailedCrawled,
+				"total_crawled":      stats.TotalCrawled,
+				"success_crawled":    stats.SuccessCrawled,
+				"failed_crawled":     stats.FailedCrawled,
 				"average_crawl_time": stats.AverageCrawlTime.String(),
 			},
 			"processing": gin.H{
@@ -109,8 +110,8 @@ func (h *NewsPipelineHandler) GetNewsProcessingStatus(c *gin.Context) {
 				"average_nlp_time":  stats.AverageNLPTime.String(),
 			},
 			"queue": gin.H{
-				"queue_length":    stats.QueueLength,
-				"active_workers":  stats.ActiveWorkers,
+				"queue_length":   stats.QueueLength,
+				"active_workers": stats.ActiveWorkers,
 			},
 			"timing": gin.H{
 				"last_run_time":     stats.LastRunTime,
