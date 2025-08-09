@@ -65,3 +65,39 @@ func Timeout(timeout time.Duration) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// ContentFilter 新闻内容安全过滤中间件
+func ContentFilter() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 在响应前进行内容过滤
+		c.Next()
+		
+		// 检查是否是新闻相关的API
+		if isNewsAPI(c.Request.URL.Path) {
+			// 获取响应数据
+			if data, exists := c.Get("response_data"); exists {
+				// 对新闻内容进行安全过滤
+				filteredData := filterNewsContent(data)
+				c.Set("response_data", filteredData)
+			}
+		}
+	}
+}
+
+// isNewsAPI 判断是否是新闻相关的API
+func isNewsAPI(path string) bool {
+	return path == "/api/v1/news" || 
+		   path == "/api/v1/news/hot" || 
+		   path == "/api/v1/news/latest" ||
+		   (len(path) > 15 && path[:15] == "/api/v1/news/")
+}
+
+// filterNewsContent 过滤新闻内容中的敏感信息
+func filterNewsContent(data interface{}) interface{} {
+	// TODO: 实现具体的内容过滤逻辑
+	// 1. 过滤敏感词汇
+	// 2. 检查内容合规性
+	// 3. 移除可能的恶意链接
+	// 4. 标准化内容格式
+	return data
+}

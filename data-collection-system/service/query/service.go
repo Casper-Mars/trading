@@ -392,3 +392,30 @@ func (s *QueryService) GetLatestFinancialData(ctx context.Context, symbol, repor
 	}
 	return data, nil
 }
+
+// GetNewsDetail 获取新闻详情
+func (s *QueryService) GetNewsDetail(ctx context.Context, id uint64) (*model.NewsData, error) {
+	news, err := s.repoManager.News().GetByID(ctx, uint(id))
+	if err != nil {
+		return nil, errors.Wrap(err, errors.ErrCodeDataNotFound, "新闻不存在")
+	}
+	return news, nil
+}
+
+// GetHotNews 获取热门新闻
+func (s *QueryService) GetHotNews(ctx context.Context, limit, hours int) ([]*model.NewsData, error) {
+	newsList, err := s.repoManager.News().GetHotNews(ctx, limit, hours)
+	if err != nil {
+		return nil, errors.Wrap(err, errors.ErrCodeDatabase, "获取热门新闻失败")
+	}
+	return newsList, nil
+}
+
+// GetLatestNews 获取最新新闻
+func (s *QueryService) GetLatestNews(ctx context.Context, limit int) ([]*model.NewsData, error) {
+	newsList, err := s.repoManager.News().GetLatestNews(ctx, limit)
+	if err != nil {
+		return nil, errors.Wrap(err, errors.ErrCodeDatabase, "获取最新新闻失败")
+	}
+	return newsList, nil
+}

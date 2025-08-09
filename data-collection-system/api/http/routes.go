@@ -104,10 +104,17 @@ func SetupRoutes(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 			}
 
 			// 新闻数据路由
-		data.GET("/news", queryHandler.GetNews)
+			news := data.Group("/news")
+			news.Use(middleware.ContentFilter()) // 添加内容过滤中间件
+			{
+				news.GET("/", queryHandler.GetNews)
+				news.GET("/:id", queryHandler.GetNewsDetail)
+				news.GET("/hot", queryHandler.GetHotNews)
+				news.GET("/latest", queryHandler.GetLatestNews)
+			}
 
-		// 宏观数据路由
-		data.GET("/macro", queryHandler.GetMacroData)
+			// 宏观数据路由
+			data.GET("/macro", queryHandler.GetMacroData)
 	}
 
 

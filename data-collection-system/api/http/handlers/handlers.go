@@ -204,6 +204,91 @@ func (h *QueryHandler) GetNews(c *gin.Context) {
 	response.SuccessPage(c, result.Data, pagination)
 }
 
+// GetNewsDetail 获取新闻详情
+func (h *QueryHandler) GetNewsDetail(c *gin.Context) {
+	ctx := context.Background()
+
+	// 获取新闻ID
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		response.BadRequest(c, "新闻ID格式错误")
+		return
+	}
+
+	// 查询新闻详情
+	news, err := h.queryService.GetNewsDetail(ctx, id)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	if news == nil {
+		response.NotFound(c, "新闻不存在")
+		return
+	}
+
+	// 返回新闻详情
+	response.Success(c, news)
+}
+
+// GetHotNews 获取热门新闻
+func (h *QueryHandler) GetHotNews(c *gin.Context) {
+	ctx := context.Background()
+
+	// 获取查询参数
+	limitStr := c.DefaultQuery("limit", "10")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 || limit > 100 {
+		limit = 10
+	}
+
+	hoursStr := c.DefaultQuery("hours", "24")
+	hours, err := strconv.Atoi(hoursStr)
+	if err != nil || hours <= 0 || hours > 168 { // 最多7天
+		hours = 24
+	}
+
+	// 查询热门新闻
+	newsList, err := h.queryService.GetHotNews(ctx, limit, hours)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	// 返回热门新闻列表
+	response.Success(c, gin.H{
+		"news": newsList,
+		"limit": limit,
+		"hours": hours,
+	})
+}
+
+// GetLatestNews 获取最新新闻
+func (h *QueryHandler) GetLatestNews(c *gin.Context) {
+	ctx := context.Background()
+
+	// 获取查询参数
+	limitStr := c.DefaultQuery("limit", "20")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 || limit > 100 {
+		limit = 20
+	}
+
+	// 查询最新新闻
+	newsList, err := h.queryService.GetLatestNews(ctx, limit)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	// 返回最新新闻列表
+	response.Success(c, gin.H{
+		"news": newsList,
+		"limit": limit,
+	})
+}
+
 // GetMacroData 获取宏观经济数据
 func (h *QueryHandler) GetMacroData(c *gin.Context) {
 	ctx := context.Background()
