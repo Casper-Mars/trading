@@ -209,3 +209,15 @@ func (e *TaskExecutor) ValidateDataIntegrity(ctx context.Context) error {
 	log.Println("数据完整性验证完成")
 	return nil
 }
+
+// ExecuteStockDataCollection 执行股票数据采集
+func (e *TaskExecutor) ExecuteStockDataCollection(ctx context.Context, config map[string]interface{}) error {
+	log.Println("开始执行股票数据采集")
+	return e.executeDailyStockDataFlow(ctx, config)
+}
+
+// ExecuteNewsDataCollection 执行新闻数据采集
+func (e *TaskExecutor) ExecuteNewsDataCollection(ctx context.Context, config map[string]interface{}) error {
+	log.Println("开始执行新闻数据采集")
+	return e.executeNewsDataFlow(ctx, config)
+}

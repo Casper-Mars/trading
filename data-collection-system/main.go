@@ -10,7 +10,12 @@ import (
 	"syscall"
 	"time"
 
+	"data-collection-system/api/cron"
 	routes "data-collection-system/api/http"
+	"data-collection-system/biz"
+	mysqldao "data-collection-system/repo/mysql"
+	"data-collection-system/service/collection"
+	"data-collection-system/service/processing"
 	"data-collection-system/pkg/config"
 	"data-collection-system/pkg/database"
 	"data-collection-system/pkg/logger"
@@ -57,6 +62,47 @@ func main() {
 
 	logger.Info("Redis connection established successfully")
 
+	// 创建业务服务
+	_ = mysqldao.NewRepositoryManager(db) // 暂时不使用，避免编译错误
+	
+	// 创建采集服务配置
+	collectionConfig := &collection.Config{
+		TushareToken: "", // 从配置文件获取
+		TushareURL:   "http://api.tushare.pro",
+		RateLimit:    200,
+		RetryCount:   3,
+		Timeout:      30,
+		NewsCrawler:  nil, // 暂时不启用新闻爬虫
+	}
+	
+	// 创建采集服务
+	collectionService, err := collection.NewService(
+		collectionConfig,
+		nil, // stockRepo - 需要适配器
+		nil, // marketRepo - 需要适配器
+		nil, // financialRepo - 需要适配器
+		nil, // macroRepo - 需要适配器
+		nil, // newsRepo - 需要适配器
+	)
+	if err != nil {
+		logger.Fatal("Failed to create collection service: %v", err)
+	}
+	
+	// 创建处理服务
+	processingService := processing.NewProcessingService(db, nil, cfg, rdb)
+	
+	// 创建任务执行器
+	taskExecutor := biz.NewTaskExecutor(collectionService, processingService)
+	
+	// 创建定时任务管理器
+	cronManager := cron.NewCronManager(taskExecutor)
+	
+	// 启动定时任务
+	if err := cronManager.Start(); err != nil {
+		logger.Fatal("Failed to start cron manager: %v", err)
+	}
+	logger.Info("Cron manager started successfully")
+
 	// 设置Gin模式
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -88,6 +134,12 @@ func main() {
 	// 优雅关闭
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	
+	// 停止定时任务
+	cronManager.Stop()
+	logger.Info("Cron manager stopped")
+	
+	// 关闭HTTP服务器
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Fatal("Server forced to shutdown:", err)
 	}

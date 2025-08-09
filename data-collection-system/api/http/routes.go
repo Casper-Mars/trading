@@ -5,12 +5,8 @@ import (
 
 	"data-collection-system/api/http/handlers"
 	"data-collection-system/api/http/middleware"
-	"data-collection-system/biz"
 	mysqldao "data-collection-system/repo/mysql"
-	"data-collection-system/service/collection"
-	"data-collection-system/service/processing"
 	"data-collection-system/service/query"
-	"data-collection-system/pkg/config"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -33,38 +29,6 @@ func SetupRoutes(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 	// 创建查询服务
 	queryService := query.NewQueryService(repoManager)
 	queryHandler := handlers.NewQueryHandler(queryService)
-
-	// 创建业务服务
-	// 创建默认配置
-	cfg := &config.Config{} // 使用默认配置，实际应该从配置文件加载
-	
-	// 创建采集服务配置
-	collectionConfig := &collection.Config{
-		TushareToken: "", // 从配置文件获取
-		TushareURL:   "http://api.tushare.pro",
-		RateLimit:    200,
-		RetryCount:   3,
-		Timeout:      30,
-		NewsCrawler:  nil, // 暂时不启用新闻爬虫
-	}
-	
-	// 暂时使用 nil 仓库，后续需要创建适配器来解决接口不匹配问题
-	collectionService, err := collection.NewService(
-		collectionConfig,
-		nil, // stockRepo - 需要适配器
-		nil, // marketRepo - 需要适配器
-		nil, // financialRepo - 需要适配器
-		nil, // macroRepo - 需要适配器
-		nil, // newsRepo - 需要适配器
-	)
-	if err != nil {
-		panic("Failed to create collection service: " + err.Error())
-	}
-	
-	// 暂时使用 nil 新闻仓库，后续需要创建适配器来解决接口不匹配问题
-	processingService := processing.NewProcessingService(db, nil, cfg, rdb)
-	dataPipeline := biz.NewDataPipeline(collectionService, processingService, rdb)
-	newsPipelineHandler := handlers.NewNewsPipelineHandler(dataPipeline)
 
 
 	// 健康检查
@@ -123,17 +87,17 @@ func SetupRoutes(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 	news := v1.Group("/news")
 	news.Use(middleware.SecurityCheck()) // 添加安全检查中间件
 	{
-		// 新闻处理管道路由
-		pipeline := news.Group("/pipeline")
-		{
-			pipeline.POST("/trigger", newsPipelineHandler.TriggerNewsProcessing)
-			pipeline.GET("/status", newsPipelineHandler.GetNewsProcessingStatus)
-			pipeline.GET("/stats", newsPipelineHandler.GetNewsStats)
-			pipeline.POST("/stats/reset", newsPipelineHandler.ResetNewsStats)
-			pipeline.POST("/stop", newsPipelineHandler.StopNewsProcessing)
-			pipeline.GET("/history", newsPipelineHandler.GetNewsProcessingHistory)
-			pipeline.GET("/config", newsPipelineHandler.GetNewsProcessingConfig)
-		}
+		// 新闻数据管道 - 暂时移除，等待重构
+		// pipeline := v1.Group("/pipeline")
+		// {
+		//	pipeline.POST("/trigger", newsPipelineHandler.TriggerNewsProcessing)
+		//	pipeline.GET("/status", newsPipelineHandler.GetNewsProcessingStatus)
+		//	pipeline.GET("/stats", newsPipelineHandler.GetNewsStats)
+		//	pipeline.POST("/stats/reset", newsPipelineHandler.ResetNewsStats)
+		//	pipeline.POST("/stop", newsPipelineHandler.StopNewsProcessing)
+		//	pipeline.GET("/history", newsPipelineHandler.GetNewsProcessingHistory)
+		//	pipeline.GET("/config", newsPipelineHandler.GetNewsProcessingConfig)
+		// }
 		}
 
 		// 任务管理相关路由
@@ -160,6 +124,8 @@ func SetupRoutes(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 			monitor.GET("/stats", handlers.GetSystemStats(db, rdb))
 			monitor.GET("/metrics", handlers.GetMetrics(db, rdb))
 		}
+
+
 	}
 
 	return r
