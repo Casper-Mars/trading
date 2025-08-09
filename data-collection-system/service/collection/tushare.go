@@ -8,58 +8,25 @@ import (
 
 	"data-collection-system/model"
 	"data-collection-system/repo/external/tushare"
+	"data-collection-system/repo/mysql"
 )
 
 // TushareService Tushare数据采集业务服务
 type TushareService struct {
 	collector    *tushare.Collector
-	stockRepo    StockRepository
-	marketRepo   MarketRepository
-	financialRepo FinancialRepository
-	macroRepo    MacroRepository
-}
-
-// StockRepository 股票数据仓储接口
-type StockRepository interface {
-	Create(ctx context.Context, stock *model.Stock) error
-	BatchCreate(ctx context.Context, stocks []*model.Stock) error
-	GetBySymbol(ctx context.Context, symbol string) (*model.Stock, error)
-	Update(ctx context.Context, stock *model.Stock) error
-	List(ctx context.Context, offset, limit int) ([]*model.Stock, error)
-}
-
-// MarketRepository 市场数据仓储接口
-type MarketRepository interface {
-	Create(ctx context.Context, data *model.MarketData) error
-	BatchCreate(ctx context.Context, data []*model.MarketData) error
-	GetBySymbolAndDate(ctx context.Context, symbol string, date time.Time) (*model.MarketData, error)
-	GetByDateRange(ctx context.Context, symbol string, startDate, endDate time.Time) ([]*model.MarketData, error)
-	GetLatest(ctx context.Context, symbol string, period string) (*model.MarketData, error)
-}
-
-// FinancialRepository 财务数据仓储接口
-type FinancialRepository interface {
-	Create(ctx context.Context, data *model.FinancialData) error
-	BatchCreate(ctx context.Context, data []*model.FinancialData) error
-	GetBySymbolAndPeriod(ctx context.Context, symbol string, reportDate time.Time, reportType string) (*model.FinancialData, error)
-	GetBySymbol(ctx context.Context, symbol string, limit int) ([]*model.FinancialData, error)
-}
-
-// MacroRepository 宏观数据仓储接口
-type MacroRepository interface {
-	Create(ctx context.Context, data *model.MacroData) error
-	BatchCreate(ctx context.Context, data []*model.MacroData) error
-	GetByIndicator(ctx context.Context, indicatorCode string, startDate, endDate time.Time) ([]*model.MacroData, error)
-	GetLatest(ctx context.Context, indicatorCode string) (*model.MacroData, error)
+	stockRepo    dao.StockRepository
+	marketRepo   dao.MarketDataRepository
+	financialRepo dao.FinancialDataRepository
+	macroRepo    dao.MacroDataRepository
 }
 
 // NewTushareService 创建Tushare数据采集服务
 func NewTushareService(
 	collector *tushare.Collector,
-	stockRepo StockRepository,
-	marketRepo MarketRepository,
-	financialRepo FinancialRepository,
-	macroRepo MacroRepository,
+	stockRepo dao.StockRepository,
+	marketRepo dao.MarketDataRepository,
+	financialRepo dao.FinancialDataRepository,
+	macroRepo dao.MacroDataRepository,
 ) *TushareService {
 	return &TushareService{
 		collector:     collector,

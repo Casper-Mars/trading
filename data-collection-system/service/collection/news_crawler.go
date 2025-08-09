@@ -11,6 +11,7 @@ import (
 
 	"data-collection-system/model"
 	"data-collection-system/pkg/errors"
+	"data-collection-system/repo/mysql"
 
 	"github.com/gocolly/colly/v2"
 	"github.com/gocolly/colly/v2/extensions"
@@ -21,7 +22,7 @@ import (
 type NewsCrawlerService struct {
 	config     *NewsCrawlerConfig
 	collector  *colly.Collector
-	newsRepo   NewsRepository
+	newsRepo   dao.NewsRepository
 	logger     *logrus.Logger
 	userAgents []string
 }
@@ -65,14 +66,8 @@ type NewsSelectors struct {
 }
 
 // NewsRepository 新闻数据仓库接口
-type NewsRepository interface {
-	Create(ctx context.Context, news *model.NewsData) error
-	ExistsByURL(ctx context.Context, url string) (bool, error)
-	BatchCreate(ctx context.Context, newsList []*model.NewsData) error
-}
-
 // NewNewsCrawlerService 创建新闻爬虫服务
-func NewNewsCrawlerService(config *NewsCrawlerConfig, newsRepo NewsRepository) *NewsCrawlerService {
+func NewNewsCrawlerService(config *NewsCrawlerConfig, newsRepo dao.NewsRepository) *NewsCrawlerService {
 	// 创建Colly收集器
 	c := colly.NewCollector(
 		colly.Async(true),

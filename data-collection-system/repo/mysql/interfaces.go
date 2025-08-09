@@ -181,6 +181,45 @@ type NewsRepository interface {
 	GetDuplicationStats(ctx context.Context) (*DuplicationStats, error)
 }
 
+// SentimentRepository 市场情绪数据仓库接口
+type SentimentRepository interface {
+	// 市场情绪数据
+	CreateMarketSentiment(ctx context.Context, data *model.MarketSentimentData) error
+	BatchCreateMarketSentiment(ctx context.Context, data []interface{}) error
+	GetMarketSentimentByDate(ctx context.Context, date time.Time) ([]*model.MarketSentimentData, error)
+	GetMarketSentimentByDateRange(ctx context.Context, startDate, endDate time.Time, dataType string) ([]*model.MarketSentimentData, error)
+	
+	// 资金流向数据
+	CreateMoneyFlow(ctx context.Context, data *model.MoneyFlowData) error
+	BatchCreateMoneyFlow(ctx context.Context, data []interface{}) error
+	GetMoneyFlowBySymbolAndDate(ctx context.Context, symbol string, date time.Time) (*model.MoneyFlowData, error)
+	GetMoneyFlowByDateRange(ctx context.Context, symbol string, startDate, endDate time.Time) ([]*model.MoneyFlowData, error)
+	
+	// 北向资金数据
+	CreateNorthboundFund(ctx context.Context, data *model.NorthboundFundData) error
+	BatchCreateNorthboundFund(ctx context.Context, dataList []*model.NorthboundFundData) error
+	GetNorthboundFundByDate(ctx context.Context, tradeDate time.Time) ([]*model.NorthboundFundData, error)
+	GetNorthboundFundByDateRange(ctx context.Context, startDate, endDate time.Time) ([]*model.NorthboundFundData, error)
+	
+	// 北向资金十大成交股数据
+	CreateNorthboundTopStock(ctx context.Context, data *model.NorthboundTopStockData) error
+	BatchCreateNorthboundTopStock(ctx context.Context, dataList []*model.NorthboundTopStockData) error
+	GetNorthboundTopStocksByDate(ctx context.Context, tradeDate time.Time, market string) ([]*model.NorthboundTopStockData, error)
+	
+	// 融资融券数据
+	CreateMarginTrading(ctx context.Context, data *model.MarginTradingData) error
+	BatchCreateMarginTrading(ctx context.Context, data []interface{}) error
+	GetMarginTradingByDate(ctx context.Context, date time.Time, exchange string) ([]*model.MarginTradingData, error)
+	GetMarginTradingByDateRange(ctx context.Context, startDate, endDate time.Time, exchange string) ([]*model.MarginTradingData, error)
+	
+	// ETF数据
+	CreateETF(ctx context.Context, data *model.ETFData) error
+	BatchCreateETF(ctx context.Context, dataList []*model.ETFData) error
+	GetETFByMarket(ctx context.Context, market string) ([]*model.ETFData, error)
+	GetETFBySymbol(ctx context.Context, symbol string) (*model.ETFData, error)
+	GetETFList(ctx context.Context, market string) ([]*model.ETFData, error)
+}
+
 // RepositoryManager 数据仓库管理器接口
 type RepositoryManager interface {
 	Stock() StockRepository                   // 股票数据仓库
@@ -189,5 +228,6 @@ type RepositoryManager interface {
 	MacroData() MacroDataRepository           // 宏观数据仓库
 	DataTask() DataTaskRepository             // 数据任务仓库
 	News() NewsRepository                     // 新闻数据仓库
+	Sentiment() SentimentRepository           // 市场情绪数据仓库
 	Close() error
 }

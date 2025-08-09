@@ -14,9 +14,10 @@ import (
 
 // Service 数据采集业务服务
 type Service struct {
-	tushareService *TushareService
-	newsCrawler    *NewsCrawlerService // 新闻爬虫服务
-	newsScheduler  *NewsScheduler      // 新闻调度器
+	tushareService   *TushareService
+	newsCrawler      *NewsCrawlerService // 新闻爬虫服务
+	newsScheduler    *NewsScheduler      // 新闻调度器
+	sentimentService *SentimentService   // 市场情绪和资金流向数据采集服务
 }
 
 // Config 采集服务配置
@@ -67,6 +68,12 @@ func NewService(
 		repoMgr.MacroData(),    // macroRepo
 	)
 
+	// 创建市场情绪和资金流向数据采集服务
+	sentimentService := NewSentimentService(
+		tushareCollector,
+		repoMgr.Sentiment(), // sentimentRepo - 需要在RepositoryManager中添加
+	)
+
 	// 创建新闻爬虫服务
 	var newsCrawler *NewsCrawlerService
 	var newsScheduler *NewsScheduler
@@ -79,9 +86,10 @@ func NewService(
 	}
 
 	return &Service{
-		tushareService: tushareService,
-		newsCrawler:    newsCrawler,
-		newsScheduler:  newsScheduler,
+		tushareService:   tushareService,
+		newsCrawler:      newsCrawler,
+		newsScheduler:    newsScheduler,
+		sentimentService: sentimentService,
 	}, nil
 }
 
@@ -301,6 +309,20 @@ func (s *Service) ValidateCollectionTask(taskType string, params map[string]inte
 		}
 		return nil
 
+	case "news_crawl":
+		if _, ok := params["source_name"]; !ok {
+			return fmt.Errorf("news_crawl任务缺少source_name参数")
+		}
+		return nil
+
+	case "news_crawl_all":
+		// 无需额外参数
+		return nil
+
+	// 市场情绪和资金流向数据采集任务验证
+	case "money_flow", "northbound_fund", "northbound_top", "margin_trading", "etf_basic", "all_sentiment":
+		return s.sentimentService.ValidateSentimentCollectionTask(taskType, params)
+
 	default:
 		return fmt.Errorf("不支持的采集任务类型: %s", taskType)
 	}
@@ -320,6 +342,12 @@ func (s *Service) GetSupportedTaskTypes() []string {
 		"monthly_data",   // 月度综合数据
 		"news_crawl",     // 新闻爬取
 		"news_crawl_all", // 全量新闻爬取
+		"money_flow",     // 个股资金流向数据采集
+		"northbound_fund", // 北向资金数据采集
+		"northbound_top",  // 北向资金十大成交股数据采集
+		"margin_trading",  // 融资融券数据采集
+		"etf_basic",       // ETF基础数据采集
+		"all_sentiment",   // 所有市场情绪和资金流向数据采集
 	}
 }
 
@@ -387,11 +415,51 @@ func (s *Service) TriggerNewsCrawlAll(ctx context.Context) error {
 func (s *Service) GetNewsSchedulerStatus() map[string]interface{} {
 	if s.newsScheduler == nil {
 		return map[string]interface{}{
-			"initialized": false,
-			"message":     "新闻调度器未初始化",
+			"status": "disabled",
+			"message": "新闻调度器未启用",
 		}
 	}
 	return s.newsScheduler.GetStatus()
+}
+
+// CollectMoneyFlowData 采集个股资金流向数据
+func (s *Service) CollectMoneyFlowData(ctx context.Context, symbol, tradeDate string) error {
+	return s.sentimentService.CollectMoneyFlowData(ctx, symbol, tradeDate)
+}
+
+// CollectNorthboundFundData 采集北向资金数据
+func (s *Service) CollectNorthboundFundData(ctx context.Context, tradeDate string) error {
+	return s.sentimentService.CollectNorthboundFundData(ctx, tradeDate)
+}
+
+// CollectNorthboundTopStocksData 采集北向资金十大成交股数据
+func (s *Service) CollectNorthboundTopStocksData(ctx context.Context, tradeDate, market string) error {
+	return s.sentimentService.CollectNorthboundTopStocksData(ctx, tradeDate, market)
+}
+
+// CollectMarginTradingData 采集融资融券数据
+func (s *Service) CollectMarginTradingData(ctx context.Context, tradeDate, exchange string) error {
+	return s.sentimentService.CollectMarginTradingData(ctx, tradeDate, exchange)
+}
+
+// CollectETFBasicData 采集ETF基础数据
+func (s *Service) CollectETFBasicData(ctx context.Context, market string) error {
+	return s.sentimentService.CollectETFBasicData(ctx, market)
+}
+
+// CollectAllSentimentData 采集所有市场情绪和资金流向数据
+func (s *Service) CollectAllSentimentData(ctx context.Context, tradeDate string) error {
+	return s.sentimentService.CollectAllSentimentData(ctx, tradeDate)
+}
+
+// CollectActiveStocksMoneyFlow 采集活跃股票的资金流向数据
+func (s *Service) CollectActiveStocksMoneyFlow(ctx context.Context, tradeDate string, symbols []string) error {
+	return s.sentimentService.CollectActiveStocksMoneyFlow(ctx, tradeDate, symbols)
+}
+
+// GetSentimentCollectorStatus 获取市场情绪数据采集器状态
+func (s *Service) GetSentimentCollectorStatus(ctx context.Context) (map[string]interface{}, error) {
+	return s.sentimentService.GetSentimentCollectorStatus(ctx)
 }
 
 // AddNewsSource 添加新闻源
@@ -474,6 +542,10 @@ func (s *Service) ExecuteCollectionTask(ctx context.Context, taskType string, pa
 	case "news_crawl_all":
 		// 爬取所有新闻源
 		return s.CrawlAllNews(ctx)
+
+	// 市场情绪和资金流向数据采集任务
+	case "money_flow", "northbound_fund", "northbound_top", "margin_trading", "etf_basic", "all_sentiment":
+		return s.sentimentService.ExecuteSentimentCollectionTask(ctx, taskType, params)
 
 	default:
 		return fmt.Errorf("不支持的采集任务类型: %s", taskType)

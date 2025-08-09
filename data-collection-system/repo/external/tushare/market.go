@@ -346,3 +346,159 @@ func (m *MarketCollector) GetMoneyFlow(ctx context.Context, symbol, startDate, e
 
 	return results, nil
 }
+
+// GetNorthboundFundFlow 获取沪深港通资金流向数据
+func (m *MarketCollector) GetNorthboundFundFlow(ctx context.Context, startDate, endDate string) ([]map[string]interface{}, error) {
+	params := map[string]interface{}{
+		"start_date": startDate,
+		"end_date":   endDate,
+	}
+
+	fields := "trade_date,ggt_ss,ggt_sz,hgt,sgt,north_money,south_money"
+
+	data, err := m.client.CallWithRetry(ctx, "moneyflow_hsgt", params, fields, 3)
+	if err != nil {
+		return nil, fmt.Errorf("get northbound fund flow failed: %w", err)
+	}
+
+	if data == nil || len(data.Items) == 0 {
+		return []map[string]interface{}{}, nil
+	}
+
+	// 创建字段索引映射
+	fieldMap := make(map[string]int)
+	for i, field := range data.Fields {
+		fieldMap[field] = i
+	}
+
+	results := make([]map[string]interface{}, 0, len(data.Items))
+	for _, item := range data.Items {
+		result := make(map[string]interface{})
+		for field, idx := range fieldMap {
+			if idx < len(item) {
+				result[field] = item[idx]
+			}
+		}
+		results = append(results, result)
+	}
+
+	return results, nil
+}
+
+// GetNorthboundTopStocks 获取沪深股通十大成交股数据
+func (m *MarketCollector) GetNorthboundTopStocks(ctx context.Context, tradeDate string, marketType string) ([]map[string]interface{}, error) {
+	params := map[string]interface{}{
+		"trade_date":  tradeDate,
+		"market_type": marketType, // 1:沪市 3:深市
+	}
+
+	fields := "trade_date,ts_code,name,close,change,rank,market_type,amount,net_amount,buy,sell"
+
+	data, err := m.client.CallWithRetry(ctx, "hsgt_top10", params, fields, 3)
+	if err != nil {
+		return nil, fmt.Errorf("get northbound top stocks failed: %w", err)
+	}
+
+	if data == nil || len(data.Items) == 0 {
+		return []map[string]interface{}{}, nil
+	}
+
+	// 创建字段索引映射
+	fieldMap := make(map[string]int)
+	for i, field := range data.Fields {
+		fieldMap[field] = i
+	}
+
+	results := make([]map[string]interface{}, 0, len(data.Items))
+	for _, item := range data.Items {
+		result := make(map[string]interface{})
+		for field, idx := range fieldMap {
+			if idx < len(item) {
+				result[field] = item[idx]
+			}
+		}
+		results = append(results, result)
+	}
+
+	return results, nil
+}
+
+// GetMarginTradingData 获取融资融券数据
+func (m *MarketCollector) GetMarginTradingData(ctx context.Context, tradeDate, exchangeID string) ([]map[string]interface{}, error) {
+	params := map[string]interface{}{
+		"trade_date":  tradeDate,
+		"exchange_id": exchangeID, // SSE上交所 SZSE深交所 BSE北交所
+	}
+
+	fields := "trade_date,exchange_id,rzye,rzmre,rzche,rqye,rqmcl,rzrqye,rqyl"
+
+	data, err := m.client.CallWithRetry(ctx, "margin", params, fields, 3)
+	if err != nil {
+		return nil, fmt.Errorf("get margin trading data failed: %w", err)
+	}
+
+	if data == nil || len(data.Items) == 0 {
+		return []map[string]interface{}{}, nil
+	}
+
+	// 创建字段索引映射
+	fieldMap := make(map[string]int)
+	for i, field := range data.Fields {
+		fieldMap[field] = i
+	}
+
+	results := make([]map[string]interface{}, 0, len(data.Items))
+	for _, item := range data.Items {
+		result := make(map[string]interface{})
+		for field, idx := range fieldMap {
+			if idx < len(item) {
+				result[field] = item[idx]
+			}
+		}
+		results = append(results, result)
+	}
+
+	return results, nil
+}
+
+// GetETFBasicData 获取ETF基础信息
+func (m *MarketCollector) GetETFBasicData(ctx context.Context, listStatus, exchange string) ([]map[string]interface{}, error) {
+	params := map[string]interface{}{}
+	
+	if listStatus != "" {
+		params["list_status"] = listStatus // L上市 D退市 P待上市
+	}
+	if exchange != "" {
+		params["exchange"] = exchange // SH上交所 SZ深交所
+	}
+
+	fields := "ts_code,csname,extname,cname,index_code,index_name,setup_date,list_date,list_status,exchange,mgr_name,custod_name,mgt_fee,etf_type"
+
+	data, err := m.client.CallWithRetry(ctx, "etf_basic", params, fields, 3)
+	if err != nil {
+		return nil, fmt.Errorf("get ETF basic data failed: %w", err)
+	}
+
+	if data == nil || len(data.Items) == 0 {
+		return []map[string]interface{}{}, nil
+	}
+
+	// 创建字段索引映射
+	fieldMap := make(map[string]int)
+	for i, field := range data.Fields {
+		fieldMap[field] = i
+	}
+
+	results := make([]map[string]interface{}, 0, len(data.Items))
+	for _, item := range data.Items {
+		result := make(map[string]interface{})
+		for field, idx := range fieldMap {
+			if idx < len(item) {
+				result[field] = item[idx]
+			}
+		}
+		results = append(results, result)
+	}
+
+	return results, nil
+}
