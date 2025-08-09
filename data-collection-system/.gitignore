@@ -69,3 +69,4 @@ coverage.html
 
 # Air live reload
 tmp/
+bin/

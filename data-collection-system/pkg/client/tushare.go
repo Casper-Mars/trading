@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"data-collection-system/internal/config"
+	"data-collection-system/pkg/config"
 	"data-collection-system/pkg/logger"
 )
 

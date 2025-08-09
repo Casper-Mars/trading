@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"data-collection-system/internal/config"
-	"data-collection-system/internal/models"
+	"data-collection-system/pkg/config"
 	"data-collection-system/pkg/logger"
 
 	"gorm.io/driver/mysql"
@@ -16,15 +15,15 @@ import (
 var db *gorm.DB
 
 // Init 初始化数据库连接
-func Init(cfg config.DatabaseConfig) (*gorm.DB, error) {
+func Init(cfg *config.Config) (*gorm.DB, error) {
 	// 构建DSN
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=True&loc=Local",
-		cfg.User,
-		cfg.Password,
-		cfg.Host,
-		cfg.Port,
-		cfg.DBName,
-		cfg.Charset,
+		cfg.Database.User,
+		cfg.Database.Password,
+		cfg.Database.Host,
+		cfg.Database.Port,
+		cfg.Database.DBName,
+		cfg.Database.Charset,
 	)
 
 	// 配置GORM
@@ -74,26 +73,5 @@ func Close() error {
 		}
 		return sqlDB.Close()
 	}
-	return nil
-}
-
-// AutoMigrate 自动迁移数据库表结构
-func AutoMigrate() error {
-	if db == nil {
-		return fmt.Errorf("database not initialized")
-	}
-
-	// 自动迁移所有模型
-	if err := models.AutoMigrate(db); err != nil {
-		return fmt.Errorf("failed to migrate database: %w", err)
-	}
-
-	// 创建额外的索引
-	if err := models.CreateIndexes(db); err != nil {
-		logger.Warn("Failed to create additional indexes: %v", err)
-		// 索引创建失败不影响主流程，只记录警告
-	}
-
-	logger.Info("Database migration completed")
 	return nil
 }

@@ -4,7 +4,7 @@ import (
 	"io"
 	"os"
 
-	"data-collection-system/internal/config"
+	"data-collection-system/pkg/config"
 
 	"github.com/sirupsen/logrus"
 )

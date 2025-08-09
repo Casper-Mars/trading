@@ -1,18 +1,18 @@
-package router
+package routes
 
 import (
 	"net/http"
 
-	"data-collection-system/internal/handlers"
-	"data-collection-system/internal/middleware"
+	"data-collection-system/api/http/handlers"
+	"data-collection-system/api/http/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"gorm.io/gorm"
 )
 
-// Setup 设置路由
-func Setup(db *gorm.DB, rdb *redis.Client) *gin.Engine {
+// SetupRoutes 设置路由
+func SetupRoutes(db *gorm.DB, rdb *redis.Client) *gin.Engine {
 	r := gin.New()
 
 	// 添加中间件

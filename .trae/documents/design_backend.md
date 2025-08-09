@@ -12,7 +12,7 @@
 
 ## 2. 系统概述
 
-数据采集子系统是量化交易平台的核心基础设施，采用Golang巨石架构，基于Gin框架构建高性能RESTful API服务。系统采用模块化设计，所有功能模块运行在同一个进程中，通过内部消息总线进行通信。系统负责从外部数据源采集金融市场数据，进行数据处理和质量管控，并为上层业务系统提供统一的数据服务。
+数据采集子系统是量化交易平台的核心基础设施，采用Golang单体架构，基于Gin框架构建高性能RESTful API服务。系统采用模块化设计，所有功能模块运行在同一个进程中，通过直接函数调用进行通信。系统负责从外部数据源采集金融市场数据，进行数据处理和质量管控，并为上层业务系统提供统一的数据服务。
 
 ### 2.1 技术栈选型
 
@@ -24,7 +24,7 @@
 
 * **缓存**: Redis 7.0+ (缓存层)
 
-* **内部通信**: 基于Channel的消息总线 (模块间通信)
+* **内部通信**: 直接函数调用 (模块间通信)
 
 * **爬虫框架**: Colly v2.1+ (网页爬虫)
 
@@ -62,7 +62,6 @@ graph TB
         B4[数据查询模块]
         B5[任务调度模块]
         B6[监控模块]
-        B7[内部消息总线]
     end
     
     subgraph "数据存储层"
@@ -82,8 +81,7 @@ graph TB
     A3 --> B2
     A4 --> B2
     
-    B2 --> B7
-    B7 --> B3
+    B2 --> B3
     B3 --> C1
     C1 --> C2
     
@@ -414,7 +412,6 @@ GET /api/v1/news/detail
 sequenceDiagram
     participant TS as 任务调度模块
     participant DC as 数据采集模块
-    participant Bus as 内部消息总线
     participant DP as 数据处理模块
     participant DB as 数据库
     participant Cache as Redis缓存
@@ -422,12 +419,12 @@ sequenceDiagram
     TS->>DC: 触发数据采集任务
     DC->>外部API: 请求数据
     外部API-->>DC: 返回原始数据
-    DC->>Bus: 发送数据到内部总线
-    Bus->>DP: 转发数据到处理模块
+    DC->>DP: 直接调用数据处理模块
     DP->>DP: 数据清洗和处理
     DP->>DB: 存储处理后的数据
     DP->>Cache: 更新缓存
-    DP-->>TS: 返回处理结果
+    DP-->>DC: 返回处理结果
+    DC-->>TS: 返回采集结果
 ```
 
 ### 6.2 数据查询流程
@@ -460,13 +457,11 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant DC as 数据采集模块
-    participant Bus as 内部消息总线
     participant NLP as NLP处理组件
     participant DP as 数据处理模块
     participant DB as 数据库
     
-    DC->>Bus: 发送原始新闻数据
-    Bus->>DP: 转发新闻数据
+    DC->>DP: 直接传递原始新闻数据
     DP->>NLP: 调用NLP处理
     NLP->>NLP: 内容预处理
     NLP->>NLP: 实体识别
@@ -476,204 +471,2329 @@ sequenceDiagram
     DP->>DP: 行业分类映射
     DP->>DP: 去重处理
     DP->>DB: 存储结构化数据
+    DP-->>DC: 返回处理结果
 ```
 
 ## 7. 技术实现方案
 
 ### 7.1 项目结构
 
+采用简洁清晰的三层架构，遵循Go项目标准布局：
+
 ```
 data-collection-system/
-├── cmd/
-│   └── server/            # 主应用入口
-│       └── main.go
-├── internal/
+├── main.go                # 应用入口
+├── config.yaml           # 配置文件
+├── docker-compose.yml    # Docker配置
+├── go.mod                 # Go模块文件
+├── go.sum                 # Go依赖锁定
+├── README.md              # 项目说明
+│
+├── api/                   # 接入层 (API Layer)
+│   ├── http/              # HTTP接口
+│   │   ├── handlers/      # HTTP处理器
+│   │   ├── middleware/    # 中间件
+│   │   └── routes.go      # 路由配置
+│   ├── cron/              # 定时任务
+│   │   ├── scheduler.go   # 任务调度器
+│   │   ├── jobs/          # 定时任务定义
+│   │   └── manager.go     # 任务管理器
+│   └── grpc/              # gRPC接口(预留)
+│
+├── biz/                   # 业务编排层 (Business Layer)
+│   ├── collection/        # 数据采集业务
+│   │   ├── service.go     # 采集业务服务
+│   │   ├── tushare.go     # Tushare数据采集
+│   │   ├── news.go        # 新闻数据采集
+│   │   └── validator.go   # 数据验证器
+│   ├── processing/        # 数据加工业务
+│   │   ├── service.go     # 加工业务服务
+│   │   ├── cleaner.go     # 数据清洗
+│   │   ├── nlp.go         # NLP处理
+│   │   └── enricher.go    # 数据增强
+│   ├── query/             # 数据查询业务
+│   │   ├── service.go     # 查询业务服务
+│   │   ├── stock.go       # 股票数据查询
+│   │   ├── news.go        # 新闻数据查询
+│   │   └── aggregator.go  # 数据聚合
+│   └── task/              # 任务管理业务
+│       ├── service.go     # 任务业务服务
+│       ├── scheduler.go   # 任务调度
+│       └── monitor.go     # 任务监控
+│
+├── repo/                  # 数据仓库层 (Repository Layer)
+│   ├── mysql/             # MySQL数据访问
+│   │   ├── stock.go       # 股票数据仓库
+│   │   ├── news.go        # 新闻数据仓库
+│   │   ├── market.go      # 市场数据仓库
+│   │   ├── financial.go   # 财务数据仓库
+│   │   └── task.go        # 任务数据仓库
+│   ├── redis/             # Redis缓存访问
+│   │   ├── cache.go       # 缓存操作
+│   │   └── session.go     # 会话管理
+│   └── external/          # 外部数据源
+│       ├── tushare/       # Tushare API客户端
+│       ├── crawler/       # 网页爬虫
+│       └── nlp/           # NLP服务客户端
+│
+├── model/                 # 数据模型定义
+│   ├── stock.go           # 股票模型
+│   ├── news.go            # 新闻模型
+│   ├── market.go          # 市场数据模型
+│   ├── financial.go       # 财务数据模型
+│   └── task.go            # 任务模型
+│
+├── pkg/                   # 公共包 (Shared Package)
 │   ├── config/            # 配置管理
-│   ├── database/          # 数据库连接
-│   ├── cache/             # 缓存管理
-│   ├── models/            # 数据模型
-│   ├── modules/           # 功能模块
-│   │   ├── collector/     # 数据采集模块
-│   │   ├── processor/     # 数据处理模块
-│   │   ├── query/         # 数据查询模块
-│   │   ├── scheduler/     # 任务调度模块
-│   │   └── monitor/       # 监控模块
-│   ├── handlers/          # HTTP处理器
-│   ├── middleware/        # 中间件
-│   ├── router/            # 路由配置
-│   ├── bus/               # 内部消息总线
-│   └── utils/             # 工具函数
-├── pkg/
 │   ├── logger/            # 日志组件
-│   ├── validator/         # 参数验证
-│   ├── errors/            # 错误处理
-│   └── response/          # 响应封装
-├── scripts/
-│   ├── migration/         # 数据库迁移
-│   └── deploy/            # 部署脚本
-├── configs/
-│   ├── config.yaml        # 配置文件
-│   └── docker-compose.yml # Docker配置
-└── docs/                  # 文档
+│   ├── errors/            # 错误定义
+│   ├── utils/             # 工具函数
+│   ├── types/             # 公共类型
+│   └── constants/         # 常量定义
+│
+└── scripts/               # 脚本文件
+    ├── migrate.sql        # 数据库迁移
+    └── deploy.sh          # 部署脚本
 ```
+
+#### 目录说明
+
+**简洁架构分层设计**
+
+* **api/**：接口层，负责外部接口适配，包括HTTP和gRPC接口
+* **biz/**：业务编排层，负责业务流程编排和跨领域协调
+* **domain/**：领域层，按照业务能力划分的领域服务
+  - **collection/**: 数据采集领域服务（Tushare、新闻爬虫等）
+  - **processing/**: 数据加工领域服务（清洗、标准化、NLP等）
+  - **scheduling/**: 任务调度领域服务（定时任务、工作流等）
+* **infrastructure/**：基础设施层，提供技术能力支撑
+* **pkg/**：共享内核，包含公共组件和工具
+* **scripts/**：部署和维护脚本
+
+**各层职责**
+
+1. **接口层 (api/)**
+   - HTTP接口适配和路由配置
+   - 请求参数验证和响应格式化
+   - 中间件处理（认证、限流、日志等）
+
+2. **业务编排层 (biz/)**
+   - 跨领域业务流程编排
+   - 复杂业务场景的工作流管理
+   - 领域服务的组合和协调
+   - 任务调度编排：数据采集 → 数据加工 → 结果存储
+
+3. **领域层 (domain/)**
+   - 按业务能力划分的领域服务
+   - collection领域：负责各种数据源的采集逻辑
+   - processing领域：负责数据清洗、转换、NLP处理
+   - scheduling领域：负责任务调度和工作流管理
+   - 各领域模块相互独立，低耦合
+
+4. **基础设施层 (infrastructure/)**
+   - 数据持久化实现
+   - 外部服务集成
+   - 技术组件实现
+
+#### 设计原则
+
+1. **依赖倒置**：高层模块不依赖低层模块，都依赖抽象
+2. **领域独立**：各领域模块相互独立，便于并行开发和维护
+3. **业务编排**：复杂业务逻辑在biz层编排，保持领域层纯净
+4. **接口适配**：外部接口变化不影响内部业务逻辑
+5. **可测试性**：各层职责清晰，便于单元测试和集成测试
 
 ### 7.2 核心组件实现
 
-#### 7.2.1 数据采集器接口
+#### 7.2.1 业务层服务实现
 
 ```go
-type DataCollector interface {
-    Collect(ctx context.Context, params CollectParams) (*CollectResult, error)
-    GetDataType() DataType
-    GetSource() string
+// biz/collection/service.go
+package collection
+
+import (
+    "context"
+    "fmt"
+    "time"
+    
+    "github.com/trading/model"
+    "github.com/trading/repo/mysql"
+    "github.com/trading/repo/external"
+)
+
+// 数据采集业务服务
+type Service struct {
+    stockRepo    mysql.StockRepository
+    newsRepo     mysql.NewsRepository
+    tushareRepo  external.TushareRepository
+    crawlerRepo  external.CrawlerRepository
 }
 
-// Tushare数据采集器
-type TushareCollector struct {
-    client *http.Client
-    token  string
-    config *CollectorConfig
+func NewService(stockRepo mysql.StockRepository, newsRepo mysql.NewsRepository, 
+    tushareRepo external.TushareRepository, crawlerRepo external.CrawlerRepository) *Service {
+    return &Service{
+        stockRepo:   stockRepo,
+        newsRepo:    newsRepo,
+        tushareRepo: tushareRepo,
+        crawlerRepo: crawlerRepo,
+    }
 }
 
-func (t *TushareCollector) Collect(ctx context.Context, params CollectParams) (*CollectResult, error) {
-    // 实现Tushare数据采集逻辑
-    // 支持股票数据、财务数据、宏观经济数据采集
+// 采集股票数据
+func (s *Service) CollectStockData(ctx context.Context, symbols []string, dataType model.StockDataType) error {
+    // 从Tushare获取股票数据
+    stockData, err := s.tushareRepo.GetStockData(ctx, symbols, dataType)
+    if err != nil {
+        return fmt.Errorf("failed to get stock data: %w", err)
+    }
+    
+    // 保存到数据库
+    for _, data := range stockData {
+        if err := s.stockRepo.SaveStockData(ctx, data); err != nil {
+            return fmt.Errorf("failed to save stock data: %w", err)
+        }
+    }
+    
+    return nil
 }
 
-// 新闻爬虫采集器
+// 采集新闻数据
+func (s *Service) CollectNewsData(ctx context.Context, sources []string, keywords []string) error {
+    // 从各个新闻源爬取数据
+    newsData, err := s.crawlerRepo.CrawlNews(ctx, sources, keywords)
+    if err != nil {
+        return fmt.Errorf("failed to crawl news: %w", err)
+    }
+    
+    // 保存到数据库
+    for _, news := range newsData {
+        if err := s.newsRepo.SaveNews(ctx, news); err != nil {
+            return fmt.Errorf("failed to save news: %w", err)
+        }
+    }
+    
+    return nil
+}
+
+// biz/processing/service.go
+package processing
+
+import (
+    "context"
+    "fmt"
+    
+    "github.com/trading/model"
+    "github.com/trading/repo/mysql"
+    "github.com/trading/repo/external"
+)
+
+// 数据加工业务服务
+type Service struct {
+    newsRepo mysql.NewsRepository
+    nlpRepo  external.NLPRepository
+}
+
+func NewService(newsRepo mysql.NewsRepository, nlpRepo external.NLPRepository) *Service {
+    return &Service{
+        newsRepo: newsRepo,
+        nlpRepo:  nlpRepo,
+    }
+}
+
+// 处理新闻数据
+func (s *Service) ProcessNewsData(ctx context.Context, limit int) error {
+    // 获取未处理的新闻
+    newsList, err := s.newsRepo.GetUnprocessedNews(ctx, limit)
+    if err != nil {
+        return fmt.Errorf("failed to get unprocessed news: %w", err)
+    }
+    
+    for _, news := range newsList {
+        // NLP情感分析
+        sentiment, score, err := s.nlpRepo.AnalyzeSentiment(ctx, news.Content)
+        if err != nil {
+            continue // 跳过处理失败的新闻
+        }
+        
+        // 提取关键词
+        keywords, err := s.nlpRepo.ExtractKeywords(ctx, news.Content)
+        if err != nil {
+            keywords = []string{} // 使用空关键词
+        }
+        
+        // 提取相关股票
+        stocks, err := s.nlpRepo.ExtractStocks(ctx, news.Content)
+        if err != nil {
+            stocks = []string{} // 使用空股票列表
+        }
+        
+        // 更新新闻的NLP处理结果
+        err = s.newsRepo.UpdateNewsNLP(ctx, news.ID, sentiment, score, keywords, stocks)
+        if err != nil {
+            return fmt.Errorf("failed to update news NLP: %w", err)
+        }
+    }
+    
+    return nil
+}
+
+type NLPResult struct {
+    Sentiments     []SentimentResult
+    Entities       []EntityResult
+    Keywords       []KeywordResult
+    Classifications []ClassificationResult
+}
+```
+
+#### 7.2.2 任务管理业务服务
+
+```go
+// biz/task/service.go
+package task
+
+import (
+    "context"
+    "fmt"
+    "time"
+    
+    "github.com/trading/model"
+    "github.com/trading/repo/mysql"
+    "github.com/trading/biz/collection"
+    "github.com/trading/biz/processing"
+)
+
+// 任务管理业务服务
+type Service struct {
+    taskRepo       mysql.TaskRepository
+    collectionSvc  *collection.Service
+    processingSvc  *processing.Service
+}
+
+func NewService(taskRepo mysql.TaskRepository, collectionSvc *collection.Service, processingSvc *processing.Service) *Service {
+    return &Service{
+        taskRepo:      taskRepo,
+        collectionSvc: collectionSvc,
+        processingSvc: processingSvc,
+    }
+}
+
+// 创建数据采集任务
+func (s *Service) CreateCollectionTask(ctx context.Context, name string, symbols []string, dataType model.StockDataType, schedule string) error {
+    task := &model.Task{
+        Name:        name,
+        Type:        model.TaskTypeCollection,
+        Status:      model.TaskStatusPending,
+        Config: map[string]interface{}{
+            "symbols":   symbols,
+            "dataType":  dataType,
+            "schedule":  schedule,
+        },
+        ScheduleTime: time.Now(),
+        MaxRetries:   3,
+        CreatedAt:    time.Now(),
+        UpdatedAt:    time.Now(),
+    }
+    
+    return s.taskRepo.CreateTask(ctx, task)
+}
+
+// 创建数据处理任务
+func (s *Service) CreateProcessingTask(ctx context.Context, name string, limit int, schedule string) error {
+    task := &model.Task{
+        Name:        name,
+        Type:        model.TaskTypeProcessing,
+        Status:      model.TaskStatusPending,
+        Config: map[string]interface{}{
+            "limit":    limit,
+            "schedule": schedule,
+        },
+        ScheduleTime: time.Now(),
+        MaxRetries:   3,
+        CreatedAt:    time.Now(),
+        UpdatedAt:    time.Now(),
+    }
+    
+    return s.taskRepo.CreateTask(ctx, task)
+}
+
+// 执行任务
+func (s *Service) ExecuteTask(ctx context.Context, taskID int64) error {
+    task, err := s.taskRepo.GetTaskByID(ctx, taskID)
+    if err != nil {
+        return fmt.Errorf("failed to get task: %w", err)
+    }
+    
+    // 更新任务状态为运行中
+    if err := s.taskRepo.UpdateTaskStatus(ctx, taskID, model.TaskStatusRunning, "Task started"); err != nil {
+        return fmt.Errorf("failed to update task status: %w", err)
+    }
+    
+    var execErr error
+    switch task.Type {
+    case model.TaskTypeCollection:
+        execErr = s.executeCollectionTask(ctx, task)
+    case model.TaskTypeProcessing:
+        execErr = s.executeProcessingTask(ctx, task)
+    default:
+        execErr = fmt.Errorf("unknown task type: %v", task.Type)
+    }
+    
+    // 更新任务状态
+    if execErr != nil {
+        s.taskRepo.UpdateTaskStatus(ctx, taskID, model.TaskStatusFailed, execErr.Error())
+        return execErr
+    }
+    
+    return s.taskRepo.UpdateTaskStatus(ctx, taskID, model.TaskStatusCompleted, "Task completed successfully")
+}
+
+// 执行采集任务
+func (s *Service) executeCollectionTask(ctx context.Context, task *model.Task) error {
+    symbols, ok := task.Config["symbols"].([]string)
+    if !ok {
+        return fmt.Errorf("invalid symbols config")
+    }
+    
+    dataType, ok := task.Config["dataType"].(model.StockDataType)
+    if !ok {
+        return fmt.Errorf("invalid dataType config")
+    }
+    
+    return s.collectionSvc.CollectStockData(ctx, symbols, dataType)
+}
+
+// 执行处理任务
+func (s *Service) executeProcessingTask(ctx context.Context, task *model.Task) error {
+    limit, ok := task.Config["limit"].(int)
+    if !ok {
+        limit = 100 // 默认值
+    }
+    
+    return s.processingSvc.ProcessNewsData(ctx, limit)
+}
+```
+
+#### 7.2.3 数据模型定义
+
+```go
+// model/stock.go
+package model
+
+import (
+    "time"
+)
+
+// 股票基础信息
+type Stock struct {
+    ID          int64     `json:"id" db:"id"`
+    Symbol      string    `json:"symbol" db:"symbol"`           // 股票代码
+    Name        string    `json:"name" db:"name"`               // 股票名称
+    Exchange    string    `json:"exchange" db:"exchange"`       // 交易所
+    Sector      string    `json:"sector" db:"sector"`           // 行业
+    Industry    string    `json:"industry" db:"industry"`       // 子行业
+    MarketCap   float64   `json:"market_cap" db:"market_cap"`   // 市值
+    IsActive    bool      `json:"is_active" db:"is_active"`     // 是否活跃
+    CreatedAt   time.Time `json:"created_at" db:"created_at"`
+    UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// 股票日线数据
+type StockData struct {
+    ID        int64     `json:"id" db:"id"`
+    Symbol    string    `json:"symbol" db:"symbol"`       // 股票代码
+    Date      time.Time `json:"date" db:"date"`           // 交易日期
+    Open      float64   `json:"open" db:"open"`           // 开盘价
+    High      float64   `json:"high" db:"high"`           // 最高价
+    Low       float64   `json:"low" db:"low"`             // 最低价
+    Close     float64   `json:"close" db:"close"`         // 收盘价
+    Volume    int64     `json:"volume" db:"volume"`       // 成交量
+    Amount    float64   `json:"amount" db:"amount"`       // 成交额
+    Change    float64   `json:"change" db:"change"`       // 涨跌额
+    ChangePct float64   `json:"change_pct" db:"change_pct"` // 涨跌幅
+    CreatedAt time.Time `json:"created_at" db:"created_at"`
+    UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// 股票数据类型
+type StockDataType int
+
+const (
+    StockDataTypeDaily   StockDataType = iota + 1 // 日线数据
+    StockDataTypeMinute                           // 分钟数据
+    StockDataTypeRealtime                         // 实时数据
+)
+```
+
+```go
+// model/news.go
+package model
+
+import (
+    "time"
+)
+
+// 新闻数据
+type News struct {
+    ID          int64     `json:"id" db:"id"`
+    Title       string    `json:"title" db:"title"`             // 新闻标题
+    Content     string    `json:"content" db:"content"`         // 新闻内容
+    Summary     string    `json:"summary" db:"summary"`         // 新闻摘要
+    Source      string    `json:"source" db:"source"`           // 新闻来源
+    Author      string    `json:"author" db:"author"`           // 作者
+    URL         string    `json:"url" db:"url"`                 // 原文链接
+    PublishedAt time.Time `json:"published_at" db:"published_at"` // 发布时间
+    Symbols     []string  `json:"symbols" db:"-"`               // 相关股票代码
+    Tags        []string  `json:"tags" db:"-"`                  // 标签
+    Sentiment   float64   `json:"sentiment" db:"sentiment"`     // 情感分析得分
+    Keywords    []string  `json:"keywords" db:"-"`              // 关键词
+    Entities    []string  `json:"entities" db:"-"`              // 实体
+    IsProcessed bool      `json:"is_processed" db:"is_processed"` // 是否已处理
+    CreatedAt   time.Time `json:"created_at" db:"created_at"`
+    UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+}
+```
+
+```go
+// model/task.go
+package model
+
+import (
+    "time"
+)
+
+// 任务定义
+type Task struct {
+    ID           int64                  `json:"id" db:"id"`
+    Name         string                 `json:"name" db:"name"`                   // 任务名称
+    Type         TaskType               `json:"type" db:"type"`                   // 任务类型
+    Status       TaskStatus             `json:"status" db:"status"`               // 任务状态
+    Config       map[string]interface{} `json:"config" db:"config"`               // 任务配置
+    ScheduleTime time.Time              `json:"schedule_time" db:"schedule_time"` // 调度时间
+    StartTime    *time.Time             `json:"start_time" db:"start_time"`       // 开始时间
+    EndTime      *time.Time             `json:"end_time" db:"end_time"`           // 结束时间
+    RetryCount   int                    `json:"retry_count" db:"retry_count"`     // 重试次数
+    MaxRetries   int                    `json:"max_retries" db:"max_retries"`     // 最大重试次数
+    ErrorMsg     string                 `json:"error_msg" db:"error_msg"`         // 错误信息
+    CreatedAt    time.Time              `json:"created_at" db:"created_at"`
+    UpdatedAt    time.Time              `json:"updated_at" db:"updated_at"`
+}
+
+// 任务类型
+type TaskType int
+
+const (
+    TaskTypeCollection TaskType = iota + 1 // 数据采集
+    TaskTypeProcessing                     // 数据处理
+    TaskTypeCleanup                        // 数据清理
+)
+
+// 任务状态
+type TaskStatus int
+
+const (
+    TaskStatusPending   TaskStatus = iota + 1 // 待执行
+    TaskStatusRunning                         // 执行中
+    TaskStatusCompleted                       // 已完成
+    TaskStatusFailed                          // 失败
+    TaskStatusCancelled                       // 已取消
+)
+```
+
+#### 7.2.4 数据仓库层实现
+
+```go
+// repo/mysql/stock.go
+package mysql
+
+import (
+    "context"
+    "database/sql"
+    "fmt"
+    "time"
+    
+    "github.com/trading/model"
+)
+
+// 股票基础数据仓储接口
+type StockRepository interface {
+    SaveStock(ctx context.Context, stock *model.Stock) error
+    BatchSaveStocks(ctx context.Context, stocks []*model.Stock) error
+    GetStockBySymbol(ctx context.Context, symbol string) (*model.Stock, error)
+    GetActiveStocks(ctx context.Context) ([]*model.Stock, error)
+    UpdateStock(ctx context.Context, stock *model.Stock) error
+}
+
+// 股票基础数据仓储实现
+type stockRepository struct {
+    db *sql.DB
+}
+
+func NewStockRepository(db *sql.DB) StockRepository {
+    return &stockRepository{db: db}
+}
+
+func (r *stockRepository) SaveStock(ctx context.Context, stock *model.Stock) error {
+    query := `
+        INSERT INTO stocks (symbol, name, exchange, sector, industry, market_cap, is_active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+        name = VALUES(name), exchange = VALUES(exchange), sector = VALUES(sector),
+        industry = VALUES(industry), market_cap = VALUES(market_cap), is_active = VALUES(is_active),
+        updated_at = VALUES(updated_at)
+    `
+    
+    _, err := r.db.ExecContext(ctx, query,
+        stock.Symbol, stock.Name, stock.Exchange, stock.Sector, stock.Industry,
+        stock.MarketCap, stock.IsActive, stock.CreatedAt, stock.UpdatedAt,
+    )
+    
+    return err
+}
+
+func (r *stockRepository) BatchSaveStocks(ctx context.Context, stocks []*model.Stock) error {
+    if len(stocks) == 0 {
+        return nil
+    }
+    
+    tx, err := r.db.BeginTx(ctx, nil)
+    if err != nil {
+        return err
+    }
+    defer tx.Rollback()
+    
+    query := `
+        INSERT INTO stocks (symbol, name, exchange, sector, industry, market_cap, is_active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+        name = VALUES(name), exchange = VALUES(exchange), sector = VALUES(sector),
+        industry = VALUES(industry), market_cap = VALUES(market_cap), is_active = VALUES(is_active),
+        updated_at = VALUES(updated_at)
+    `
+    
+    stmt, err := tx.PrepareContext(ctx, query)
+    if err != nil {
+        return err
+    }
+    defer stmt.Close()
+    
+    for _, stock := range stocks {
+        _, err := stmt.ExecContext(ctx,
+            stock.Symbol, stock.Name, stock.Exchange, stock.Sector, stock.Industry,
+            stock.MarketCap, stock.IsActive, stock.CreatedAt, stock.UpdatedAt,
+        )
+        if err != nil {
+            return err
+        }
+    }
+    
+    return tx.Commit()
+}
+
+func (r *stockRepository) GetStockBySymbol(ctx context.Context, symbol string) (*model.Stock, error) {
+    query := `
+        SELECT id, symbol, name, exchange, sector, industry, market_cap, is_active, created_at, updated_at
+        FROM stocks WHERE symbol = ?
+    `
+    
+    stock := &model.Stock{}
+    err := r.db.QueryRowContext(ctx, query, symbol).Scan(
+        &stock.ID, &stock.Symbol, &stock.Name, &stock.Exchange, &stock.Sector,
+        &stock.Industry, &stock.MarketCap, &stock.IsActive, &stock.CreatedAt, &stock.UpdatedAt,
+    )
+    
+    if err != nil {
+        return nil, err
+    }
+    
+    return stock, nil
+}
+
+func (r *stockRepository) GetActiveStocks(ctx context.Context) ([]*model.Stock, error) {
+    query := `
+        SELECT id, symbol, name, exchange, sector, industry, market_cap, is_active, created_at, updated_at
+        FROM stocks WHERE is_active = true ORDER BY symbol
+    `
+    
+    rows, err := r.db.QueryContext(ctx, query)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+    
+    var stocks []*model.Stock
+    for rows.Next() {
+        stock := &model.Stock{}
+        err := rows.Scan(
+            &stock.ID, &stock.Symbol, &stock.Name, &stock.Exchange, &stock.Sector,
+            &stock.Industry, &stock.MarketCap, &stock.IsActive, &stock.CreatedAt, &stock.UpdatedAt,
+        )
+        if err != nil {
+            return nil, err
+        }
+        stocks = append(stocks, stock)
+    }
+    
+    return stocks, rows.Err()
+}
+
+func (r *stockRepository) UpdateStock(ctx context.Context, stock *model.Stock) error {
+    query := `
+        UPDATE stocks SET name = ?, exchange = ?, sector = ?, industry = ?, 
+        market_cap = ?, is_active = ?, updated_at = ?
+        WHERE symbol = ?
+    `
+    
+    _, err := r.db.ExecContext(ctx, query,
+        stock.Name, stock.Exchange, stock.Sector, stock.Industry,
+        stock.MarketCap, stock.IsActive, stock.UpdatedAt, stock.Symbol,
+    )
+    
+    return err
+}
+
+// infrastructure/collection/news_crawler.go
+package collection
+
+import(
+    "context"
+    "fmt"
+    "time"
+    
+    "github.com/gocolly/colly/v2"
+    "github.com/trading/domain/collection"
+    "github.com/trading/model"
+)
+
 type NewsCrawler struct {
     collector *colly.Collector
-    config    *CrawlerConfig
-    nlpClient *NLPClient
+    crawlers map[collection.DataSource]NewsCrawlerInterface
 }
 
-func (n *NewsCrawler) Collect(ctx context.Context, params CollectParams) (*CollectResult, error) {
-    var newsItems []*NewsItem
-    
-    // 配置爬虫
+type NewsCrawlerInterface interface {
+    CrawlNews(ctx context.Context, keywords []string, category collection.NewsCategory) ([]*model.News, error)
+}
+
+type NewsSource struct {
+    Name     string
+    BaseURL  string
+    Selectors map[string]string
+}
+
+func NewNewsCrawler() *NewsCrawler {
     c := colly.NewCollector(
         colly.UserAgent("Mozilla/5.0 (compatible; DataCollector/1.0)"),
     )
     
-    // 设置请求限制
     c.Limit(&colly.LimitRule{
         DomainGlob:  "*",
         Parallelism: 2,
         Delay:       1 * time.Second,
     })
     
-    // 解析新闻列表页
-    c.OnHTML(".news-item", func(e *colly.HTMLElement) {
-        newsItem := &NewsItem{
-            Title:       e.ChildText(".title"),
-            URL:         e.ChildAttr("a", "href"),
-            PublishTime: parseTime(e.ChildText(".time")),
-            Source:      e.ChildText(".source"),
+    return &NewsCrawler{
+        collector: c,
+        crawlers: map[collection.DataSource]NewsCrawlerInterface{
+            collection.SourceSina:      &SinaCrawler{},
+            collection.SourceEastMoney: &EastMoneyCrawler{},
+        },
+    }
+}
+
+func (n *NewsCrawler) CollectNewsData(ctx context.Context, req *collection.NewsCollectRequest) (*collection.CollectResult, error) {
+    var allNews []*model.News
+    
+    // 从多个新闻源采集数据
+    for _, source := range req.Sources {
+        crawler, exists := n.crawlers[source]
+        if !exists {
+            continue
         }
-        newsItems = append(newsItems, newsItem)
-    })
-    
-    // 解析新闻详情页
-    c.OnHTML(".article-content", func(e *colly.HTMLElement) {
-        content := e.Text
-        // 存储新闻内容
-    })
-    
-    // 访问目标网站
-    for _, url := range n.config.TargetURLs {
-        c.Visit(url)
+        
+        news, err := crawler.CrawlNews(ctx, req.Keywords, req.Category)
+        if err != nil {
+            // 记录错误但继续处理其他源
+            continue
+        }
+        
+        allNews = append(allNews, news...)
     }
     
-    return &CollectResult{
-        Data:      newsItems,
-        Count:     len(newsItems),
-        Timestamp: time.Now(),
+    // 去重处理
+    uniqueNews := n.deduplicateNews(allNews)
+    
+    // 转换为通用数据格式
+    var data []interface{}
+    for _, news := range uniqueNews {
+        data = append(data, news)
+    }
+    
+    return &collection.CollectResult{
+        Data:   data,
+        Count:  len(data),
+        Source: req.Sources[0], // 使用第一个源作为主要来源
     }, nil
 }
-```
 
-#### 7.2.2 数据处理器
-
-```go
-type DataProcessor interface {
-    Process(ctx context.Context, data *RawData) (*ProcessedData, error)
-    Validate(data *RawData) error
-}
-
-type NewsProcessor struct {
-    nlpService *NLPService
-    stockRepo  *StockRepository
-    bus        *MessageBus
-}
-
-func (n *NewsProcessor) Process(ctx context.Context, data *RawData) (*ProcessedData, error) {
-    // 实现新闻数据处理逻辑
-    // 1. 内容预处理
-    cleaned := n.preprocess(data.Content)
+func (n *NewsCrawler) deduplicateNews(news []*model.News) []*model.News {
+    seen := make(map[string]bool)
+    var unique []*model.News
     
-    // 2. 实体识别和情感分析
-    nlpResult := n.nlpService.Analyze(cleaned)
-    
-    // 3. 股票关联
-    relatedStocks := n.matchStocks(nlpResult.Entities)
-    
-    // 4. 行业映射
-    industries := n.mapIndustries(relatedStocks)
-    
-    // 5. 构建处理结果
-    processed := &ProcessedData{
-        Title:           data.Title,
-        Content:         cleaned,
-        Sentiment:       nlpResult.Sentiment,
-        SentimentScore:  nlpResult.Score,
-        RelatedStocks:   relatedStocks,
-        RelatedIndustries: industries,
-    }
-    
-    return processed, nil
-}
-```
-
-#### 7.2.3 内部消息总线
-
-```go
-type MessageBus struct {
-    channels map[string]chan interface{}
-    mutex    sync.RWMutex
-}
-
-func (m *MessageBus) Publish(topic string, data interface{}) error {
-    m.mutex.RLock()
-    defer m.mutex.RUnlock()
-    
-    if ch, exists := m.channels[topic]; exists {
-        select {
-        case ch <- data:
-            return nil
-        default:
-            return errors.New("channel buffer full")
+    for _, item := range news {
+        key := fmt.Sprintf("%s-%s", item.Title, item.Source)
+        if !seen[key] {
+            seen[key] = true
+            unique = append(unique, item)
         }
     }
-    return errors.New("topic not found")
+    
+    return unique
 }
 
-func (m *MessageBus) Subscribe(topic string, handler func(interface{})) {
-    m.mutex.Lock()
-    defer m.mutex.Unlock()
+// 具体爬虫实现示例
+type SinaCrawler struct{}
+
+func (s *SinaCrawler) CrawlNews(ctx context.Context, keywords []string, category collection.NewsCategory) ([]*model.News, error) {
+    // 实现新浪财经新闻爬取逻辑
+    return nil, nil
+}
+
+type EastMoneyCrawler struct{}
+
+func (e *EastMoneyCrawler) CrawlNews(ctx context.Context, keywords []string, category collection.NewsCategory) ([]*model.News, error) {
+    // 实现东方财富新闻爬取逻辑
+    return nil, nil
+}
+
+// infrastructure/processing/nlp.go
+package processing
+
+import (
+    "context"
+    "fmt"
+    "strings"
     
-    if _, exists := m.channels[topic]; !exists {
-        m.channels[topic] = make(chan interface{}, 1000)
+    "github.com/trading/domain/processing"
+    "github.com/trading/model"
+)
+
+type NLPService struct {
+    sentimentModel SentimentAnalyzer
+    entityExtractor EntityExtractor
+    keywordExtractor KeywordExtractor
+}
+
+type SentimentAnalyzer interface {
+    AnalyzeSentiment(ctx context.Context, text string) (model.Sentiment, float64, error)
+}
+
+type EntityExtractor interface {
+    ExtractEntities(ctx context.Context, text string) ([]model.Entity, error)
+}
+
+type KeywordExtractor interface {
+    ExtractKeywords(ctx context.Context, text string) ([]string, error)
+}
+
+func NewNLPService() *NLPService {
+    return &NLPService{
+        sentimentModel:   &BaiduSentimentAnalyzer{},
+        entityExtractor:  &JiebaEntityExtractor{},
+        keywordExtractor: &TFIDFKeywordExtractor{},
+    }
+}
+
+func (n *NLPService) ProcessNLP(ctx context.Context, req *processing.NLPRequest) (*processing.NLPResult, error) {
+    result := &processing.NLPResult{
+        ProcessedTexts: make([]*processing.ProcessedText, 0, len(req.TextData)),
     }
     
-    go func() {
-        for data := range m.channels[topic] {
-            handler(data)
+    for _, text := range req.TextData {
+        processedText := &processing.ProcessedText{
+            OriginalText: text,
         }
-    }()
+        
+        // 执行各种NLP任务
+        for _, task := range req.Tasks {
+            switch task {
+            case processing.NLPTaskSentiment:
+                sentiment, score, err := n.sentimentModel.AnalyzeSentiment(ctx, text)
+                if err == nil {
+                    processedText.Sentiment = sentiment
+                    processedText.SentimentScore = score
+                }
+                
+            case processing.NLPTaskEntityExtraction:
+                entities, err := n.entityExtractor.ExtractEntities(ctx, text)
+                if err == nil {
+                    processedText.Entities = entities
+                }
+                
+            case processing.NLPTaskKeywordExtraction:
+                keywords, err := n.keywordExtractor.ExtractKeywords(ctx, text)
+                if err == nil {
+                    processedText.Keywords = keywords
+                }
+            }
+        }
+        
+        result.ProcessedTexts = append(result.ProcessedTexts, processedText)
+    }
+    
+    return result, nil
+}
+
+// 具体NLP实现示例
+type BaiduSentimentAnalyzer struct{}
+
+func (b *BaiduSentimentAnalyzer) AnalyzeSentiment(ctx context.Context, text string) (model.Sentiment, float64, error) {
+    // 实现百度情感分析API调用
+    // 这里返回模拟结果
+    if strings.Contains(text, "上涨") || strings.Contains(text, "利好") {
+        return model.SentimentPositive, 0.8, nil
+    } else if strings.Contains(text, "下跌") || strings.Contains(text, "利空") {
+        return model.SentimentNegative, 0.7, nil
+    }
+    return model.SentimentNeutral, 0.5, nil
+}
+
+type JiebaEntityExtractor struct{}
+
+func (j *JiebaEntityExtractor) ExtractEntities(ctx context.Context, text string) ([]model.Entity, error) {
+    // 实现基于jieba的实体提取
+    return nil, nil
+}
+
+type TFIDFKeywordExtractor struct{}
+
+func (t *TFIDFKeywordExtractor) ExtractKeywords(ctx context.Context, text string) ([]string, error) {
+    // 实现TF-IDF关键词提取
+    return nil, nil
+}
+
+// infrastructure/processing/cleaner.go
+package processing
+
+import (
+    "context"
+    "fmt"
+    "regexp"
+    "strings"
+    "time"
+    
+    "github.com/trading/domain/processing"
+    "github.com/trading/model"
+)
+
+type DataCleaner struct {
+    rules map[model.DataType][]CleaningRule
+}
+
+type CleaningRule interface {
+    Apply(data interface{}) (interface{}, error)
+}
+
+func NewDataCleaner() *DataCleaner {
+    return &DataCleaner{
+        rules: map[model.DataType][]CleaningRule{
+            model.DataTypeNews: {
+                &NewsTextCleaner{},
+                &NewsDeduplicator{},
+                &NewsValidator{},
+            },
+            model.DataTypeStock: {
+                &StockDataValidator{},
+                &StockDataNormalizer{},
+            },
+        },
+    }
+}
+
+func (d *DataCleaner) CleanAndNormalize(ctx context.Context, req *processing.ProcessRequest) (*processing.ProcessResult, error) {
+    rules, exists := d.rules[req.DataType]
+    if !exists {
+        return nil, fmt.Errorf("no cleaning rules for data type: %v", req.DataType)
+    }
+    
+    var processedData []interface{}
+    
+    for _, rawItem := range req.RawData {
+        cleanedItem := rawItem
+        
+        // 应用清洗规则
+        for _, rule := range rules {
+            var err error
+            cleanedItem, err = rule.Apply(cleanedItem)
+            if err != nil {
+                // 记录错误但继续处理
+                continue
+            }
+        }
+        
+        // 应用用户自定义规则
+        for _, userRule := range req.Rules {
+            cleanedItem = d.applyUserRule(cleanedItem, userRule)
+        }
+        
+        if cleanedItem != nil {
+            processedData = append(processedData, cleanedItem)
+        }
+    }
+    
+    return &processing.ProcessResult{
+        ProcessedData: processedData,
+        ProcessedAt:   time.Now(),
+        Rules:         req.Rules,
+    }, nil
+}
+
+func (d *DataCleaner) applyUserRule(data interface{}, rule processing.ProcessingRule) interface{} {
+    // 实现用户自定义规则应用逻辑
+    return data
+}
+
+// 具体清洗规则实现
+type NewsTextCleaner struct{}
+
+func (n *NewsTextCleaner) Apply(data interface{}) (interface{}, error) {
+    news, ok := data.(*model.News)
+    if !ok {
+        return data, nil
+    }
+    
+    // 清理HTML标签
+    htmlTagRegex := regexp.MustCompile(`<[^>]*>`)
+    news.Content = htmlTagRegex.ReplaceAllString(news.Content, "")
+    
+    // 清理多余空白字符
+    news.Content = strings.TrimSpace(news.Content)
+    news.Title = strings.TrimSpace(news.Title)
+    
+    return news, nil
+}
+
+type NewsDeduplicator struct{}
+
+func (n *NewsDeduplicator) Apply(data interface{}) (interface{}, error) {
+    // 实现新闻去重逻辑
+    return data, nil
+}
+
+type NewsValidator struct{}
+
+func (n *NewsValidator) Apply(data interface{}) (interface{}, error) {
+    news, ok := data.(*model.News)
+    if !ok {
+        return data, nil
+    }
+    
+    // 验证必要字段
+    if news.Title == "" || news.Content == "" {
+        return nil, fmt.Errorf("invalid news: missing title or content")
+    }
+    
+    // 验证内容长度
+    if len(news.Content) < 50 {
+        return nil, fmt.Errorf("news content too short")
+    }
+    
+    return news, nil
+}
+
+type StockDataValidator struct{}
+
+func (s *StockDataValidator) Apply(data interface{}) (interface{}, error) {
+    stock, ok := data.(*model.Stock)
+    if !ok {
+        return data, nil
+    }
+    
+    // 验证股票代码格式
+    if stock.Symbol == "" {
+        return nil, fmt.Errorf("invalid stock: missing symbol")
+    }
+    
+    return stock, nil
+}
+
+type StockDataNormalizer struct{}
+
+func (s *StockDataNormalizer) Apply(data interface{}) (interface{}, error) {
+    stock, ok := data.(*model.Stock)
+    if !ok {
+        return data, nil
+    }
+    
+    // 标准化股票代码格式
+    stock.Symbol = strings.ToUpper(stock.Symbol)
+    
+    return stock, nil
+}
+
+// infrastructure/repository/stock.go
+package repository
+
+import (
+    "context"
+    "database/sql"
+    "fmt"
+    "time"
+    
+    "github.com/trading/domain/collection"
+    "github.com/trading/model"
+)
+
+// 股票基础数据仓储实现
+type StockRepository struct {
+    db *sql.DB
+}
+
+func NewStockRepository(db *sql.DB) *StockRepository {
+    return &StockRepository{db: db}
+}
+
+// 保存股票基础信息
+func (r *StockRepository) SaveStockBasic(ctx context.Context, stock *model.Stock) error {
+    query := `
+        INSERT INTO stocks (symbol, name, industry, market, list_date, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            name = VALUES(name),
+            industry = VALUES(industry),
+            market = VALUES(market),
+            status = VALUES(status),
+            updated_at = VALUES(updated_at)
+    `
+    
+    _, err := r.db.ExecContext(ctx, query,
+        stock.Symbol,
+        stock.Name,
+        stock.Industry,
+        stock.Market,
+        stock.ListDate,
+        stock.Status,
+        time.Now(),
+        time.Now(),
+    )
+    
+    return err
+}
+
+// 批量保存股票基础信息
+func (r *StockRepository) BatchSaveStockBasic(ctx context.Context, stocks []*model.Stock) error {
+    if len(stocks) == 0 {
+        return nil
+    }
+    
+    tx, err := r.db.BeginTx(ctx, nil)
+    if err != nil {
+        return fmt.Errorf("failed to begin transaction: %w", err)
+    }
+    defer tx.Rollback()
+    
+    stmt, err := tx.PrepareContext(ctx, `
+        INSERT INTO stocks (symbol, name, industry, market, list_date, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            name = VALUES(name),
+            industry = VALUES(industry),
+            market = VALUES(market),
+            status = VALUES(status),
+            updated_at = VALUES(updated_at)
+    `)
+    if err != nil {
+        return fmt.Errorf("failed to prepare statement: %w", err)
+    }
+    defer stmt.Close()
+    
+    for _, stock := range stocks {
+        _, err := stmt.ExecContext(ctx,
+            stock.Symbol,
+            stock.Name,
+            stock.Industry,
+            stock.Market,
+            stock.ListDate,
+            stock.Status,
+            time.Now(),
+            time.Now(),
+        )
+        if err != nil {
+            return fmt.Errorf("failed to insert stock %s: %w", stock.Symbol, err)
+        }
+    }
+    
+    return tx.Commit()
+}
+
+// 获取股票基础信息
+func (r *StockRepository) GetStockBasic(ctx context.Context, symbol string) (*model.Stock, error) {
+    query := `
+        SELECT symbol, name, industry, market, list_date, status, created_at, updated_at
+        FROM stocks
+        WHERE symbol = ?
+    `
+    
+    var stock model.Stock
+    err := r.db.QueryRowContext(ctx, query, symbol).Scan(
+        &stock.Symbol,
+        &stock.Name,
+        &stock.Industry,
+        &stock.Market,
+        &stock.ListDate,
+        &stock.Status,
+        &stock.CreatedAt,
+        &stock.UpdatedAt,
+    )
+    
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return nil, fmt.Errorf("stock not found: %s", symbol)
+        }
+        return nil, fmt.Errorf("failed to get stock: %w", err)
+    }
+    
+    return &stock, nil
+}
+
+// 获取所有活跃股票列表
+func (r *StockRepository) GetActiveStocks(ctx context.Context) ([]*model.Stock, error) {
+    query := `
+        SELECT symbol, name, industry, market, list_date, status, created_at, updated_at
+        FROM stocks
+        WHERE status = ?
+        ORDER BY symbol
+    `
+    
+    rows, err := r.db.QueryContext(ctx, query, model.StatusActive)
+    if err != nil {
+        return nil, fmt.Errorf("failed to query stocks: %w", err)
+    }
+    defer rows.Close()
+    
+    var stocks []*model.Stock
+    for rows.Next() {
+        var stock model.Stock
+        err := rows.Scan(
+            &stock.Symbol,
+            &stock.Name,
+            &stock.Industry,
+            &stock.Market,
+            &stock.ListDate,
+            &stock.Status,
+            &stock.CreatedAt,
+            &stock.UpdatedAt,
+        )
+        if err != nil {
+            return nil, fmt.Errorf("failed to scan stock: %w", err)
+        }
+        stocks = append(stocks, &stock)
+    }
+    
+    return stocks, nil
+}
+
+// infrastructure/repository/stock_data.go
+package repository
+
+import (
+    "context"
+    "database/sql"
+    "fmt"
+    "time"
+    
+    "github.com/trading/model"
+)
+
+// 股票行情数据仓储实现
+type StockDataRepository struct {
+    db *sql.DB
+}
+
+func NewStockDataRepository(db *sql.DB) *StockDataRepository {
+    return &StockDataRepository{db: db}
+}
+
+// 保存日线数据
+func (r *StockDataRepository) SaveDailyData(ctx context.Context, data *model.StockDailyData) error {
+    query := `
+        INSERT INTO stock_daily_data 
+        (symbol, trade_date, open_price, high_price, low_price, close_price, 
+         volume, amount, pre_close, change_amount, change_percent, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            open_price = VALUES(open_price),
+            high_price = VALUES(high_price),
+            low_price = VALUES(low_price),
+            close_price = VALUES(close_price),
+            volume = VALUES(volume),
+            amount = VALUES(amount),
+            pre_close = VALUES(pre_close),
+            change_amount = VALUES(change_amount),
+            change_percent = VALUES(change_percent)
+    `
+    
+    _, err := r.db.ExecContext(ctx, query,
+        data.Symbol,
+        data.TradeDate,
+        data.OpenPrice,
+        data.HighPrice,
+        data.LowPrice,
+        data.ClosePrice,
+        data.Volume,
+        data.Amount,
+        data.PreClose,
+        data.ChangeAmount,
+        data.ChangePercent,
+        time.Now(),
+    )
+    
+    return err
+}
+
+// 批量保存日线数据
+func (r *StockDataRepository) BatchSaveDailyData(ctx context.Context, dataList []*model.StockDailyData) error {
+    if len(dataList) == 0 {
+        return nil
+    }
+    
+    tx, err := r.db.BeginTx(ctx, nil)
+    if err != nil {
+        return fmt.Errorf("failed to begin transaction: %w", err)
+    }
+    defer tx.Rollback()
+    
+    stmt, err := tx.PrepareContext(ctx, `
+        INSERT INTO stock_daily_data 
+        (symbol, trade_date, open_price, high_price, low_price, close_price, 
+         volume, amount, pre_close, change_amount, change_percent, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            open_price = VALUES(open_price),
+            high_price = VALUES(high_price),
+            low_price = VALUES(low_price),
+            close_price = VALUES(close_price),
+            volume = VALUES(volume),
+            amount = VALUES(amount),
+            pre_close = VALUES(pre_close),
+            change_amount = VALUES(change_amount),
+            change_percent = VALUES(change_percent)
+    `)
+    if err != nil {
+        return fmt.Errorf("failed to prepare statement: %w", err)
+    }
+    defer stmt.Close()
+    
+    for _, data := range dataList {
+        _, err := stmt.ExecContext(ctx,
+            data.Symbol,
+            data.TradeDate,
+            data.OpenPrice,
+            data.HighPrice,
+            data.LowPrice,
+            data.ClosePrice,
+            data.Volume,
+            data.Amount,
+            data.PreClose,
+            data.ChangeAmount,
+            data.ChangePercent,
+            time.Now(),
+        )
+        if err != nil {
+            return fmt.Errorf("failed to insert daily data for %s: %w", data.Symbol, err)
+        }
+    }
+    
+    return tx.Commit()
+}
+
+// 获取股票历史数据
+func (r *StockDataRepository) GetDailyData(ctx context.Context, symbol string, startDate, endDate time.Time) ([]*model.StockDailyData, error) {
+    query := `
+        SELECT symbol, trade_date, open_price, high_price, low_price, close_price,
+               volume, amount, pre_close, change_amount, change_percent, created_at
+        FROM stock_daily_data
+        WHERE symbol = ? AND trade_date >= ? AND trade_date <= ?
+        ORDER BY trade_date DESC
+    `
+    
+    rows, err := r.db.QueryContext(ctx, query, symbol, startDate, endDate)
+    if err != nil {
+        return nil, fmt.Errorf("failed to query daily data: %w", err)
+    }
+    defer rows.Close()
+    
+    var dataList []*model.StockDailyData
+    for rows.Next() {
+        var data model.StockDailyData
+        err := rows.Scan(
+            &data.Symbol,
+            &data.TradeDate,
+            &data.OpenPrice,
+            &data.HighPrice,
+            &data.LowPrice,
+            &data.ClosePrice,
+            &data.Volume,
+            &data.Amount,
+            &data.PreClose,
+            &data.ChangeAmount,
+            &data.ChangePercent,
+            &data.CreatedAt,
+        )
+        if err != nil {
+            return nil, fmt.Errorf("failed to scan daily data: %w", err)
+        }
+        dataList = append(dataList, &data)
+    }
+    
+    return dataList, nil
+}
+
+// 获取最新交易日数据
+func (r *StockDataRepository) GetLatestData(ctx context.Context, symbol string) (*model.StockDailyData, error) {
+    query := `
+        SELECT symbol, trade_date, open_price, high_price, low_price, close_price,
+               volume, amount, pre_close, change_amount, change_percent, created_at
+        FROM stock_daily_data
+        WHERE symbol = ?
+        ORDER BY trade_date DESC
+        LIMIT 1
+    `
+    
+    var data model.StockDailyData
+    err := r.db.QueryRowContext(ctx, query, symbol).Scan(
+        &data.Symbol,
+        &data.TradeDate,
+        &data.OpenPrice,
+        &data.HighPrice,
+        &data.LowPrice,
+        &data.ClosePrice,
+        &data.Volume,
+        &data.Amount,
+        &data.PreClose,
+        &data.ChangeAmount,
+        &data.ChangePercent,
+        &data.CreatedAt,
+    )
+    
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return nil, fmt.Errorf("no data found for stock: %s", symbol)
+        }
+        return nil, fmt.Errorf("failed to get latest data: %w", err)
+    }
+    
+    return &data, nil
+}
+
+// infrastructure/repository/news.go
+package repository
+
+import (
+    "context"
+    "database/sql"
+    "fmt"
+    "time"
+    
+    "github.com/trading/model"
+)
+
+// 新闻数据仓储实现
+type NewsRepository struct {
+    db *sql.DB
+}
+
+func NewNewsRepository(db *sql.DB) *NewsRepository {
+    return &NewsRepository{db: db}
+}
+
+// 保存新闻数据
+func (r *NewsRepository) SaveNews(ctx context.Context, news *model.News) error {
+    query := `
+        INSERT INTO news (title, content, source, url, publish_time, category, 
+                         sentiment, sentiment_score, keywords, related_stocks, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            content = VALUES(content),
+            sentiment = VALUES(sentiment),
+            sentiment_score = VALUES(sentiment_score),
+            keywords = VALUES(keywords),
+            related_stocks = VALUES(related_stocks),
+            updated_at = VALUES(updated_at)
+    `
+    
+    _, err := r.db.ExecContext(ctx, query,
+        news.Title,
+        news.Content,
+        news.Source,
+        news.URL,
+        news.PublishTime,
+        news.Category,
+        news.Sentiment,
+        news.SentimentScore,
+        news.Keywords,
+        news.RelatedStocks,
+        time.Now(),
+        time.Now(),
+    )
+    
+    return err
+}
+
+// 批量保存新闻数据
+func (r *NewsRepository) BatchSaveNews(ctx context.Context, newsList []*model.News) error {
+    if len(newsList) == 0 {
+        return nil
+    }
+    
+    tx, err := r.db.BeginTx(ctx, nil)
+    if err != nil {
+        return fmt.Errorf("failed to begin transaction: %w", err)
+    }
+    defer tx.Rollback()
+    
+    stmt, err := tx.PrepareContext(ctx, `
+        INSERT INTO news (title, content, source, url, publish_time, category, 
+                         sentiment, sentiment_score, keywords, related_stocks, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            content = VALUES(content),
+            sentiment = VALUES(sentiment),
+            sentiment_score = VALUES(sentiment_score),
+            keywords = VALUES(keywords),
+            related_stocks = VALUES(related_stocks),
+            updated_at = VALUES(updated_at)
+    `)
+    if err != nil {
+        return fmt.Errorf("failed to prepare statement: %w", err)
+    }
+    defer stmt.Close()
+    
+    for _, news := range newsList {
+        _, err := stmt.ExecContext(ctx,
+            news.Title,
+            news.Content,
+            news.Source,
+            news.URL,
+            news.PublishTime,
+            news.Category,
+            news.Sentiment,
+            news.SentimentScore,
+            news.Keywords,
+            news.RelatedStocks,
+            time.Now(),
+            time.Now(),
+        )
+        if err != nil {
+            return fmt.Errorf("failed to insert news %s: %w", news.Title, err)
+        }
+    }
+    
+    return tx.Commit()
+}
+
+// 根据ID获取新闻
+func (r *NewsRepository) GetNewsByID(ctx context.Context, id int64) (*model.News, error) {
+    query := `
+        SELECT id, title, content, source, url, publish_time, category,
+               sentiment, sentiment_score, keywords, related_stocks, created_at, updated_at
+        FROM news
+        WHERE id = ?
+    `
+    
+    var news model.News
+    err := r.db.QueryRowContext(ctx, query, id).Scan(
+        &news.ID,
+        &news.Title,
+        &news.Content,
+        &news.Source,
+        &news.URL,
+        &news.PublishTime,
+        &news.Category,
+        &news.Sentiment,
+        &news.SentimentScore,
+        &news.Keywords,
+        &news.RelatedStocks,
+        &news.CreatedAt,
+        &news.UpdatedAt,
+    )
+    
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return nil, fmt.Errorf("news not found: %d", id)
+        }
+        return nil, fmt.Errorf("failed to get news: %w", err)
+    }
+    
+    return &news, nil
+}
+
+// 根据股票代码获取相关新闻
+func (r *NewsRepository) GetNewsByStock(ctx context.Context, symbol string, limit int) ([]*model.News, error) {
+    query := `
+        SELECT id, title, content, source, url, publish_time, category,
+               sentiment, sentiment_score, keywords, related_stocks, created_at, updated_at
+        FROM news
+        WHERE JSON_CONTAINS(related_stocks, JSON_QUOTE(?))
+        ORDER BY publish_time DESC
+        LIMIT ?
+    `
+    
+    rows, err := r.db.QueryContext(ctx, query, symbol, limit)
+    if err != nil {
+        return nil, fmt.Errorf("failed to query news by stock: %w", err)
+    }
+    defer rows.Close()
+    
+    var newsList []*model.News
+    for rows.Next() {
+        var news model.News
+        err := rows.Scan(
+            &news.ID,
+            &news.Title,
+            &news.Content,
+            &news.Source,
+            &news.URL,
+            &news.PublishTime,
+            &news.Category,
+            &news.Sentiment,
+            &news.SentimentScore,
+            &news.Keywords,
+            &news.RelatedStocks,
+            &news.CreatedAt,
+            &news.UpdatedAt,
+        )
+        if err != nil {
+            return nil, fmt.Errorf("failed to scan news: %w", err)
+        }
+        newsList = append(newsList, &news)
+    }
+    
+    return newsList, nil
+}
+
+// 根据时间范围获取新闻
+func (r *NewsRepository) GetNewsByTimeRange(ctx context.Context, startTime, endTime time.Time, limit int) ([]*model.News, error) {
+    query := `
+        SELECT id, title, content, source, url, publish_time, category,
+               sentiment, sentiment_score, keywords, related_stocks, created_at, updated_at
+        FROM news
+        WHERE publish_time >= ? AND publish_time <= ?
+        ORDER BY publish_time DESC
+        LIMIT ?
+    `
+    
+    rows, err := r.db.QueryContext(ctx, query, startTime, endTime, limit)
+    if err != nil {
+        return nil, fmt.Errorf("failed to query news by time range: %w", err)
+    }
+    defer rows.Close()
+    
+    var newsList []*model.News
+    for rows.Next() {
+        var news model.News
+        err := rows.Scan(
+            &news.ID,
+            &news.Title,
+            &news.Content,
+            &news.Source,
+            &news.URL,
+            &news.PublishTime,
+            &news.Category,
+            &news.Sentiment,
+            &news.SentimentScore,
+            &news.Keywords,
+            &news.RelatedStocks,
+            &news.CreatedAt,
+            &news.UpdatedAt,
+        )
+        if err != nil {
+            return nil, fmt.Errorf("failed to scan news: %w", err)
+        }
+        newsList = append(newsList, &news)
+    }
+    
+    return newsList, nil
+}
+
+// 获取未处理的新闻（用于NLP处理）
+func (r *NewsRepository) GetUnprocessedNews(ctx context.Context, limit int) ([]*model.News, error) {
+    query := `
+        SELECT id, title, content, source, url, publish_time, category,
+               sentiment, sentiment_score, keywords, related_stocks, created_at, updated_at
+        FROM news
+        WHERE sentiment IS NULL OR sentiment = 0
+        ORDER BY created_at ASC
+        LIMIT ?
+    `
+    
+    rows, err := r.db.QueryContext(ctx, query, limit)
+    if err != nil {
+        return nil, fmt.Errorf("failed to query unprocessed news: %w", err)
+    }
+    defer rows.Close()
+    
+    var newsList []*model.News
+    for rows.Next() {
+        var news model.News
+        err := rows.Scan(
+            &news.ID,
+            &news.Title,
+            &news.Content,
+            &news.Source,
+            &news.URL,
+            &news.PublishTime,
+            &news.Category,
+            &news.Sentiment,
+            &news.SentimentScore,
+            &news.Keywords,
+            &news.RelatedStocks,
+            &news.CreatedAt,
+            &news.UpdatedAt,
+        )
+        if err != nil {
+            return nil, fmt.Errorf("failed to scan news: %w", err)
+        }
+        newsList = append(newsList, &news)
+    }
+    
+    return newsList, nil
+}
+
+// 更新新闻的NLP处理结果
+func (r *NewsRepository) UpdateNewsNLP(ctx context.Context, id int64, sentiment model.Sentiment, sentimentScore float64, keywords []string, relatedStocks []string) error {
+    query := `
+        UPDATE news
+        SET sentiment = ?, sentiment_score = ?, keywords = ?, related_stocks = ?, updated_at = ?
+        WHERE id = ?
+    `
+    
+    _, err := r.db.ExecContext(ctx, query,
+        sentiment,
+        sentimentScore,
+        keywords,
+        relatedStocks,
+        time.Now(),
+        id,
+    )
+    
+    return err
+}
+
+// infrastructure/repository/task.go
+package repository
+
+import (
+    "context"
+    "database/sql"
+    "encoding/json"
+    "fmt"
+    "time"
+    
+    "github.com/trading/model"
+)
+
+// 任务调度仓储实现
+type TaskRepository struct {
+    db *sql.DB
+}
+
+func NewTaskRepository(db *sql.DB) *TaskRepository {
+    return &TaskRepository{db: db}
+}
+
+// 创建任务
+func (r *TaskRepository) CreateTask(ctx context.Context, task *model.Task) error {
+    query := `
+        INSERT INTO tasks (name, type, status, config, schedule_time, 
+                          retry_count, max_retries, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
+    
+    configJSON, err := json.Marshal(task.Config)
+    if err != nil {
+        return fmt.Errorf("failed to marshal task config: %w", err)
+    }
+    
+    result, err := r.db.ExecContext(ctx, query,
+        task.Name,
+        task.Type,
+        task.Status,
+        configJSON,
+        task.ScheduleTime,
+        task.RetryCount,
+        task.MaxRetries,
+        time.Now(),
+        time.Now(),
+    )
+    if err != nil {
+        return fmt.Errorf("failed to create task: %w", err)
+    }
+    
+    id, err := result.LastInsertId()
+    if err != nil {
+        return fmt.Errorf("failed to get task id: %w", err)
+    }
+    
+    task.ID = id
+    return nil
+}
+
+// 更新任务状态
+func (r *TaskRepository) UpdateTaskStatus(ctx context.Context, id int64, status model.TaskStatus, message string) error {
+    query := `
+        UPDATE tasks
+        SET status = ?, message = ?, updated_at = ?
+        WHERE id = ?
+    `
+    
+    _, err := r.db.ExecContext(ctx, query, status, message, time.Now(), id)
+    return err
+}
+
+// 获取待执行的任务
+func (r *TaskRepository) GetPendingTasks(ctx context.Context, limit int) ([]*model.Task, error) {
+    query := `
+        SELECT id, name, type, status, config, schedule_time, retry_count, 
+               max_retries, message, created_at, updated_at
+        FROM tasks
+        WHERE status = ? AND schedule_time <= ?
+        ORDER BY schedule_time ASC
+        LIMIT ?
+    `
+    
+    rows, err := r.db.QueryContext(ctx, query, model.TaskStatusPending, time.Now(), limit)
+    if err != nil {
+        return nil, fmt.Errorf("failed to query pending tasks: %w", err)
+    }
+    defer rows.Close()
+    
+    var tasks []*model.Task
+    for rows.Next() {
+        var task model.Task
+        var configJSON string
+        
+        err := rows.Scan(
+            &task.ID,
+            &task.Name,
+            &task.Type,
+            &task.Status,
+            &configJSON,
+            &task.ScheduleTime,
+            &task.RetryCount,
+            &task.MaxRetries,
+            &task.Message,
+            &task.CreatedAt,
+            &task.UpdatedAt,
+        )
+        if err != nil {
+            return nil, fmt.Errorf("failed to scan task: %w", err)
+        }
+        
+        if err := json.Unmarshal([]byte(configJSON), &task.Config); err != nil {
+            return nil, fmt.Errorf("failed to unmarshal task config: %w", err)
+        }
+        
+        tasks = append(tasks, &task)
+    }
+    
+    return tasks, nil
+}
+
+// 获取任务详情
+func (r *TaskRepository) GetTaskByID(ctx context.Context, id int64) (*model.Task, error) {
+    query := `
+        SELECT id, name, type, status, config, schedule_time, retry_count, 
+               max_retries, message, created_at, updated_at
+        FROM tasks
+        WHERE id = ?
+    `
+    
+    var task model.Task
+    var configJSON string
+    
+    err := r.db.QueryRowContext(ctx, query, id).Scan(
+        &task.ID,
+        &task.Name,
+        &task.Type,
+        &task.Status,
+        &configJSON,
+        &task.ScheduleTime,
+        &task.RetryCount,
+        &task.MaxRetries,
+        &task.Message,
+        &task.CreatedAt,
+        &task.UpdatedAt,
+    )
+    
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return nil, fmt.Errorf("task not found: %d", id)
+        }
+        return nil, fmt.Errorf("failed to get task: %w", err)
+    }
+    
+    if err := json.Unmarshal([]byte(configJSON), &task.Config); err != nil {
+        return nil, fmt.Errorf("failed to unmarshal task config: %w", err)
+    }
+    
+    return &task, nil
+}
+
+// 增加任务重试次数
+func (r *TaskRepository) IncrementRetryCount(ctx context.Context, id int64) error {
+    query := `
+        UPDATE tasks
+        SET retry_count = retry_count + 1, updated_at = ?
+        WHERE id = ?
+    `
+    
+    _, err := r.db.ExecContext(ctx, query, time.Now(), id)
+    return err
+}
+
+// 获取任务执行历史
+func (r *TaskRepository) GetTaskHistory(ctx context.Context, taskType model.TaskType, limit int) ([]*model.Task, error) {
+    query := `
+        SELECT id, name, type, status, config, schedule_time, retry_count, 
+               max_retries, message, created_at, updated_at
+        FROM tasks
+        WHERE type = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+    `
+    
+    rows, err := r.db.QueryContext(ctx, query, taskType, limit)
+    if err != nil {
+        return nil, fmt.Errorf("failed to query task history: %w", err)
+    }
+    defer rows.Close()
+    
+    var tasks []*model.Task
+    for rows.Next() {
+        var task model.Task
+        var configJSON string
+        
+        err := rows.Scan(
+            &task.ID,
+            &task.Name,
+            &task.Type,
+            &task.Status,
+            &configJSON,
+            &task.ScheduleTime,
+            &task.RetryCount,
+            &task.MaxRetries,
+            &task.Message,
+            &task.CreatedAt,
+            &task.UpdatedAt,
+        )
+        if err != nil {
+            return nil, fmt.Errorf("failed to scan task: %w", err)
+        }
+        
+        if err := json.Unmarshal([]byte(configJSON), &task.Config); err != nil {
+            return nil, fmt.Errorf("failed to unmarshal task config: %w", err)
+        }
+        
+        tasks = append(tasks, &task)
+    }
+    
+    return tasks, nil
+}
+
+// 清理过期任务
+func (r *TaskRepository) CleanupExpiredTasks(ctx context.Context, expireDays int) error {
+    query := `
+        DELETE FROM tasks
+        WHERE status IN (?, ?) AND updated_at < ?
+    `
+    
+    expireTime := time.Now().AddDate(0, 0, -expireDays)
+    _, err := r.db.ExecContext(ctx, query, model.TaskStatusCompleted, model.TaskStatusFailed, expireTime)
+    
+    return err
 }
 ```
 
-#### 7.2.4 缓存策略
+#### 7.2.3 业务编排层实现
+
+```go
+// biz/orchestrator/service.go
+package orchestrator
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "time"
+    
+    "github.com/trading/domain/collection"
+    "github.com/trading/domain/processing"
+    "github.com/trading/domain/scheduling"
+    "github.com/trading/model"
+)
+
+// 业务编排服务 - 协调数据采集、加工和调度
+type Service struct {
+    collectionService collection.Service
+    processingService processing.Service
+    schedulingService scheduling.Service
+    logger           *log.Logger
+}
+
+func NewService(
+    collectionService collection.Service,
+    processingService processing.Service,
+    schedulingService scheduling.Service,
+    logger *log.Logger,
+) *Service {
+    return &Service{
+        collectionService: collectionService,
+        processingService: processingService,
+        schedulingService: schedulingService,
+        logger:           logger,
+    }
+}
+
+// 创建完整的数据处理工作流：数据采集 → 数据加工 → 结果存储
+func (s *Service) CreateDataProcessingWorkflow(ctx context.Context, req *CreateWorkflowRequest) error {
+    // 1. 创建数据采集任务
+    collectionTask, err := s.schedulingService.CreateCollectionTask(ctx, &scheduling.CreateTaskRequest{
+        Name: fmt.Sprintf("%s-collection", req.Name),
+        Type: scheduling.TaskTypeCollection,
+        Config: map[string]interface{}{
+            "data_sources": req.DataSources,
+            "symbols":      req.Symbols,
+            "keywords":     req.Keywords,
+        },
+        Schedule: req.Schedule,
+        Timeout:  req.CollectionTimeout,
+    })
+    if err != nil {
+        return fmt.Errorf("failed to create collection task: %w", err)
+    }
+    
+    // 2. 创建数据加工任务（依赖采集任务）
+    processingTask, err := s.schedulingService.CreateProcessingTask(ctx, &scheduling.CreateTaskRequest{
+        Name: fmt.Sprintf("%s-processing", req.Name),
+        Type: scheduling.TaskTypeProcessing,
+        Config: map[string]interface{}{
+            "processing_rules": req.ProcessingRules,
+            "nlp_tasks":       req.NLPTasks,
+        },
+        Dependencies: []string{collectionTask.ID},
+        Timeout:      req.ProcessingTimeout,
+    })
+    if err != nil {
+        return fmt.Errorf("failed to create processing task: %w", err)
+    }
+    
+    // 3. 创建工作流
+    workflow, err := s.schedulingService.CreateWorkflow(ctx, &scheduling.CreateWorkflowRequest{
+        Name:        req.Name,
+        Description: req.Description,
+        Tasks: []scheduling.WorkflowTask{
+            {TaskID: collectionTask.ID, Order: 1},
+            {TaskID: processingTask.ID, Order: 2},
+        },
+        Schedule: req.Schedule,
+    })
+    if err != nil {
+        return fmt.Errorf("failed to create workflow: %w", err)
+    }
+    
+    s.logger.Printf("Created data processing workflow: %s (ID: %s)", workflow.Name, workflow.ID)
+    return nil
+}
+
+// 执行数据采集和加工的完整流程
+func (s *Service) ExecuteDataPipeline(ctx context.Context, req *DataPipelineRequest) (*DataPipelineResult, error) {
+    result := &DataPipelineResult{
+        StartTime: time.Now(),
+    }
+    
+    // 步骤1: 数据采集
+    s.logger.Printf("Starting data collection for pipeline: %s", req.PipelineID)
+    
+    var collectedData []interface{}
+    
+    // 采集股票数据
+    if req.CollectStocks {
+        stockResult, err := s.collectionService.CollectStockData(ctx, &collection.StockCollectRequest{
+            Source:   req.StockSource,
+            Symbols:  req.Symbols,
+            DataType: req.StockDataType,
+        })
+        if err != nil {
+            result.Errors = append(result.Errors, fmt.Sprintf("Stock collection failed: %v", err))
+        } else {
+            collectedData = append(collectedData, stockResult.Data...)
+            result.CollectedCount += stockResult.Count
+        }
+    }
+    
+    // 采集新闻数据
+    if req.CollectNews {
+        newsResult, err := s.collectionService.CollectNewsData(ctx, &collection.NewsCollectRequest{
+            Sources:  req.NewsSources,
+            Keywords: req.Keywords,
+            Category: req.NewsCategory,
+        })
+        if err != nil {
+            result.Errors = append(result.Errors, fmt.Sprintf("News collection failed: %v", err))
+        } else {
+            collectedData = append(collectedData, newsResult.Data...)
+            result.CollectedCount += newsResult.Count
+        }
+    }
+    
+    // 步骤2: 数据加工处理
+    if len(collectedData) > 0 {
+        s.logger.Printf("Starting data processing for %d items", len(collectedData))
+        
+        // 数据清洗和标准化
+        processResult, err := s.processingService.CleanAndNormalize(ctx, &processing.ProcessRequest{
+            RawData:  collectedData,
+            DataType: req.DataType,
+            Rules:    req.ProcessingRules,
+        })
+        if err != nil {
+            result.Errors = append(result.Errors, fmt.Sprintf("Data processing failed: %v", err))
+        } else {
+            result.ProcessedCount = len(processResult.ProcessedData)
+            
+            // NLP处理（仅对文本数据）
+            if req.EnableNLP {
+                textData := s.extractTextData(processResult.ProcessedData)
+                if len(textData) > 0 {
+                    nlpResult, err := s.processingService.ProcessNLP(ctx, &processing.NLPRequest{
+                        TextData: textData,
+                        Tasks:    req.NLPTasks,
+                        Language: "zh",
+                    })
+                    if err != nil {
+                        result.Errors = append(result.Errors, fmt.Sprintf("NLP processing failed: %v", err))
+                    } else {
+                        result.NLPResults = nlpResult
+                    }
+                }
+            }
+        }
+    }
+    
+    result.EndTime = time.Now()
+    result.Duration = result.EndTime.Sub(result.StartTime)
+    result.Success = len(result.Errors) == 0
+    
+    s.logger.Printf("Data pipeline completed: %s, Duration: %v, Success: %v", 
+        req.PipelineID, result.Duration, result.Success)
+    
+    return result, nil
+}
+
+// 辅助方法：从处理后的数据中提取文本内容
+func (s *Service) extractTextData(processedData []interface{}) []string {
+    var textData []string
+    for _, item := range processedData {
+        if news, ok := item.(*model.News); ok {
+            textData = append(textData, news.Content)
+        }
+    }
+    return textData
+}
+
+// 请求和响应类型定义
+type CreateWorkflowRequest struct {
+    Name               string
+    Description        string
+    DataSources        []collection.DataSource
+    Symbols            []string
+    Keywords           []string
+    Schedule           *scheduling.Schedule
+    ProcessingRules    []processing.ProcessingRule
+    NLPTasks          []processing.NLPTask
+    CollectionTimeout  time.Duration
+    ProcessingTimeout  time.Duration
+}
+
+type DataPipelineRequest struct {
+    PipelineID       string
+    CollectStocks    bool
+    CollectNews      bool
+    StockSource      collection.DataSource
+    NewsSources      []collection.DataSource
+    Symbols          []string
+    Keywords         []string
+    NewsCategory     collection.NewsCategory
+    StockDataType    collection.StockDataType
+    DataType         model.DataType
+    ProcessingRules  []processing.ProcessingRule
+    EnableNLP        bool
+    NLPTasks        []processing.NLPTask
+}
+
+type DataPipelineResult struct {
+    StartTime       time.Time
+    EndTime         time.Time
+    Duration        time.Duration
+    Success         bool
+    CollectedCount  int
+    ProcessedCount  int
+    Errors          []string
+    NLPResults      *processing.NLPResult
+}
+```
+
+#### 7.2.5 API层实现
+
+```go
+// api/handler/stock.go
+package handler
+
+import (
+    "net/http"
+    "strconv"
+    
+    "github.com/gin-gonic/gin"
+    "github.com/trading/biz/stock"
+)
+
+type StockHandler struct {
+    stockService *stock.Service
+}
+
+func NewStockHandler(stockService *stock.Service) *StockHandler {
+    return &StockHandler{
+        stockService: stockService,
+    }
+}
+
+func (h *StockHandler) SyncStockList(c *gin.Context) {
+    if err := h.stockService.SyncStockList(c.Request.Context()); err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{
+            "error": "Failed to sync stock list",
+            "detail": err.Error(),
+        })
+        return
+    }
+    
+    c.JSON(http.StatusOK, gin.H{
+        "message": "Stock list sync started",
+    })
+}
+
+func (h *StockHandler) GetStock(c *gin.Context) {
+    symbol := c.Param("symbol")
+    if symbol == "" {
+        c.JSON(http.StatusBadRequest, gin.H{
+            "error": "Symbol is required",
+        })
+        return
+    }
+    
+    stock, err := h.stockService.GetStockBySymbol(c.Request.Context(), symbol)
+    if err != nil {
+        c.JSON(http.StatusNotFound, gin.H{
+            "error": "Stock not found",
+        })
+        return
+    }
+    
+    c.JSON(http.StatusOK, stock)
+}
+
+// api/handler/news.go
+package handler
+
+import (
+    "net/http"
+    "strconv"
+    
+    "github.com/gin-gonic/gin"
+    "github.com/trading/biz/news"
+)
+
+type NewsHandler struct {
+    newsService *news.Service
+}
+
+func NewNewsHandler(newsService *news.Service) *NewsHandler {
+    return &NewsHandler{
+        newsService: newsService,
+    }
+}
+
+func (h *NewsHandler) CollectNews(c *gin.Context) {
+    if err := h.newsService.CollectAndProcessNews(c.Request.Context()); err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{
+            "error": "Failed to collect news",
+            "detail": err.Error(),
+        })
+        return
+    }
+    
+    c.JSON(http.StatusOK, gin.H{
+        "message": "News collection started",
+    })
+}
+
+func (h *NewsHandler) GetNews(c *gin.Context) {
+    idStr := c.Param("id")
+    id, err := strconv.ParseInt(idStr, 10, 64)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{
+            "error": "Invalid news ID",
+        })
+        return
+    }
+    
+    news, err := h.newsService.GetNewsByID(c.Request.Context(), id)
+    if err != nil {
+        c.JSON(http.StatusNotFound, gin.H{
+            "error": "News not found",
+        })
+        return
+    }
+    
+    c.JSON(http.StatusOK, news)
+}
+
+// api/router/router.go
+package router
+
+import (
+    "github.com/gin-gonic/gin"
+    "github.com/trading/api/handler"
+)
+
+func SetupRouter(stockHandler *handler.StockHandler, newsHandler *handler.NewsHandler) *gin.Engine {
+    r := gin.Default()
+    
+    // 中间件
+    r.Use(gin.Logger())
+    r.Use(gin.Recovery())
+    
+    // API路由组
+    v1 := r.Group("/api/v1")
+    {
+        // 股票相关接口
+        stocks := v1.Group("/stocks")
+        {
+            stocks.POST("/sync", stockHandler.SyncStockList)
+            stocks.GET("/:symbol", stockHandler.GetStock)
+        }
+        
+        // 新闻相关接口
+        news := v1.Group("/news")
+        {
+            news.POST("/collect", newsHandler.CollectNews)
+            news.GET("/:id", newsHandler.GetNews)
+        }
+    }
+    
+    return r
+}
+```
+
+#### 7.2.6 缓存策略
 
 ```go
 type CacheManager struct {
@@ -822,11 +2942,6 @@ redis:
   port: 6379
   password: ${REDIS_PASSWORD}
   db: 0
-
-bus:
-  buffer_size: 1000
-  worker_count: 10
-  timeout: 30s
 
 # Tushare配置
 tushare:
