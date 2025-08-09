@@ -560,48 +560,58 @@ data-collection-system/
 
 **简洁架构分层设计**
 
-* **api/**：接口层，负责外部接口适配，包括HTTP和gRPC接口
-* **biz/**：业务编排层，负责业务流程编排和跨领域协调
-* **domain/**：领域层，按照业务能力划分的领域服务
-  - **collection/**: 数据采集领域服务（Tushare、新闻爬虫等）
-  - **processing/**: 数据加工领域服务（清洗、标准化、NLP等）
-  - **scheduling/**: 任务调度领域服务（定时任务、工作流等）
-* **infrastructure/**：基础设施层，提供技术能力支撑
-* **pkg/**：共享内核，包含公共组件和工具
-* **scripts/**：部署和维护脚本
+* **api/**：接口层，负责外部接口适配，包括HTTP接口和定时任务
+* **biz/**：业务逻辑层，按业务领域划分的核心业务服务
+* **repo/**：数据仓库层，负责数据持久化和外部数据源访问
+* **model/**：数据模型层，定义核心业务实体和数据结构
+* **pkg/**：公共组件层，提供通用的技术组件和工具
+* **scripts/**：脚本文件，包含部署和数据库迁移脚本
 
 **各层职责**
 
 1. **接口层 (api/)**
-   - HTTP接口适配和路由配置
+   - **http/**: HTTP接口适配和路由配置，包含handlers、middleware和routes
+   - **cron/**: 定时任务调度，包含scheduler、jobs和manager
    - 请求参数验证和响应格式化
    - 中间件处理（认证、限流、日志等）
 
-2. **业务编排层 (biz/)**
-   - 跨领域业务流程编排
+2. **业务逻辑层 (biz/)**
+   - **collection/**: 数据采集业务服务（Tushare、新闻爬虫等）
+   - **processing/**: 数据加工业务服务（清洗、标准化、NLP等）
+   - **query/**: 数据查询业务服务（股票、新闻、聚合查询等）
+   - **task/**: 任务管理业务服务（调度、监控等）
+   - 业务流程编排和跨领域协调
    - 复杂业务场景的工作流管理
-   - 领域服务的组合和协调
-   - 任务调度编排：数据采集 → 数据加工 → 结果存储
 
-3. **领域层 (domain/)**
-   - 按业务能力划分的领域服务
-   - collection领域：负责各种数据源的采集逻辑
-   - processing领域：负责数据清洗、转换、NLP处理
-   - scheduling领域：负责任务调度和工作流管理
-   - 各领域模块相互独立，低耦合
-
-4. **基础设施层 (infrastructure/)**
+3. **数据仓库层 (repo/)**
+   - **mysql/**: MySQL数据访问，包含各业务实体的DAO实现
+   - **redis/**: Redis缓存访问，提供缓存操作和会话管理
+   - **external/**: 外部数据源访问，包含Tushare、爬虫、NLP等客户端
    - 数据持久化实现
    - 外部服务集成
-   - 技术组件实现
+
+4. **数据模型层 (model/)**
+   - 定义核心业务实体：股票、新闻、市场数据、财务数据、任务等
+   - 数据传输对象(DTO)和值对象(VO)
+   - 业务规则和约束定义
+
+5. **公共组件层 (pkg/)**
+   - **config/**: 配置管理组件
+   - **logger/**: 日志组件
+   - **errors/**: 错误处理组件
+   - **response/**: 统一响应格式组件
+   - **validator/**: 参数验证组件
+   - **utils/**: 通用工具函数
 
 #### 设计原则
 
-1. **依赖倒置**：高层模块不依赖低层模块，都依赖抽象
-2. **领域独立**：各领域模块相互独立，便于并行开发和维护
-3. **业务编排**：复杂业务逻辑在biz层编排，保持领域层纯净
-4. **接口适配**：外部接口变化不影响内部业务逻辑
-5. **可测试性**：各层职责清晰，便于单元测试和集成测试
+1. **分层架构**：采用清晰的分层架构，各层职责明确，依赖关系单向
+2. **模块化设计**：按业务领域划分模块，各模块相对独立，便于并行开发和维护
+3. **依赖倒置**：高层模块不依赖低层模块的具体实现，通过接口进行解耦
+4. **业务聚合**：相关业务逻辑聚合在同一模块内，减少跨模块调用
+5. **接口适配**：外部接口变化不影响内部业务逻辑，通过适配层隔离
+6. **可测试性**：各层职责清晰，便于单元测试和集成测试
+7. **可扩展性**：预留扩展点，支持新功能和新数据源的快速接入
 
 ### 7.2 核心组件实现
 
@@ -616,9 +626,9 @@ import (
     "fmt"
     "time"
     
-    "github.com/trading/model"
-    "github.com/trading/repo/mysql"
-    "github.com/trading/repo/external"
+    "data-collection-system/model"
+    "data-collection-system/repo/mysql"
+    "data-collection-system/repo/external"
 )
 
 // 数据采集业务服务
@@ -682,9 +692,9 @@ import (
     "context"
     "fmt"
     
-    "github.com/trading/model"
-    "github.com/trading/repo/mysql"
-    "github.com/trading/repo/external"
+    "data-collection-system/model"
+    "data-collection-system/repo/mysql"
+    "data-collection-system/repo/external"
 )
 
 // 数据加工业务服务
@@ -756,10 +766,10 @@ import (
     "fmt"
     "time"
     
-    "github.com/trading/model"
-    "github.com/trading/repo/mysql"
-    "github.com/trading/biz/collection"
-    "github.com/trading/biz/processing"
+    "data-collection-system/model"
+    "data-collection-system/repo/mysql"
+    "data-collection-system/biz/collection"
+    "data-collection-system/biz/processing"
 )
 
 // 任务管理业务服务
@@ -1011,7 +1021,7 @@ import (
     "fmt"
     "time"
     
-    "github.com/trading/model"
+    "data-collection-system/model"
 )
 
 // 股票基础数据仓储接口
@@ -1151,8 +1161,8 @@ func (r *stockRepository) UpdateStock(ctx context.Context, stock *model.Stock) e
     return err
 }
 
-// infrastructure/collection/news_crawler.go
-package collection
+// repo/external/news_crawler.go
+package external
 
 import(
     "context"
@@ -1160,17 +1170,16 @@ import(
     "time"
     
     "github.com/gocolly/colly/v2"
-    "github.com/trading/domain/collection"
-    "github.com/trading/model"
+    "data-collection-system/model"
 )
 
 type NewsCrawler struct {
     collector *colly.Collector
-    crawlers map[collection.DataSource]NewsCrawlerInterface
+    crawlers map[string]NewsCrawlerInterface
 }
 
 type NewsCrawlerInterface interface {
-    CrawlNews(ctx context.Context, keywords []string, category collection.NewsCategory) ([]*model.News, error)
+    CrawlNews(ctx context.Context, keywords []string, category string) ([]*model.News, error)
 }
 
 type NewsSource struct {
@@ -1192,24 +1201,24 @@ func NewNewsCrawler() *NewsCrawler {
     
     return &NewsCrawler{
         collector: c,
-        crawlers: map[collection.DataSource]NewsCrawlerInterface{
-            collection.SourceSina:      &SinaCrawler{},
-            collection.SourceEastMoney: &EastMoneyCrawler{},
+        crawlers: map[string]NewsCrawlerInterface{
+            "sina":       &SinaCrawler{},
+            "eastmoney": &EastMoneyCrawler{},
         },
     }
 }
 
-func (n *NewsCrawler) CollectNewsData(ctx context.Context, req *collection.NewsCollectRequest) (*collection.CollectResult, error) {
+func (n *NewsCrawler) CollectNewsData(ctx context.Context, sources []string, keywords []string, category string) ([]*model.News, error) {
     var allNews []*model.News
     
     // 从多个新闻源采集数据
-    for _, source := range req.Sources {
+    for _, source := range sources {
         crawler, exists := n.crawlers[source]
         if !exists {
             continue
         }
         
-        news, err := crawler.CrawlNews(ctx, req.Keywords, req.Category)
+        news, err := crawler.CrawlNews(ctx, keywords, category)
         if err != nil {
             // 记录错误但继续处理其他源
             continue
@@ -1221,17 +1230,7 @@ func (n *NewsCrawler) CollectNewsData(ctx context.Context, req *collection.NewsC
     // 去重处理
     uniqueNews := n.deduplicateNews(allNews)
     
-    // 转换为通用数据格式
-    var data []interface{}
-    for _, news := range uniqueNews {
-        data = append(data, news)
-    }
-    
-    return &collection.CollectResult{
-        Data:   data,
-        Count:  len(data),
-        Source: req.Sources[0], // 使用第一个源作为主要来源
-    }, nil
+    return uniqueNews, nil
 }
 
 func (n *NewsCrawler) deduplicateNews(news []*model.News) []*model.News {
@@ -1252,28 +1251,27 @@ func (n *NewsCrawler) deduplicateNews(news []*model.News) []*model.News {
 // 具体爬虫实现示例
 type SinaCrawler struct{}
 
-func (s *SinaCrawler) CrawlNews(ctx context.Context, keywords []string, category collection.NewsCategory) ([]*model.News, error) {
+func (s *SinaCrawler) CrawlNews(ctx context.Context, keywords []string, category string) ([]*model.News, error) {
     // 实现新浪财经新闻爬取逻辑
     return nil, nil
 }
 
 type EastMoneyCrawler struct{}
 
-func (e *EastMoneyCrawler) CrawlNews(ctx context.Context, keywords []string, category collection.NewsCategory) ([]*model.News, error) {
+func (e *EastMoneyCrawler) CrawlNews(ctx context.Context, keywords []string, category string) ([]*model.News, error) {
     // 实现东方财富新闻爬取逻辑
     return nil, nil
 }
 
-// infrastructure/processing/nlp.go
-package processing
+// repo/external/nlp.go
+package external
 
 import (
     "context"
     "fmt"
     "strings"
     
-    "github.com/trading/domain/processing"
-    "github.com/trading/model"
+    "data-collection-system/model"
 )
 
 type NLPService struct {
@@ -1283,11 +1281,11 @@ type NLPService struct {
 }
 
 type SentimentAnalyzer interface {
-    AnalyzeSentiment(ctx context.Context, text string) (model.Sentiment, float64, error)
+    AnalyzeSentiment(ctx context.Context, text string) (string, float64, error)
 }
 
 type EntityExtractor interface {
-    ExtractEntities(ctx context.Context, text string) ([]model.Entity, error)
+    ExtractEntities(ctx context.Context, text string) ([]string, error)
 }
 
 type KeywordExtractor interface {
@@ -1302,63 +1300,35 @@ func NewNLPService() *NLPService {
     }
 }
 
-func (n *NLPService) ProcessNLP(ctx context.Context, req *processing.NLPRequest) (*processing.NLPResult, error) {
-    result := &processing.NLPResult{
-        ProcessedTexts: make([]*processing.ProcessedText, 0, len(req.TextData)),
-    }
-    
-    for _, text := range req.TextData {
-        processedText := &processing.ProcessedText{
-            OriginalText: text,
-        }
-        
-        // 执行各种NLP任务
-        for _, task := range req.Tasks {
-            switch task {
-            case processing.NLPTaskSentiment:
-                sentiment, score, err := n.sentimentModel.AnalyzeSentiment(ctx, text)
-                if err == nil {
-                    processedText.Sentiment = sentiment
-                    processedText.SentimentScore = score
-                }
-                
-            case processing.NLPTaskEntityExtraction:
-                entities, err := n.entityExtractor.ExtractEntities(ctx, text)
-                if err == nil {
-                    processedText.Entities = entities
-                }
-                
-            case processing.NLPTaskKeywordExtraction:
-                keywords, err := n.keywordExtractor.ExtractKeywords(ctx, text)
-                if err == nil {
-                    processedText.Keywords = keywords
-                }
-            }
-        }
-        
-        result.ProcessedTexts = append(result.ProcessedTexts, processedText)
-    }
-    
-    return result, nil
+func (n *NLPService) AnalyzeSentiment(ctx context.Context, text string) (string, float64, error) {
+    return n.sentimentModel.AnalyzeSentiment(ctx, text)
+}
+
+func (n *NLPService) ExtractEntities(ctx context.Context, text string) ([]string, error) {
+    return n.entityExtractor.ExtractEntities(ctx, text)
+}
+
+func (n *NLPService) ExtractKeywords(ctx context.Context, text string) ([]string, error) {
+    return n.keywordExtractor.ExtractKeywords(ctx, text)
 }
 
 // 具体NLP实现示例
 type BaiduSentimentAnalyzer struct{}
 
-func (b *BaiduSentimentAnalyzer) AnalyzeSentiment(ctx context.Context, text string) (model.Sentiment, float64, error) {
+func (b *BaiduSentimentAnalyzer) AnalyzeSentiment(ctx context.Context, text string) (string, float64, error) {
     // 实现百度情感分析API调用
     // 这里返回模拟结果
     if strings.Contains(text, "上涨") || strings.Contains(text, "利好") {
-        return model.SentimentPositive, 0.8, nil
+        return "positive", 0.8, nil
     } else if strings.Contains(text, "下跌") || strings.Contains(text, "利空") {
-        return model.SentimentNegative, 0.7, nil
+        return "negative", 0.7, nil
     }
-    return model.SentimentNeutral, 0.5, nil
+    return "neutral", 0.5, nil
 }
 
 type JiebaEntityExtractor struct{}
 
-func (j *JiebaEntityExtractor) ExtractEntities(ctx context.Context, text string) ([]model.Entity, error) {
+func (j *JiebaEntityExtractor) ExtractEntities(ctx context.Context, text string) ([]string, error) {
     // 实现基于jieba的实体提取
     return nil, nil
 }
@@ -1370,7 +1340,7 @@ func (t *TFIDFKeywordExtractor) ExtractKeywords(ctx context.Context, text string
     return nil, nil
 }
 
-// infrastructure/processing/cleaner.go
+// biz/processing/cleaner.go
 package processing
 
 import (
@@ -1380,12 +1350,11 @@ import (
     "strings"
     "time"
     
-    "github.com/trading/domain/processing"
-    "github.com/trading/model"
+    "data-collection-system/model"
 )
 
 type DataCleaner struct {
-    rules map[model.DataType][]CleaningRule
+    rules map[string][]CleaningRule
 }
 
 type CleaningRule interface {
@@ -1394,8 +1363,8 @@ type CleaningRule interface {
 
 func NewDataCleaner() *DataCleaner {
     return &DataCleaner{
-        rules: map[model.DataType][]CleaningRule{
-            model.DataTypeNews: {
+        rules: map[string][]CleaningRule{
+            "news": {
                 &NewsTextCleaner{},
                 &NewsDeduplicator{},
                 &NewsValidator{},
@@ -1439,14 +1408,10 @@ func (d *DataCleaner) CleanAndNormalize(ctx context.Context, req *processing.Pro
         }
     }
     
-    return &processing.ProcessResult{
-        ProcessedData: processedData,
-        ProcessedAt:   time.Now(),
-        Rules:         req.Rules,
-    }, nil
+    return processedData, nil
 }
 
-func (d *DataCleaner) applyUserRule(data interface{}, rule processing.ProcessingRule) interface{} {
+func (d *DataCleaner) applyUserRule(data interface{}, rule string) interface{} {
     // 实现用户自定义规则应用逻辑
     return data
 }
@@ -1529,8 +1494,8 @@ func (s *StockDataNormalizer) Apply(data interface{}) (interface{}, error) {
     return stock, nil
 }
 
-// infrastructure/repository/stock.go
-package repository
+// repo/mysql/stock_repository.go
+package mysql
 
 import (
     "context"
@@ -1538,8 +1503,7 @@ import (
     "fmt"
     "time"
     
-    "github.com/trading/domain/collection"
-    "github.com/trading/model"
+    "data-collection-system/model"
 )
 
 // 股票基础数据仓储实现
@@ -1691,8 +1655,8 @@ func (r *StockRepository) GetActiveStocks(ctx context.Context) ([]*model.Stock, 
     return stocks, nil
 }
 
-// infrastructure/repository/stock_data.go
-package repository
+// repo/mysql/stock_data_repository.go
+package mysql
 
 import (
     "context"
@@ -1700,7 +1664,7 @@ import (
     "fmt"
     "time"
     
-    "github.com/trading/model"
+    "data-collection-system/model"
 )
 
 // 股票行情数据仓储实现
@@ -1884,8 +1848,8 @@ func (r *StockDataRepository) GetLatestData(ctx context.Context, symbol string) 
     return &data, nil
 }
 
-// infrastructure/repository/news.go
-package repository
+// repo/mysql/news_repository.go
+package mysql
 
 import (
     "context"
@@ -1893,7 +1857,7 @@ import (
     "fmt"
     "time"
     
-    "github.com/trading/model"
+    "data-collection-system/model"
 )
 
 // 新闻数据仓储实现
@@ -2159,7 +2123,7 @@ func (r *NewsRepository) GetUnprocessedNews(ctx context.Context, limit int) ([]*
 }
 
 // 更新新闻的NLP处理结果
-func (r *NewsRepository) UpdateNewsNLP(ctx context.Context, id int64, sentiment model.Sentiment, sentimentScore float64, keywords []string, relatedStocks []string) error {
+func (r *NewsRepository) UpdateNewsNLP(ctx context.Context, id int64, sentiment string, sentimentScore float64, keywords []string, relatedStocks []string) error {
     query := `
         UPDATE news
         SET sentiment = ?, sentiment_score = ?, keywords = ?, related_stocks = ?, updated_at = ?
@@ -2178,8 +2142,8 @@ func (r *NewsRepository) UpdateNewsNLP(ctx context.Context, id int64, sentiment 
     return err
 }
 
-// infrastructure/repository/task.go
-package repository
+// repo/mysql/task_repository.go
+package mysql
 
 import (
     "context"
@@ -2188,7 +2152,7 @@ import (
     "fmt"
     "time"
     
-    "github.com/trading/model"
+    "data-collection-system/model"
 )
 
 // 任务调度仓储实现
@@ -2351,7 +2315,7 @@ func (r *TaskRepository) IncrementRetryCount(ctx context.Context, id int64) erro
 }
 
 // 获取任务执行历史
-func (r *TaskRepository) GetTaskHistory(ctx context.Context, taskType model.TaskType, limit int) ([]*model.Task, error) {
+func (r *TaskRepository) GetTaskHistory(ctx context.Context, taskType string, limit int) ([]*model.Task, error) {
     query := `
         SELECT id, name, type, status, config, schedule_time, retry_count, 
                max_retries, message, created_at, updated_at
@@ -2407,7 +2371,7 @@ func (r *TaskRepository) CleanupExpiredTasks(ctx context.Context, expireDays int
     `
     
     expireTime := time.Now().AddDate(0, 0, -expireDays)
-    _, err := r.db.ExecContext(ctx, query, model.TaskStatusCompleted, model.TaskStatusFailed, expireTime)
+    _, err := r.db.ExecContext(ctx, query, "completed", "failed", expireTime)
     
     return err
 }
@@ -2425,82 +2389,30 @@ import (
     "log"
     "time"
     
-    "github.com/trading/domain/collection"
-    "github.com/trading/domain/processing"
-    "github.com/trading/domain/scheduling"
-    "github.com/trading/model"
+    "data-collection-system/model"
 )
 
 // 业务编排服务 - 协调数据采集、加工和调度
 type Service struct {
-    collectionService collection.Service
-    processingService processing.Service
-    schedulingService scheduling.Service
-    logger           *log.Logger
+    logger *log.Logger
 }
 
-func NewService(
-    collectionService collection.Service,
-    processingService processing.Service,
-    schedulingService scheduling.Service,
-    logger *log.Logger,
-) *Service {
+func NewService(logger *log.Logger) *Service {
     return &Service{
-        collectionService: collectionService,
-        processingService: processingService,
-        schedulingService: schedulingService,
-        logger:           logger,
+        logger: logger,
     }
 }
 
 // 创建完整的数据处理工作流：数据采集 → 数据加工 → 结果存储
 func (s *Service) CreateDataProcessingWorkflow(ctx context.Context, req *CreateWorkflowRequest) error {
     // 1. 创建数据采集任务
-    collectionTask, err := s.schedulingService.CreateCollectionTask(ctx, &scheduling.CreateTaskRequest{
-        Name: fmt.Sprintf("%s-collection", req.Name),
-        Type: scheduling.TaskTypeCollection,
-        Config: map[string]interface{}{
-            "data_sources": req.DataSources,
-            "symbols":      req.Symbols,
-            "keywords":     req.Keywords,
-        },
-        Schedule: req.Schedule,
-        Timeout:  req.CollectionTimeout,
-    })
-    if err != nil {
-        return fmt.Errorf("failed to create collection task: %w", err)
-    }
+    s.logger.Printf("Creating collection task for workflow: %s", req.Name)
     
     // 2. 创建数据加工任务（依赖采集任务）
-    processingTask, err := s.schedulingService.CreateProcessingTask(ctx, &scheduling.CreateTaskRequest{
-        Name: fmt.Sprintf("%s-processing", req.Name),
-        Type: scheduling.TaskTypeProcessing,
-        Config: map[string]interface{}{
-            "processing_rules": req.ProcessingRules,
-            "nlp_tasks":       req.NLPTasks,
-        },
-        Dependencies: []string{collectionTask.ID},
-        Timeout:      req.ProcessingTimeout,
-    })
-    if err != nil {
-        return fmt.Errorf("failed to create processing task: %w", err)
-    }
+    s.logger.Printf("Creating processing task for workflow: %s", req.Name)
     
     // 3. 创建工作流
-    workflow, err := s.schedulingService.CreateWorkflow(ctx, &scheduling.CreateWorkflowRequest{
-        Name:        req.Name,
-        Description: req.Description,
-        Tasks: []scheduling.WorkflowTask{
-            {TaskID: collectionTask.ID, Order: 1},
-            {TaskID: processingTask.ID, Order: 2},
-        },
-        Schedule: req.Schedule,
-    })
-    if err != nil {
-        return fmt.Errorf("failed to create workflow: %w", err)
-    }
-    
-    s.logger.Printf("Created data processing workflow: %s (ID: %s)", workflow.Name, workflow.ID)
+    s.logger.Printf("Created data processing workflow: %s", req.Name)
     return nil
 }
 
@@ -2708,7 +2620,7 @@ import (
     "strconv"
     
     "github.com/gin-gonic/gin"
-    "github.com/trading/biz/news"
+    "data-collection-system/biz/news"
 )
 
 type NewsHandler struct {
@@ -2761,7 +2673,7 @@ package router
 
 import (
     "github.com/gin-gonic/gin"
-    "github.com/trading/api/handler"
+    "data-collection-system/api/handler"
 )
 
 func SetupRouter(stockHandler *handler.StockHandler, newsHandler *handler.NewsHandler) *gin.Engine {
