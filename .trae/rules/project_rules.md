@@ -133,3 +133,79 @@ data-collection-system/
    - **response/**: 统一响应格式组件
    - **validator/**: 参数验证组件
    - **utils/**: 通用工具函数
+
+
+
+
+
+
+
+
+# 量化系统
+
+## 项目结构
+
+```
+quantitative-system/
+├── main.py                    # 应用入口
+├── config/                    # 配置管理
+│   ├── __init__.py
+│   ├── settings.py           # 应用配置
+│   └── database.py           # 数据库配置
+├── api/                       # API接口层
+│   ├── __init__.py
+│   ├── routes/               # 路由定义
+│   │   ├── __init__.py
+│   │   ├── positions.py      # 持仓管理接口
+│   │   ├── plans.py          # 方案管理接口
+│   │   └── system.py         # 系统状态接口
+│   ├── dependencies.py       # 依赖注入
+│   └── middleware.py         # 中间件
+├── scheduler/                 # 调度层
+│   ├── __init__.py
+│   ├── jobs.py               # 任务定义
+│   ├── scheduler.py          # 调度器
+│   └── manager.py            # 任务管理器
+├── biz/                       # 业务编排层
+│   ├── __init__.py
+│   ├── plan_orchestrator.py  # 方案生成编排器
+│   ├── backtest_orchestrator.py # 回测分析编排器
+│   ├── position_orchestrator.py # 持仓管理编排器
+│   └── base_orchestrator.py  # 编排器基类
+├── services/                  # 业务服务层
+│   ├── __init__.py
+│   ├── position_service.py   # 持仓管理服务
+│   ├── backtest_service.py   # 回测服务
+│   ├── ai_service.py         # AI分析服务
+│   ├── plan_service.py       # 方案生成服务
+│   └── data_service.py       # 数据整合服务
+├── models/                    # 数据模型
+│   ├── __init__.py
+│   ├── database.py           # 数据库模型
+│   ├── schemas.py            # Pydantic模型
+│   └── enums.py              # 枚举定义
+├── repositories/              # 数据访问层
+│   ├── __init__.py
+│   ├── position_repo.py      # 持仓数据访问
+│   ├── backtest_repo.py      # 回测数据访问
+│   ├── plan_repo.py          # 方案数据访问
+│   └── cache_repo.py         # 缓存数据访问
+├── strategies/                # 交易策略
+│   ├── __init__.py
+│   ├── base_strategy.py      # 策略基类
+│   ├── ma_strategy.py        # 均线策略
+│   ├── macd_strategy.py      # MACD策略
+│   └── rsi_strategy.py       # RSI策略
+├── utils/                     # 工具模块
+│   ├── __init__.py
+│   ├── logger.py             # 日志工具
+│   ├── exceptions.py         # 异常定义
+│   ├── validators.py         # 数据验证
+│   └── helpers.py            # 辅助函数
+└── tests/                     # 测试代码
+    ├── __init__.py
+    ├── test_biz/
+    ├── test_services/
+    ├── test_repositories/
+    └── test_strategies/
+```
