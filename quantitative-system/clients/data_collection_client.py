@@ -17,7 +17,9 @@ class DataCollectionClient:
     提供股票、行情、财务、新闻等数据的查询和任务管理功能。
     """
 
-    def __init__(self, base_url: str = "http://localhost:8080", timeout: int = 30) -> None:
+    def __init__(
+        self, base_url: str = "http://localhost:8080", timeout: int = 30
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.logger = logging.getLogger(__name__)
@@ -59,7 +61,12 @@ class DataCollectionClient:
                 error_msg = error_data.get("message", f"HTTP {response.status_code}")
                 raise ExternalServiceError(f"Client error: {error_msg}")
 
-            return response.json()
+            result = response.json()
+            if not isinstance(result, dict):
+                raise ExternalServiceError(
+                    f"Unexpected response format: {type(result)}"
+                )
+            return result
 
         except requests.exceptions.Timeout as e:
             raise TimeoutError(f"Request timeout: {url}") from e
@@ -79,7 +86,7 @@ class DataCollectionClient:
         page_size: int = 20,
     ) -> dict[str, Any]:
         """获取股票列表"""
-        params = {"page": page, "page_size": page_size}
+        params = {"page": str(page), "page_size": str(page_size)}
         if symbol:
             params["symbol"] = symbol
         if exchange:
@@ -109,8 +116,8 @@ class DataCollectionClient:
         params = {
             "symbol": symbol,
             "period": period,
-            "page": page,
-            "page_size": page_size,
+            "page": str(page),
+            "page_size": str(page_size),
         }
         if start_date:
             params["start_date"] = start_date
@@ -137,7 +144,7 @@ class DataCollectionClient:
         page_size: int = 20,
     ) -> dict[str, Any]:
         """获取财务数据"""
-        params = {"symbol": symbol, "page": page, "page_size": page_size}
+        params = {"symbol": symbol, "page": str(page), "page_size": str(page_size)}
         if start_date:
             params["start_date"] = start_date
         if end_date:
@@ -172,7 +179,7 @@ class DataCollectionClient:
         page_size: int = 20,
     ) -> dict[str, Any]:
         """获取新闻列表"""
-        params = {"page": page, "page_size": page_size}
+        params = {"page": str(page), "page_size": str(page_size)}
         if keyword:
             params["keyword"] = keyword
         if category:
@@ -180,9 +187,9 @@ class DataCollectionClient:
         if related_stock:
             params["related_stock"] = related_stock
         if sentiment is not None:
-            params["sentiment"] = sentiment
+            params["sentiment"] = str(sentiment)
         if importance is not None:
-            params["importance"] = importance
+            params["importance"] = str(importance)
         if start_time:
             params["start_time"] = start_time
         if end_time:
@@ -196,12 +203,12 @@ class DataCollectionClient:
 
     def get_hot_news(self, limit: int = 10, hours: int = 24) -> dict[str, Any]:
         """获取热门新闻"""
-        params = {"limit": limit, "hours": hours}
+        params = {"limit": str(limit), "hours": str(hours)}
         return self._make_request("GET", "/api/v1/data/news/hot", params=params)
 
     def get_latest_news(self, limit: int = 10) -> dict[str, Any]:
         """获取最新新闻"""
-        params = {"limit": limit}
+        params = {"limit": str(limit)}
         return self._make_request("GET", "/api/v1/data/news/latest", params=params)
 
     # 宏观数据查询
@@ -215,7 +222,7 @@ class DataCollectionClient:
         page_size: int = 20,
     ) -> dict[str, Any]:
         """获取宏观经济数据"""
-        params = {"page": page, "page_size": page_size}
+        params = {"page": str(page), "page_size": str(page_size)}
         if indicator_code:
             params["indicator_code"] = indicator_code
         if period_type:
@@ -236,11 +243,11 @@ class DataCollectionClient:
         page_size: int = 20,
     ) -> dict[str, Any]:
         """获取任务列表"""
-        params = {"page": page, "page_size": page_size}
+        params = {"page": str(page), "page_size": str(page_size)}
         if task_type:
             params["task_type"] = task_type
         if status is not None:
-            params["status"] = status
+            params["status"] = str(status)
 
         return self._make_request("GET", "/api/v1/tasks", params=params)
 
@@ -253,7 +260,11 @@ class DataCollectionClient:
         config: dict | None = None,
     ) -> dict[str, Any]:
         """创建任务"""
-        json_data = {"name": name, "type": task_type, "schedule": schedule}
+        json_data: dict[str, Any] = {
+            "name": name,
+            "type": task_type,
+            "schedule": schedule,
+        }
         if description:
             json_data["description"] = description
         if config:
@@ -271,7 +282,7 @@ class DataCollectionClient:
         config: dict | None = None,
     ) -> dict[str, Any]:
         """更新任务"""
-        json_data = {}
+        json_data: dict[str, Any] = {}
         if task_name:
             json_data["task_name"] = task_name
         if description:
@@ -356,9 +367,9 @@ class AsyncDataCollectionClient:
         self,
         method: str,
         endpoint: str,
-        params: dict | None = None,
-        json_data: dict | None = None,
-        **kwargs,
+        params: dict[str, Any] | None = None,
+        json_data: dict[str, Any] | None = None,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """发起异步HTTP请求"""
         url = f"{self.base_url}{endpoint}"
@@ -370,22 +381,25 @@ class AsyncDataCollectionClient:
                     method=method, url=url, params=params, json=json_data, **kwargs
                 ) as response,
             ):
-                    # 处理HTTP状态码
-                    if response.status == 404:
-                        raise NotFoundError(f"Resource not found: {url}")
-                    elif response.status >= 500:
-                        raise ExternalServiceError(f"Server error: {response.status}")
-                    elif response.status >= 400:
-                        try:
-                            error_data = await response.json()
-                            error_msg = error_data.get(
-                                "message", f"HTTP {response.status}"
-                            )
-                        except Exception:
-                            error_msg = f"HTTP {response.status}"
-                        raise ExternalServiceError(f"Client error: {error_msg}")
+                # 处理HTTP状态码
+                if response.status == 404:
+                    raise NotFoundError(f"Resource not found: {url}")
+                elif response.status >= 500:
+                    raise ExternalServiceError(f"Server error: {response.status}")
+                elif response.status >= 400:
+                    try:
+                        error_data = await response.json()
+                        error_msg = error_data.get("message", f"HTTP {response.status}")
+                    except Exception:
+                        error_msg = f"HTTP {response.status}"
+                    raise ExternalServiceError(f"Client error: {error_msg}")
 
-                    return await response.json()
+                result = await response.json()
+                if not isinstance(result, dict):
+                    raise ExternalServiceError(
+                        f"Expected dict response, got {type(result)}"
+                    )
+                return result
 
         except asyncio.TimeoutError as e:
             raise TimeoutError(f"Request timeout: {url}") from e
@@ -393,16 +407,16 @@ class AsyncDataCollectionClient:
             raise ExternalServiceError(f"Request failed: {e!s}") from e
 
     # 为了简洁,这里只实现几个关键方法,其他方法可以按需添加
-    async def get_stocks(self, **kwargs) -> dict[str, Any]:
+    async def get_stocks(self, **kwargs: Any) -> dict[str, Any]:
         """获取股票列表"""
         return await self._make_request("GET", "/api/v1/data/stocks", params=kwargs)
 
-    async def get_market_data(self, symbol: str, **kwargs) -> dict[str, Any]:
+    async def get_market_data(self, symbol: str, **kwargs: Any) -> dict[str, Any]:
         """获取行情数据"""
         params = {"symbol": symbol, **kwargs}
         return await self._make_request("GET", "/api/v1/data/market", params=params)
 
-    async def get_news(self, **kwargs) -> dict[str, Any]:
+    async def get_news(self, **kwargs: Any) -> dict[str, Any]:
         """获取新闻列表"""
         return await self._make_request("GET", "/api/v1/data/news", params=kwargs)
 
@@ -410,7 +424,7 @@ class AsyncDataCollectionClient:
         """健康检查"""
         return await self._make_request("GET", "/health")
 
-    async def close(self):
+    async def close(self) -> None:
         """关闭客户端"""
         # aiohttp会自动管理连接,这里保留接口以备将来使用
         pass

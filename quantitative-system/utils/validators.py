@@ -53,7 +53,9 @@ def validate_date_range(
         try:
             start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
         except ValueError as err:
-            raise DataValidationError(f"开始日期格式错误: {start_date}, 应为YYYY-MM-DD") from err
+            raise DataValidationError(
+                f"开始日期格式错误: {start_date}, 应为YYYY-MM-DD"
+            ) from err
     elif isinstance(start_date, datetime):
         start_date = start_date.date()
 
@@ -61,7 +63,9 @@ def validate_date_range(
         try:
             end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
         except ValueError as err:
-            raise DataValidationError(f"结束日期格式错误: {end_date}, 应为YYYY-MM-DD") from err
+            raise DataValidationError(
+                f"结束日期格式错误: {end_date}, 应为YYYY-MM-DD"
+            ) from err
     elif isinstance(end_date, datetime):
         end_date = end_date.date()
 

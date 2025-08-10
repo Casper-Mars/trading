@@ -2,9 +2,10 @@
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
 from loguru import logger
-from sqlmodel import Session, and_, func, select, asc, desc
+from sqlmodel import Session, and_, col, desc, func, select
 
 from config.database import get_session
 from models.database import Position
@@ -182,11 +183,11 @@ class PositionRepo:
                 # 构建查询条件
                 conditions = []
                 if status is not None:
-                    conditions.append(Position.status == status)
+                    conditions.append(col(Position.status) == status)
                 if position_type is not None:
-                    conditions.append(Position.position_type == position_type)
+                    conditions.append(col(Position.position_type) == position_type)
                 if symbol:
-                    conditions.append(Position.symbol.like(f"%{symbol}%"))
+                    conditions.append(col(Position.symbol).contains(symbol))
 
                 # 查询总数
                 count_statement = select(func.count())
@@ -242,10 +243,12 @@ class PositionRepo:
                 if (
                     update_data.quantity is not None
                     or update_data.current_price is not None
-                ):
-                    position.market_value = position.quantity * position.current_price
+                ) and position.current_price is not None:
+                    position.market_value = (
+                        position.quantity * position.current_price
+                    )
                     position.unrealized_pnl = position.quantity * (
-                        position.current_price - position.avg_price
+                        position.current_price - position.avg_cost
                     )
 
                 position.updated_at = datetime.utcnow()
@@ -297,7 +300,7 @@ class PositionRepo:
             logger.error(f"删除持仓失败: ID={position_id}, 错误: {e}")
             raise DatabaseError(f"删除持仓失败: {e}") from e
 
-    def get_portfolio_summary(self) -> dict[str, any]:
+    def get_portfolio_summary(self) -> dict[str, Any]:
         """获取投资组合汇总信息
 
         Returns:
@@ -349,33 +352,25 @@ class PositionRepo:
                 short_result = session.exec(short_statement).first()
 
                 # 计算总盈亏
-                total_pnl = (result.total_unrealized_pnl or Decimal("0")) + (
-                    result.total_realized_pnl or Decimal("0")
-                )
+                total_pnl = (result[2] or Decimal("0")) + (result[3] or Decimal("0"))
 
                 return {
-                    "total_positions": result.total_positions or 0,
-                    "total_market_value": float(
-                        result.total_market_value or Decimal("0")
-                    ),
-                    "total_unrealized_pnl": float(
-                        result.total_unrealized_pnl or Decimal("0")
-                    ),
-                    "total_realized_pnl": float(
-                        result.total_realized_pnl or Decimal("0")
-                    ),
+                    "total_positions": result[0] or 0,
+                    "total_market_value": float(result[1] or Decimal("0")),
+                    "total_unrealized_pnl": float(result[2] or Decimal("0")),
+                    "total_realized_pnl": float(result[3] or Decimal("0")),
                     "total_pnl": float(total_pnl),
                     "long_positions": {
-                        "count": long_result.long_count if long_result else 0,
-                        "market_value": float(
-                            long_result.long_market_value or Decimal("0")
-                        ) if long_result else 0.0,
+                        "count": long_result[0] if long_result else 0,
+                        "market_value": float(long_result[1] or Decimal("0"))
+                        if long_result
+                        else 0.0,
                     },
                     "short_positions": {
-                        "count": short_result.short_count if short_result else 0,
-                        "market_value": float(
-                            short_result.short_market_value or Decimal("0")
-                        ) if short_result else 0.0,
+                        "count": short_result[0] if short_result else 0,
+                        "market_value": float(short_result[1] or Decimal("0"))
+                        if short_result
+                        else 0.0,
                     },
                 }
 
@@ -404,7 +399,7 @@ class PositionRepo:
             with self._get_session() as session:
                 statement = select(Position).where(
                     and_(
-                        Position.symbol.in_(symbols),
+                        col(Position.symbol).in_(symbols),
                         Position.status == PositionStatus.ACTIVE,
                     )
                 )
@@ -440,7 +435,7 @@ class PositionRepo:
                         position.current_price = current_price
                         position.market_value = position.quantity * current_price
                         position.unrealized_pnl = position.quantity * (
-                            current_price - position.avg_price
+                            current_price - position.avg_cost
                         )
                         position.updated_at = datetime.utcnow()
                         session.add(position)

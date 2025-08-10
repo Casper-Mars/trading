@@ -5,6 +5,7 @@ description = "Quantitative Trading System"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "aiohttp>=3.12.15",
     "apscheduler>=3.11.0",
     "backtrader>=1.9.78.123",
     "fastapi>=0.116.1",

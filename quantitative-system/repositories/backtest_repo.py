@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from loguru import logger
-from sqlmodel import Session, and_, func, select, asc, desc
+from sqlmodel import Session, and_, asc, col, desc, func, select
 
 from config.database import get_session
 from models.database import BacktestResult
@@ -55,8 +55,6 @@ class BacktestRepo:
                         backtest_data.strategy_params, ensure_ascii=False, default=str
                     )
 
-
-
                 # 创建回测对象
                 backtest = BacktestResult(
                     name=backtest_data.name,
@@ -73,9 +71,7 @@ class BacktestRepo:
                 session.commit()
                 session.refresh(backtest)
 
-                logger.info(
-                    f"创建回测任务成功: {backtest.name}, ID: {backtest.id}"
-                )
+                logger.info(f"创建回测任务成功: {backtest.name}, ID: {backtest.id}")
                 return backtest
 
         except Exception as e:
@@ -199,15 +195,19 @@ class BacktestRepo:
                 # 构建查询条件
                 conditions = []
                 if status is not None:
-                    conditions.append(BacktestResult.status == status)
+                    conditions.append(col(BacktestResult.status) == status)
                 if strategy_type is not None:
-                    conditions.append(BacktestResult.strategy_type == strategy_type)
+                    conditions.append(
+                        col(BacktestResult.strategy_type) == strategy_type
+                    )
                 if symbol:
-                    # symbols是list[str]类型，需要使用JSON查询
-                    conditions.append(func.json_contains(BacktestResult.symbols, f'"{symbol}"'))
+                    # symbols是list[str]类型, 需要使用JSON查询
+                    conditions.append(
+                        func.json_contains(col(BacktestResult.symbols), f'"{symbol}"')
+                    )
                 if strategy_name:
                     conditions.append(
-                        BacktestResult.name.like(f"%{strategy_name}%")
+                        col(BacktestResult.name).like(f"%{strategy_name}%")
                     )
 
                 # 查询总数
@@ -371,9 +371,7 @@ class BacktestRepo:
 
                 # 保存原始数据(如果提供)
                 if raw_data:
-                    backtest.raw_data = json.dumps(
-                        raw_data, ensure_ascii=False, default=str
-                    )
+                    backtest.raw_data = raw_data
 
                 # 从指标中提取关键数据
                 if "total_return" in metrics:
@@ -445,32 +443,55 @@ class BacktestRepo:
         try:
             with self._get_session() as session:
                 # 获取已完成的回测统计
-                statement = select(
-                    func.count().label("total_backtests"),
-                    func.avg(BacktestResult.total_return).label("avg_return"),
-                    func.avg(BacktestResult.sharpe_ratio).label("avg_sharpe"),
-                    func.avg(BacktestResult.max_drawdown).label("avg_drawdown"),
-                    func.avg(BacktestResult.win_rate).label("avg_win_rate"),
-                    func.max(BacktestResult.total_return).label("best_return"),
-                    func.min(BacktestResult.total_return).label("worst_return"),
-                ).where(
-                    and_(
-                        BacktestResult.name == strategy_name,
-                        BacktestResult.status == BacktestStatus.COMPLETED,
-                    )
+                # 基础条件
+                base_condition = and_(
+                    col(BacktestResult.name) == strategy_name,
+                    col(BacktestResult.status) == BacktestStatus.COMPLETED,
                 )
 
-                result = session.exec(statement).first()
+                # 分别查询各项统计
+                count_stmt = select(func.count()).where(base_condition)
+                total_backtests = session.exec(count_stmt).first() or 0
+
+                avg_return_stmt = select(
+                    func.avg(col(BacktestResult.total_return))
+                ).where(base_condition)
+                avg_return = session.exec(avg_return_stmt).first()
+
+                avg_sharpe_stmt = select(
+                    func.avg(col(BacktestResult.sharpe_ratio))
+                ).where(base_condition)
+                avg_sharpe = session.exec(avg_sharpe_stmt).first()
+
+                avg_drawdown_stmt = select(
+                    func.avg(col(BacktestResult.max_drawdown))
+                ).where(base_condition)
+                avg_drawdown = session.exec(avg_drawdown_stmt).first()
+
+                avg_win_rate_stmt = select(
+                    func.avg(col(BacktestResult.win_rate))
+                ).where(base_condition)
+                avg_win_rate = session.exec(avg_win_rate_stmt).first()
+
+                best_return_stmt = select(
+                    func.max(col(BacktestResult.total_return))
+                ).where(base_condition)
+                best_return = session.exec(best_return_stmt).first()
+
+                worst_return_stmt = select(
+                    func.min(col(BacktestResult.total_return))
+                ).where(base_condition)
+                worst_return = session.exec(worst_return_stmt).first()
 
                 return {
                     "strategy_name": strategy_name,
-                    "total_backtests": result.total_backtests or 0,
-                    "avg_return": float(result.avg_return or 0),
-                    "avg_sharpe_ratio": float(result.avg_sharpe or 0),
-                    "avg_max_drawdown": float(result.avg_drawdown or 0),
-                    "avg_win_rate": float(result.avg_win_rate or 0),
-                    "best_return": float(result.best_return or 0),
-                    "worst_return": float(result.worst_return or 0),
+                    "total_backtests": total_backtests,
+                    "avg_return": float(avg_return) if avg_return else 0.0,
+                    "avg_sharpe_ratio": float(avg_sharpe) if avg_sharpe else 0.0,
+                    "avg_max_drawdown": float(avg_drawdown) if avg_drawdown else 0.0,
+                    "avg_win_rate": float(avg_win_rate) if avg_win_rate else 0.0,
+                    "best_return": float(best_return) if best_return else 0.0,
+                    "worst_return": float(worst_return) if worst_return else 0.0,
                 }
 
         except Exception as e:

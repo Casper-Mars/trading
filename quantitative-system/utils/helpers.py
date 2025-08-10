@@ -75,7 +75,7 @@ def safe_json_dumps(obj: Any, default: str = "{}") -> str:
         return default
 
 
-def format_datetime(dt: datetime, format_str: str = "%Y-%m-%d %H:%M:%S") -> str:
+def format_datetime(dt: datetime | None, format_str: str = "%Y-%m-%d %H:%M:%S") -> str:
     """格式化日期时间
 
     Args:

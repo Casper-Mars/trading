@@ -43,7 +43,7 @@ def analyze_ruff_output(stdout: str, stderr: str) -> dict[str, Any]:
     error_lines = [line for line in lines if line.strip() and not line.startswith('warning:') and not line.startswith('Found')]
 
     # 统计错误类型
-    error_types = {}
+    error_types: dict[str, int] = {}
     for line in error_lines:
         try:
             if ':' in line and ' ' in line:
@@ -72,7 +72,7 @@ def analyze_mypy_output(stdout: str, stderr: str) -> dict[str, Any]:
     error_lines = [line for line in lines if 'error:' in line]
 
     # 统计错误类型
-    error_types = {}
+    error_types: dict[str, int] = {}
     for line in error_lines:
         try:
             if '[' in line and ']' in line:

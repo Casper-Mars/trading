@@ -1,8 +1,8 @@
 import sys
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
-from typing import Any
 
 from config.settings import settings
 

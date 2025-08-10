@@ -101,6 +101,7 @@ class CacheRepo:
             cache_key = self._build_key(cache_type, key)
 
             # 序列化数据
+            serialized_value: str | bytes
             if serialize_method == "json":
                 serialized_value = json.dumps(value, ensure_ascii=False, default=str)
             elif serialize_method == "pickle":

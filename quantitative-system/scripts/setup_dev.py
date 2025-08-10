@@ -59,6 +59,9 @@ def install_uv() -> bool:
 
         # 使用官方安装脚本
         curl_path = shutil.which("curl")
+        if curl_path is None:
+            print("错误: 未找到curl命令")
+            return False
         result = subprocess.run(
             [curl_path, "-LsSf", "https://astral.sh/uv/install.sh"],
             capture_output=True,

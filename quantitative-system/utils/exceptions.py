@@ -4,7 +4,9 @@
 class QuantitativeSystemError(Exception):
     """量化系统基础异常"""
 
-    def __init__(self, message: str, error_code: str | None = None, details: dict | None = None):
+    def __init__(
+        self, message: str, error_code: str | None = None, details: dict | None = None
+    ):
         self.message = message
         self.error_code = error_code
         self.details = details or {}
