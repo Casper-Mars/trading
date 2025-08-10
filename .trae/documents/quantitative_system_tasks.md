@@ -100,7 +100,7 @@
 
 ## 阶段3：业务服务层（Services）（M1）
 
-* [ ] 3.1 PositionService
+* [x] 3.1 PositionService
 
   * 业务校验、组合指标计算、按需更新当前价格/市值（调用数据采集系统）
 
