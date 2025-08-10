@@ -1,0 +1,53 @@
+# Pre-commit hooks configuration
+# 在提交代码前自动运行代码质量检查
+
+repos:
+  # Ruff - Python代码检查和格式化
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.9
+    hooks:
+      # 运行ruff检查
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      # 运行ruff格式化
+      - id: ruff-format
+
+  # MyPy - 类型检查
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - types-redis
+          - types-requests
+          - pydantic
+          - sqlalchemy
+        args: [--ignore-missing-imports]
+
+  # 通用hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      # 检查文件末尾是否有换行符
+      - id: end-of-file-fixer
+      # 去除行尾空白字符
+      - id: trailing-whitespace
+      # 检查YAML文件语法
+      - id: check-yaml
+      # 检查JSON文件语法
+      - id: check-json
+      # 检查是否有合并冲突标记
+      - id: check-merge-conflict
+      # 检查是否有调试语句
+      - id: debug-statements
+      # 检查大文件
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      # 检查Python文件语法
+      - id: check-ast
+      # 检查docstring是否在第一行
+      - id: check-docstring-first
+
+# 配置选项
+default_stages: [commit]
+fail_fast: false

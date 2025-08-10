@@ -1,6 +1,8 @@
 import sys
 from pathlib import Path
+
 from loguru import logger
+
 from config.settings import settings
 
 
@@ -8,7 +10,7 @@ def setup_logger():
     """配置日志系统"""
     # 移除默认的控制台处理器
     logger.remove()
-    
+
     # 控制台日志配置
     console_format = (
         "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
@@ -16,7 +18,7 @@ def setup_logger():
         "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
         "<level>{message}</level>"
     )
-    
+
     logger.add(
         sys.stdout,
         format=console_format,
@@ -25,20 +27,20 @@ def setup_logger():
         backtrace=True,
         diagnose=True,
     )
-    
+
     # 文件日志配置
     if settings.log_file:
         # 确保日志目录存在
         log_file_path = Path(settings.log_file)
         log_file_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         file_format = (
             "{time:YYYY-MM-DD HH:mm:ss} | "
             "{level: <8} | "
             "{name}:{function}:{line} - "
             "{message}"
         )
-        
+
         logger.add(
             settings.log_file,
             format=file_format,
@@ -49,7 +51,7 @@ def setup_logger():
             backtrace=True,
             diagnose=True,
         )
-    
+
     return logger
 
 

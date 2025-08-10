@@ -1,8 +1,9 @@
-from sqlmodel import SQLModel, create_engine, Session
-from sqlalchemy.pool import StaticPool
-from typing import Generator
-from .settings import settings
+from collections.abc import Generator
 
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine
+
+from .settings import settings
 
 # 创建数据库引擎
 if settings.database_url.startswith("sqlite"):

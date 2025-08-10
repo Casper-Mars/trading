@@ -3,5 +3,6 @@
 from .data_collection_client import DataCollectionClient, data_collection_client
 
 __all__ = [
-    "DataCollectionClient", "data_collection_client",
+    "DataCollectionClient",
+    "data_collection_client",
 ]
