@@ -17,11 +17,12 @@
 
 ### 1.1 整体架构
 
-量化交易系统采用分层架构设计，确保系统的可维护性和可扩展性。系统分为四个核心层次：
+量化交易系统采用分层架构设计，确保系统的可维护性和可扩展性。系统分为五个核心层次：
 
 - **接口层 (API Layer)**: 处理HTTP请求和响应
 - **调度层 (Scheduler Layer)**: 管理定时任务和任务调度
-- **业务层 (Business Layer)**: 核心业务逻辑处理
+- **业务编排层 (Business Orchestration Layer)**: 组合多个业务服务完成复杂业务流程
+- **业务服务层 (Business Service Layer)**: 独立的业务服务，保持单一职责
 - **数据层 (Data Layer)**: 数据存储和缓存
 
 
@@ -37,39 +38,52 @@ graph TB
         A3[任务管理]
     end
     
-    subgraph "业务层 (Business Layer)"
-        B1[持仓管理服务]
-        B2[策略回测服务]
-        B3[AI分析服务]
-        B4[方案生成服务]
-        B5[数据整合服务]
+    subgraph "业务编排层 (Business Orchestration Layer)"
+        B1[方案生成编排器]
+        B2[回测分析编排器]
+        B3[持仓管理编排器]
+    end
+    
+    subgraph "业务服务层 (Business Service Layer)"
+        C1[持仓管理服务]
+        C2[策略回测服务]
+        C3[AI分析服务]
+        C4[方案生成服务]
+        C5[数据整合服务]
     end
     
     subgraph "数据层 (Data Layer)"
-        C1[MySQL数据库]
-        C2[Redis缓存]
+        D1[MySQL数据库]
+        D2[Redis缓存]
     end
     
     subgraph "外部服务 (External Services)"
-        D1[数据采集系统]
-        D2[阿里百炼平台]
+        E1[数据采集系统]
+        E2[阿里百炼平台]
     end
     
     A1 --> B1
     A1 --> B2
     A1 --> B3
-    A1 --> B4
-    A2 --> B5
-    A3 --> B5
+    A2 --> B1
+    A3 --> B1
     
-    B1 --> C1
-    B2 --> C1
+    B1 --> C5
+    B1 --> C2
+    B1 --> C3
+    B1 --> C4
+    B2 --> C2
+    B2 --> C5
     B3 --> C1
-    B4 --> C1
-    B5 --> C2
     
-    B5 --> D1
-    B3 --> D2
+    C1 --> D1
+    C2 --> D1
+    C3 --> D1
+    C4 --> D1
+    C5 --> D2
+    
+    C5 --> E1
+    C3 --> E2
 ```
 
 ### 1.2 技术架构
@@ -115,6 +129,12 @@ quantitative-system/
 │   ├── jobs.py               # 任务定义
 │   ├── scheduler.py          # 调度器
 │   └── manager.py            # 任务管理器
+├── biz/                       # 业务编排层
+│   ├── __init__.py
+│   ├── plan_orchestrator.py  # 方案生成编排器
+│   ├── backtest_orchestrator.py # 回测分析编排器
+│   ├── position_orchestrator.py # 持仓管理编排器
+│   └── base_orchestrator.py  # 编排器基类
 ├── services/                  # 业务服务层
 │   ├── __init__.py
 │   ├── position_service.py   # 持仓管理服务
@@ -147,6 +167,7 @@ quantitative-system/
 │   └── helpers.py            # 辅助函数
 └── tests/                     # 测试代码
     ├── __init__.py
+    ├── test_biz/
     ├── test_services/
     ├── test_repositories/
     └── test_strategies/
@@ -440,9 +461,252 @@ Response: {
 GET /api/v1/system/stats
 ```
 
-## 4. 核心服务设计
+## 4. 业务编排层设计
 
-### 4.1 持仓管理服务 (PositionService)
+### 4.1 设计原则
+
+业务编排层（Business Orchestration Layer）的核心目标是解决业务服务层相互依赖的问题，通过编排器模式组合多个独立的业务服务来完成复杂的业务流程。
+
+**设计原则**
+- **服务独立性**: 业务服务层保持单一职责，服务之间不直接依赖
+- **流程编排**: 编排器负责组合多个服务完成完整业务流程
+- **事务管理**: 编排器处理跨服务的事务一致性
+- **错误处理**: 统一的异常处理和回滚机制
+- **可扩展性**: 支持新的业务流程编排
+
+### 4.2 编排器基类设计
+
+```python
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Optional
+from contextlib import asynccontextmanager
+
+class BaseOrchestrator(ABC):
+    """业务编排器基类"""
+    
+    def __init__(self):
+        self.logger = get_logger(self.__class__.__name__)
+        self.transaction_context = None
+        
+    @asynccontextmanager
+    async def transaction(self):
+        """事务上下文管理器"""
+        try:
+            # 开始事务
+            self.transaction_context = await self._begin_transaction()
+            yield self.transaction_context
+            # 提交事务
+            await self._commit_transaction()
+        except Exception as e:
+            # 回滚事务
+            await self._rollback_transaction()
+            self.logger.error(f"Transaction failed: {e}")
+            raise
+        finally:
+            self.transaction_context = None
+            
+    @abstractmethod
+    async def _begin_transaction(self) -> Any:
+        """开始事务"""
+        pass
+        
+    @abstractmethod
+    async def _commit_transaction(self) -> None:
+        """提交事务"""
+        pass
+        
+    @abstractmethod
+    async def _rollback_transaction(self) -> None:
+        """回滚事务"""
+        pass
+        
+    async def execute_with_retry(self, func, max_retries: int = 3, **kwargs):
+        """带重试的执行"""
+        for attempt in range(max_retries):
+            try:
+                return await func(**kwargs)
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    raise
+                self.logger.warning(f"Attempt {attempt + 1} failed: {e}, retrying...")
+                await asyncio.sleep(2 ** attempt)  # 指数退避
+```
+
+### 4.3 方案生成编排器
+
+```python
+class PlanOrchestrator(BaseOrchestrator):
+    """方案生成编排器
+    
+    负责编排完整的方案生成流程：
+    1. 数据获取和整合
+    2. 策略回测执行
+    3. AI分析和建议生成
+    4. 方案格式化和保存
+    """
+    
+    def __init__(self, data_service: DataService, backtest_service: BacktestService,
+                 ai_service: AIService, plan_service: PlanService):
+        super().__init__()
+        self.data_service = data_service
+        self.backtest_service = backtest_service
+        self.ai_service = ai_service
+        self.plan_service = plan_service
+        
+    async def generate_daily_plan(self, plan_date: date, 
+                                 symbols: List[str]) -> TradingPlan:
+        """生成每日操作方案"""
+        async with self.transaction():
+            try:
+                # 1. 数据获取和整合
+                self.logger.info(f"开始生成 {plan_date} 的操作方案")
+                market_data = await self.data_service.fetch_market_data(
+                    symbols, plan_date - timedelta(days=30), plan_date
+                )
+                
+                # 2. 执行策略回测
+                backtest_results = []
+                strategies = ['ma_strategy', 'macd_strategy', 'rsi_strategy']
+                
+                for strategy in strategies:
+                    for symbol in symbols:
+                        result = await self.backtest_service.run_backtest(
+                            strategy, [symbol], 
+                            plan_date - timedelta(days=30), plan_date,
+                            self._get_default_parameters(strategy)
+                        )
+                        backtest_results.append(result)
+                
+                # 3. AI分析
+                analysis_result = await self.ai_service.analyze_market_data(
+                    backtest_results, await self._get_current_positions()
+                )
+                
+                recommendations = await self.ai_service.generate_trading_recommendations(
+                    analysis_result
+                )
+                
+                # 4. 生成和保存方案
+                plan = await self.plan_service.generate_daily_plan(analysis_result)
+                plan.buy_recommendations = recommendations.buy_list
+                plan.sell_recommendations = recommendations.sell_list
+                plan.hold_recommendations = recommendations.hold_list
+                
+                plan_id = await self.plan_service.save_plan(plan)
+                plan.id = plan_id
+                
+                self.logger.info(f"方案生成完成，ID: {plan_id}")
+                return plan
+                
+            except Exception as e:
+                self.logger.error(f"方案生成失败: {e}")
+                raise
+                
+    def _get_default_parameters(self, strategy: str) -> Dict:
+        """获取策略默认参数"""
+        defaults = {
+            'ma_strategy': {'short_window': 5, 'long_window': 20},
+            'macd_strategy': {'fast': 12, 'slow': 26, 'signal': 9},
+            'rsi_strategy': {'period': 14, 'oversold': 30, 'overbought': 70}
+        }
+        return defaults.get(strategy, {})
+        
+    async def _get_current_positions(self) -> List[Position]:
+        """获取当前持仓（通过依赖注入获取）"""
+        # 这里可以通过依赖注入获取PositionService
+        # 或者通过事件/消息机制获取
+        pass
+```
+
+### 4.4 回测分析编排器
+
+```python
+class BacktestOrchestrator(BaseOrchestrator):
+    """回测分析编排器
+    
+    负责编排策略回测和分析流程：
+    1. 数据准备和验证
+    2. 批量回测执行
+    3. 结果分析和排名
+    4. 报告生成
+    """
+    
+    def __init__(self, data_service: DataService, backtest_service: BacktestService):
+        super().__init__()
+        self.data_service = data_service
+        self.backtest_service = backtest_service
+        
+    async def run_batch_backtest(self, strategies: List[str], symbols: List[str],
+                                start_date: date, end_date: date) -> BacktestReport:
+        """批量回测执行"""
+        async with self.transaction():
+            results = []
+            
+            # 数据预加载
+            await self.data_service.preload_market_data(symbols, start_date, end_date)
+            
+            # 并发执行回测
+            tasks = []
+            for strategy in strategies:
+                for symbol in symbols:
+                    task = self.backtest_service.run_backtest(
+                        strategy, [symbol], start_date, end_date, {}
+                    )
+                    tasks.append(task)
+                    
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # 生成分析报告
+            report = await self._generate_backtest_report(results)
+            return report
+```
+
+### 4.5 持仓管理编排器
+
+```python
+class PositionOrchestrator(BaseOrchestrator):
+    """持仓管理编排器
+    
+    负责编排持仓相关的复杂业务流程：
+    1. 持仓数据同步和更新
+    2. 风险分析和预警
+    3. 收益计算和统计
+    """
+    
+    def __init__(self, position_service: PositionService, data_service: DataService):
+        super().__init__()
+        self.position_service = position_service
+        self.data_service = data_service
+        
+    async def sync_and_analyze_positions(self) -> PositionAnalysisResult:
+        """同步并分析持仓"""
+        async with self.transaction():
+            # 1. 获取当前持仓
+            positions = await self.position_service.get_positions()
+            
+            # 2. 更新市场价格
+            symbols = [pos.symbol for pos in positions]
+            current_prices = await self.data_service.get_current_prices(symbols)
+            
+            # 3. 更新持仓市值
+            await self.position_service.update_market_values(current_prices)
+            
+            # 4. 计算投资组合指标
+            portfolio_metrics = await self.position_service.calculate_portfolio_metrics()
+            
+            # 5. 风险分析
+            risk_analysis = await self._analyze_portfolio_risk(positions, current_prices)
+            
+            return PositionAnalysisResult(
+                positions=positions,
+                portfolio_metrics=portfolio_metrics,
+                risk_analysis=risk_analysis
+            )
+```
+
+## 5. 核心服务设计
+
+### 5.1 持仓管理服务 (PositionService)
 
 **主要功能**
 - 持仓信息的CRUD操作
@@ -473,7 +737,7 @@ class PositionService:
         """更新持仓市值"""
 ```
 
-### 4.2 回测服务 (BacktestService)
+### 5.2 回测服务 (BacktestService)
 
 **主要功能**
 - 基于backtrader框架的策略回测执行
@@ -541,7 +805,7 @@ class BacktestService:
         """获取策略排名"""
 ```
 
-### 4.3 AI分析服务 (AIService)
+### 5.3 AI分析服务 (AIService)
 
 **主要功能**
 - 数据整合和预处理
@@ -567,7 +831,7 @@ class AIService:
         """解析AI响应"""
 ```
 
-### 4.4 方案生成服务 (PlanService)
+### 5.4 方案生成服务 (PlanService)
 
 **主要功能**
 - Markdown方案生成
@@ -595,7 +859,7 @@ class PlanService:
         """获取历史方案"""
 ```
 
-### 4.5 数据整合服务 (DataService)
+### 5.5 数据整合服务 (DataService)
 
 **主要功能**
 - 外部数据获取
@@ -620,9 +884,9 @@ class DataService:
         """获取缓存数据"""
 ```
 
-## 5. 交易策略设计
+## 6. 交易策略设计
 
-### 5.1 策略基类设计
+### 6.1 策略基类设计
 
 基于backtrader框架的策略基类设计：
 
@@ -700,9 +964,9 @@ class BaseStrategy(bt.Strategy):
         return True
 ```
 
-### 5.2 具体策略实现
+### 6.2 具体策略实现
 
-#### 5.2.1 双均线策略
+#### 6.2.1 双均线策略
 
 ```python
 import backtrader as bt
@@ -764,7 +1028,7 @@ class MovingAverageStrategy(BaseStrategy):
         }
 ```
 
-#### 5.2.2 MACD策略
+#### 6.2.2 MACD策略
 
 ```python
 import backtrader as bt
@@ -884,7 +1148,7 @@ class RSIStrategy(BaseStrategy):
         }
 ```
 
-### 5.3 策略管理器
+### 6.3 策略管理器
 
 ```python
 import backtrader as bt
@@ -933,9 +1197,9 @@ class StrategyManager:
         return DynamicStrategy
 ```
 
-## 6. 定时任务设计
+## 7. 定时任务设计
 
-### 6.1 任务调度器
+### 7.1 任务调度器
 
 ```python
 import schedule
@@ -1056,9 +1320,9 @@ class DataCollectionJobs:
             logger.error(f"新闻数据采集失败: {e}")
 ```
 
-## 7. 配置管理
+## 8. 配置管理
 
-### 7.1 配置结构
+### 8.1 配置结构
 
 ```yaml
 # config.yaml
@@ -1107,7 +1371,7 @@ logging:
   backup_count: 10
 ```
 
-### 7.2 配置管理器
+### 8.2 配置管理器
 
 ```python
 import yaml
@@ -1195,7 +1459,7 @@ class ConfigManager:
         return value
 ```
 
-## 8. 错误处理与日志
+## 9. 错误处理与日志
 
 ### 8.1 错误定义
 
@@ -1266,9 +1530,9 @@ class LoggerManager:
         return logger
 ```
 
-## 9. 部署方案
+## 10. 部署方案
 
-### 9.1 Docker配置
+### 10.1 Docker配置
 
 ```dockerfile
 # Dockerfile
@@ -1292,7 +1556,7 @@ EXPOSE 8080
 CMD ["./trading-system"]
 ```
 
-### 9.2 Docker Compose
+### 10.2 Docker Compose
 
 ```yaml
 # docker-compose.yml
