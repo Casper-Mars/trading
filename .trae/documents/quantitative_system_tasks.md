@@ -80,7 +80,7 @@
 
   * _Requirements: 1.1-1.7_
 
-* [ ] 2.2 BacktestRepo
+* [x] 2.2 BacktestRepo
 
   * 保存/查询回测任务与结果（含指标与原始数据JSON）
 
