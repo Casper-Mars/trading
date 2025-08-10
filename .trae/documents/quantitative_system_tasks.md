@@ -50,15 +50,15 @@
 
 ## 阶段1：数据模型与存储（M0）
 
-* [ ] 1.1 建表与迁移脚本
+* [x] 1.1 建表与迁移脚本
 
-  * 创建并执行迁移：positions, backtest\_results, trading\_plans, market\_data\_cache, system\_logs
+  * 创建并执行迁移：positions, backtest_results, trading_plans, market_data_cache, system_logs
 
   * 基础索引与约束同步到文档
 
   * _Requirements: 1.1, 2.14, 3.14, 5.5_
 
-* [ ] 1.2 ORM与Schema
+* [x] 1.2 ORM与Schema
 
   * 定义 ORM 模型与 Pydantic Schema 输入/输出
 
@@ -66,7 +66,7 @@
 
   * _Requirements: 1.1, 2.14_
 
-* [ ] 1.3 Redis 缓存基线
+* [x] 1.3 Redis 缓存基线
 
   * 统一 key 规范与过期策略；封装 CacheRepo
 
