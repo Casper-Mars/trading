@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from loguru import logger
-from sqlmodel import Session, and_, func, select
+from sqlmodel import Session, and_, func, select, asc, desc
 
 from config.database import get_session
 from models.database import BacktestResult
@@ -55,22 +55,17 @@ class BacktestRepo:
                         backtest_data.strategy_params, ensure_ascii=False, default=str
                     )
 
-                backtest_config_json = None
-                if backtest_data.backtest_config:
-                    backtest_config_json = json.dumps(
-                        backtest_data.backtest_config, ensure_ascii=False, default=str
-                    )
+
 
                 # 创建回测对象
                 backtest = BacktestResult(
-                    strategy_name=backtest_data.strategy_name,
+                    name=backtest_data.name,
                     strategy_type=backtest_data.strategy_type,
-                    symbol=backtest_data.symbol,
+                    symbols=backtest_data.symbols,
                     start_date=backtest_data.start_date,
                     end_date=backtest_data.end_date,
-                    initial_capital=backtest_data.initial_capital,
+                    initial_cash=backtest_data.initial_cash,
                     strategy_params=strategy_params_json,
-                    backtest_config=backtest_config_json,
                     status=BacktestStatus.PENDING,
                 )
 
@@ -79,7 +74,7 @@ class BacktestRepo:
                 session.refresh(backtest)
 
                 logger.info(
-                    f"创建回测任务成功: {backtest.strategy_name}, ID: {backtest.id}"
+                    f"创建回测任务成功: {backtest.name}, ID: {backtest.id}"
                 )
                 return backtest
 
@@ -121,8 +116,8 @@ class BacktestRepo:
             with self._get_session() as session:
                 statement = (
                     select(BacktestResult)
-                    .where(BacktestResult.strategy_name == strategy_name)
-                    .order_by(BacktestResult.created_at.desc())
+                    .where(BacktestResult.name == strategy_name)
+                    .order_by(desc(BacktestResult.created_at))
                 )
                 backtests = session.exec(statement).all()
                 return list(backtests)
@@ -144,8 +139,8 @@ class BacktestRepo:
             with self._get_session() as session:
                 statement = (
                     select(BacktestResult)
-                    .where(BacktestResult.symbol == symbol)
-                    .order_by(BacktestResult.created_at.desc())
+                    .where(func.json_contains(BacktestResult.symbols, f'"{symbol}"'))
+                    .order_by(desc(BacktestResult.created_at))
                 )
                 backtests = session.exec(statement).all()
                 return list(backtests)
@@ -168,7 +163,7 @@ class BacktestRepo:
                 statement = (
                     select(BacktestResult)
                     .where(BacktestResult.status == status)
-                    .order_by(BacktestResult.created_at.desc())
+                    .order_by(desc(BacktestResult.created_at))
                 )
                 backtests = session.exec(statement).all()
                 return list(backtests)
@@ -208,14 +203,15 @@ class BacktestRepo:
                 if strategy_type is not None:
                     conditions.append(BacktestResult.strategy_type == strategy_type)
                 if symbol:
-                    conditions.append(BacktestResult.symbol.contains(symbol))
+                    # symbols是list[str]类型，需要使用JSON查询
+                    conditions.append(func.json_contains(BacktestResult.symbols, f'"{symbol}"'))
                 if strategy_name:
                     conditions.append(
-                        BacktestResult.strategy_name.contains(strategy_name)
+                        BacktestResult.name.like(f"%{strategy_name}%")
                     )
 
                 # 查询总数
-                count_statement = select(func.count(BacktestResult.id))
+                count_statement = select(func.count())
                 if conditions:
                     count_statement = count_statement.where(and_(*conditions))
                 total = session.exec(count_statement).one()
@@ -225,7 +221,7 @@ class BacktestRepo:
                 if conditions:
                     statement = statement.where(and_(*conditions))
 
-                statement = statement.order_by(BacktestResult.created_at.desc())
+                statement = statement.order_by(desc(BacktestResult.created_at))
                 statement = statement.offset((page - 1) * size).limit(size)
 
                 backtests = session.exec(statement).all()
@@ -450,7 +446,7 @@ class BacktestRepo:
             with self._get_session() as session:
                 # 获取已完成的回测统计
                 statement = select(
-                    func.count(BacktestResult.id).label("total_backtests"),
+                    func.count().label("total_backtests"),
                     func.avg(BacktestResult.total_return).label("avg_return"),
                     func.avg(BacktestResult.sharpe_ratio).label("avg_sharpe"),
                     func.avg(BacktestResult.max_drawdown).label("avg_drawdown"),
@@ -459,7 +455,7 @@ class BacktestRepo:
                     func.min(BacktestResult.total_return).label("worst_return"),
                 ).where(
                     and_(
-                        BacktestResult.strategy_name == strategy_name,
+                        BacktestResult.name == strategy_name,
                         BacktestResult.status == BacktestStatus.COMPLETED,
                     )
                 )
@@ -503,7 +499,7 @@ class BacktestRepo:
                 statement = (
                     select(BacktestResult)
                     .where(BacktestResult.status == BacktestStatus.PENDING)
-                    .order_by(BacktestResult.created_at.asc())
+                    .order_by(asc(BacktestResult.created_at))
                 )
                 backtests = session.exec(statement).all()
                 return list(backtests)
@@ -523,7 +519,7 @@ class BacktestRepo:
                 statement = (
                     select(BacktestResult)
                     .where(BacktestResult.status == BacktestStatus.RUNNING)
-                    .order_by(BacktestResult.created_at.asc())
+                    .order_by(asc(BacktestResult.created_at))
                 )
                 backtests = session.exec(statement).all()
                 return list(backtests)

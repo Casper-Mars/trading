@@ -23,10 +23,10 @@ class CacheRepo:
         """初始化Redis连接"""
         try:
             self.redis_client = redis.Redis(
-                host=settings.REDIS_HOST,
-                port=settings.REDIS_PORT,
-                db=settings.REDIS_DB,
-                password=settings.REDIS_PASSWORD,
+                host=settings.redis_host,
+                port=settings.redis_port,
+                db=settings.redis_db,
+                password=settings.redis_password,
                 decode_responses=False,  # 保持二进制模式以支持pickle
                 socket_connect_timeout=5,
                 socket_timeout=5,

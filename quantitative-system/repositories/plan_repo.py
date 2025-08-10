@@ -5,7 +5,7 @@ from datetime import date, datetime
 from typing import Any
 
 from loguru import logger
-from sqlmodel import Session, and_, func, or_, select
+from sqlmodel import Session, and_, func, or_, select, asc, desc
 
 from config.database import get_session
 from models.database import TradingPlan
@@ -48,30 +48,20 @@ class PlanRepo:
         """
         try:
             with self._get_session() as session:
-                # 序列化分析数据和配置
-                analysis_data_json = None
-                if plan_data.analysis_data:
-                    analysis_data_json = json.dumps(
-                        plan_data.analysis_data, ensure_ascii=False, default=str
-                    )
-
-                config_json = None
-                if plan_data.config:
-                    config_json = json.dumps(
-                        plan_data.config, ensure_ascii=False, default=str
-                    )
-
                 # 创建方案对象
                 plan = TradingPlan(
                     plan_date=plan_data.plan_date,
-                    plan_type=plan_data.plan_type,
                     title=plan_data.title,
                     content=plan_data.content,
-                    analysis_data=analysis_data_json,
-                    config=config_json,
-                    status=plan_data.status or PlanStatus.DRAFT,
-                    tags=plan_data.tags,
-                    confidence_score=plan_data.confidence_score,
+                    plan_type=plan_data.plan_type,
+                    risk_level=plan_data.risk_level,
+                    target_return=plan_data.target_return,
+                    max_drawdown_limit=plan_data.max_drawdown_limit,
+                    position_limit=plan_data.position_limit,
+                    recommendations=plan_data.recommendations,
+                    backtest_results=plan_data.backtest_results,
+                    ai_analysis=plan_data.ai_analysis,
+                    notes=plan_data.notes,
                 )
 
                 session.add(plan)
@@ -118,7 +108,7 @@ class PlanRepo:
                 statement = (
                     select(TradingPlan)
                     .where(TradingPlan.plan_date == plan_date)
-                    .order_by(TradingPlan.created_at.desc())
+                    .order_by(desc(TradingPlan.created_at))
                 )
                 plan = session.exec(statement).first()
                 return plan
@@ -145,7 +135,7 @@ class PlanRepo:
         try:
             with self._get_session() as session:
                 statement = select(TradingPlan).order_by(
-                    TradingPlan.plan_date.desc(), TradingPlan.created_at.desc()
+                    desc(TradingPlan.plan_date), desc(TradingPlan.created_at)
                 )
                 plan = session.exec(statement).first()
                 return plan
@@ -174,7 +164,7 @@ class PlanRepo:
                             TradingPlan.plan_date <= end_date,
                         )
                     )
-                    .order_by(TradingPlan.plan_date.desc())
+                    .order_by(desc(TradingPlan.plan_date))
                 )
                 plans = session.exec(statement).all()
                 return list(plans)
@@ -217,7 +207,7 @@ class PlanRepo:
                 statement = (
                     select(TradingPlan)
                     .where(TradingPlan.status == status)
-                    .order_by(TradingPlan.plan_date.desc())
+                    .order_by(desc(TradingPlan.plan_date))
                 )
                 plans = session.exec(statement).all()
                 return list(plans)
@@ -240,7 +230,7 @@ class PlanRepo:
                 statement = (
                     select(TradingPlan)
                     .where(TradingPlan.plan_type == plan_type)
-                    .order_by(TradingPlan.plan_date.desc())
+                    .order_by(desc(TradingPlan.plan_date))
                 )
                 plans = session.exec(statement).all()
                 return list(plans)
@@ -286,10 +276,10 @@ class PlanRepo:
                 if end_date is not None:
                     conditions.append(TradingPlan.plan_date <= end_date)
                 if title_keyword:
-                    conditions.append(TradingPlan.title.contains(title_keyword))
+                    conditions.append(TradingPlan.title.like(f"%{title_keyword}%"))
 
                 # 查询总数
-                count_statement = select(func.count(TradingPlan.id))
+                count_statement = select(func.count())
                 if conditions:
                     count_statement = count_statement.where(and_(*conditions))
                 total = session.exec(count_statement).one()
@@ -299,7 +289,7 @@ class PlanRepo:
                 if conditions:
                     statement = statement.where(and_(*conditions))
 
-                statement = statement.order_by(TradingPlan.plan_date.desc())
+                statement = statement.order_by(desc(TradingPlan.plan_date))
                 statement = statement.offset((page - 1) * size).limit(size)
 
                 plans = session.exec(statement).all()
@@ -442,20 +432,20 @@ class PlanRepo:
             with self._get_session() as session:
                 # 总体统计
                 total_statement = select(
-                    func.count(TradingPlan.id).label("total_plans"),
+                    func.count().label("total_plans"),
                     func.avg(TradingPlan.confidence_score).label("avg_confidence"),
                 )
                 total_result = session.exec(total_statement).first()
 
                 # 按状态统计
                 status_statement = select(
-                    TradingPlan.status, func.count(TradingPlan.id).label("count")
+                    TradingPlan.status, func.count().label("count")
                 ).group_by(TradingPlan.status)
                 status_results = session.exec(status_statement).all()
 
                 # 按类型统计
                 type_statement = select(
-                    TradingPlan.plan_type, func.count(TradingPlan.id).label("count")
+                    TradingPlan.plan_type, func.count().label("count")
                 ).group_by(TradingPlan.plan_type)
                 type_results = session.exec(type_statement).all()
 
@@ -464,19 +454,32 @@ class PlanRepo:
 
                 thirty_days_ago = date.today() - timedelta(days=30)
                 recent_statement = select(
-                    func.count(TradingPlan.id).label("recent_count")
+                    func.count().label("recent_count")
                 ).where(TradingPlan.plan_date >= thirty_days_ago)
                 recent_result = session.exec(recent_statement).first()
 
+                # 添加空值检查
+                if total_result is None:
+                    total_plans = 0
+                    avg_confidence = 0.0
+                else:
+                    total_plans = total_result.total_plans or 0
+                    avg_confidence = float(total_result.avg_confidence or 0)
+                
+                if recent_result is None:
+                    recent_count = 0
+                else:
+                    recent_count = recent_result.recent_count or 0
+
                 return {
-                    "total_plans": total_result.total_plans or 0,
-                    "avg_confidence_score": float(total_result.avg_confidence or 0),
-                    "recent_30_days": recent_result.recent_count or 0,
+                    "total_plans": total_plans,
+                    "avg_confidence_score": avg_confidence,
+                    "recent_30_days": recent_count,
                     "status_distribution": {
-                        result.status.name: result.count for result in status_results
+                        result.status.value: result.count for result in status_results
                     },
                     "type_distribution": {
-                        result.plan_type.name: result.count for result in type_results
+                        result.plan_type.value: result.count for result in type_results
                     },
                 }
 
@@ -506,12 +509,12 @@ class PlanRepo:
                     select(TradingPlan)
                     .where(
                         or_(
-                            TradingPlan.title.contains(keyword),
-                            TradingPlan.content.contains(keyword),
-                            TradingPlan.tags.contains(keyword),
+                            TradingPlan.title.like(f"%{keyword}%"),
+                    TradingPlan.content.like(f"%{keyword}%"),
+                    func.json_extract(TradingPlan.recommendations, '$').like(f"%{keyword}%"),
                         )
                     )
-                    .order_by(TradingPlan.plan_date.desc())
+                    .order_by(desc(TradingPlan.plan_date))
                     .limit(limit)
                 )
 
@@ -535,12 +538,12 @@ class PlanRepo:
             with self._get_session() as session:
                 conditions = []
                 for tag in tags:
-                    conditions.append(TradingPlan.tags.contains(tag))
+                    conditions.append(func.json_extract(TradingPlan.recommendations, '$').like(f"%{tag}%"))
 
                 statement = (
                     select(TradingPlan)
                     .where(or_(*conditions))
-                    .order_by(TradingPlan.plan_date.desc())
+                    .order_by(desc(TradingPlan.plan_date))
                 )
 
                 plans = session.exec(statement).all()

@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from loguru import logger
-from sqlmodel import Session, and_, func, select
+from sqlmodel import Session, and_, func, select, asc, desc
 
 from config.database import get_session
 from models.database import Position
@@ -125,7 +125,7 @@ class PositionRepo:
                 statement = (
                     select(Position)
                     .where(Position.status == PositionStatus.ACTIVE)
-                    .order_by(Position.updated_at.desc())
+                    .order_by(desc(Position.updated_at))
                 )
                 positions = session.exec(statement).all()
                 return list(positions)
@@ -148,7 +148,7 @@ class PositionRepo:
                 statement = (
                     select(Position)
                     .where(Position.position_type == position_type)
-                    .order_by(Position.updated_at.desc())
+                    .order_by(desc(Position.updated_at))
                 )
                 positions = session.exec(statement).all()
                 return list(positions)
@@ -186,10 +186,10 @@ class PositionRepo:
                 if position_type is not None:
                     conditions.append(Position.position_type == position_type)
                 if symbol:
-                    conditions.append(Position.symbol.contains(symbol))
+                    conditions.append(Position.symbol.like(f"%{symbol}%"))
 
                 # 查询总数
-                count_statement = select(func.count(Position.id))
+                count_statement = select(func.count())
                 if conditions:
                     count_statement = count_statement.where(and_(*conditions))
                 total = session.exec(count_statement).one()
@@ -199,7 +199,7 @@ class PositionRepo:
                 if conditions:
                     statement = statement.where(and_(*conditions))
 
-                statement = statement.order_by(Position.updated_at.desc())
+                statement = statement.order_by(desc(Position.updated_at))
                 statement = statement.offset((page - 1) * size).limit(size)
 
                 positions = session.exec(statement).all()
@@ -307,17 +307,27 @@ class PositionRepo:
             with self._get_session() as session:
                 # 获取活跃持仓统计
                 active_statement = select(
-                    func.count(Position.id).label("total_positions"),
+                    func.count().label("total_positions"),
                     func.sum(Position.market_value).label("total_market_value"),
                     func.sum(Position.unrealized_pnl).label("total_unrealized_pnl"),
                     func.sum(Position.realized_pnl).label("total_realized_pnl"),
                 ).where(Position.status == PositionStatus.ACTIVE)
 
                 result = session.exec(active_statement).first()
+                if not result:
+                    return {
+                        "total_positions": 0,
+                        "total_market_value": 0.0,
+                        "total_unrealized_pnl": 0.0,
+                        "total_realized_pnl": 0.0,
+                        "total_pnl": 0.0,
+                        "long_positions": {"count": 0, "market_value": 0.0},
+                        "short_positions": {"count": 0, "market_value": 0.0},
+                    }
 
                 # 获取多头和空头统计
                 long_statement = select(
-                    func.count(Position.id).label("long_count"),
+                    func.count().label("long_count"),
                     func.sum(Position.market_value).label("long_market_value"),
                 ).where(
                     and_(
@@ -328,7 +338,7 @@ class PositionRepo:
                 long_result = session.exec(long_statement).first()
 
                 short_statement = select(
-                    func.count(Position.id).label("short_count"),
+                    func.count().label("short_count"),
                     func.sum(Position.market_value).label("short_market_value"),
                 ).where(
                     and_(
@@ -356,16 +366,16 @@ class PositionRepo:
                     ),
                     "total_pnl": float(total_pnl),
                     "long_positions": {
-                        "count": long_result.long_count or 0,
+                        "count": long_result.long_count if long_result else 0,
                         "market_value": float(
                             long_result.long_market_value or Decimal("0")
-                        ),
+                        ) if long_result else 0.0,
                     },
                     "short_positions": {
-                        "count": short_result.short_count or 0,
+                        "count": short_result.short_count if short_result else 0,
                         "market_value": float(
                             short_result.short_market_value or Decimal("0")
-                        ),
+                        ) if short_result else 0.0,
                     },
                 }
 

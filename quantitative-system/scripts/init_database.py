@@ -44,8 +44,9 @@ def check_database():
         logger.info("检查数据库连接...")
 
         # 测试数据库连接
+        from sqlalchemy import text
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
             logger.info("数据库连接正常")
             return True
 
