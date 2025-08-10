@@ -22,6 +22,8 @@
 
 * [ ] 0.1 建立项目骨架与依赖管理
 
+  * 使用 UV 初始化项目环境
+  
   * 创建 Python FastAPI 项目骨架、目录与模块
 
   * 初始化依赖：fastapi, uvicorn, sqlmodel/sqlalchemy, pydantic-settings, httpx, redis, backtrader, pandas, numpy, apscheduler, loguru

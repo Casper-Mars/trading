@@ -143,6 +143,10 @@ data-collection-system/
 
 # 量化系统
 
+## 项目环境
+
+使用 UV 管理项目的Python运行环境。
+
 ## 项目结构
 
 ```
