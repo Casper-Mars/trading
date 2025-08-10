@@ -74,7 +74,7 @@
 
 ## 阶段2：数据访问层（Repositories）（M0）
 
-* [ ] 2.1 PositionRepo
+* [x] 2.1 PositionRepo
 
   * 实现增删改查、聚合（组合市值/盈亏）
 
