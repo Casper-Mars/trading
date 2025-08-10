@@ -98,6 +98,7 @@ ignore = [
     "T201",  # print found
     "S104",  # possible binding to all interfaces
     "RUF002", # ambiguous unicode character in docstring
+    "RUF003", # ambiguous unicode character in comments (支持中文标点)
 ]
 
 [tool.ruff.lint.per-file-ignores]

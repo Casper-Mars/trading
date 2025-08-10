@@ -201,7 +201,7 @@ class BacktestRepo:
                         col(BacktestResult.strategy_type) == strategy_type
                     )
                 if symbol:
-                    # symbols是list[str]类型, 需要使用JSON查询
+                    # symbols是list[str]类型，需要使用JSON查询
                     conditions.append(
                         func.json_contains(col(BacktestResult.symbols), f'"{symbol}"')
                     )
