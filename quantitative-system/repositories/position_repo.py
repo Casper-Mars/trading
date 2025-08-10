@@ -50,17 +50,16 @@ class PositionRepo:
                 # 创建持仓对象
                 position = Position(
                     symbol=position_data.symbol,
+                    name=position_data.name,
                     position_type=position_data.position_type,
                     quantity=position_data.quantity,
-                    avg_price=position_data.avg_price,
-                    current_price=position_data.current_price,
-                    market_value=position_data.quantity * position_data.current_price,
-                    unrealized_pnl=(
-                        position_data.quantity
-                        * (position_data.current_price - position_data.avg_price)
-                    ),
-                    realized_pnl=position_data.realized_pnl or Decimal("0"),
-                    status=position_data.status or PositionStatus.ACTIVE,
+                    avg_price=position_data.avg_cost,
+                    current_price=position_data.avg_cost,  # 初始设为成本价
+                    market_value=position_data.quantity * position_data.avg_cost,
+                    unrealized_pnl=Decimal("0"),  # 初始无浮动盈亏
+                    realized_pnl=Decimal("0"),
+                    status=PositionStatus.ACTIVE,
+                    open_date=position_data.open_date,
                     notes=position_data.notes,
                 )
 
