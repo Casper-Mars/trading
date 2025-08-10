@@ -204,9 +204,53 @@
 
   * _Requirements: 3.4-3.14, 5.1_
 
-## 阶段4：API接口层（FastAPI）（M1）
 
-* [ ] 4.1 持仓管理接口
+
+## 阶段4：业务编排层（Business Orchestration）（M1）
+
+* [ ] 4.1 BaseOrchestrator 基础编排器
+
+  * 实现编排器基类：统一的错误处理、日志记录、事务管理接口
+
+  * 定义编排流程的通用模式：前置检查→服务调用→结果聚合→异常回滚
+
+  * 提供编排上下文管理和跨服务的数据传递机制
+
+  * _Requirements: 5.5, 5.6_
+
+* [ ] 4.2 PlanOrchestrator 方案生成编排器
+
+  * 编排完整的方案生成流程：数据获取→回测分析→AI分析→方案格式化→结果保存
+
+  * 协调 DataService、BacktestService、AIService、PlanService 完成端到端业务
+
+  * 处理各阶段的失败降级：数据缺失→使用历史数据，AI失败→规则引擎兜底
+
+  * _Requirements: 3.1-3.16, 4.1-4.8_
+
+* [ ] 4.3 BacktestOrchestrator 回测分析编排器
+
+  * 编排回测任务执行流程：策略配置验证→数据准备→回测执行→结果分析→报告生成
+
+  * 支持批量回测和并行执行优化，管理回测任务的生命周期
+
+  * 集成策略注册器，支持动态策略选择和参数优化
+
+  * _Requirements: 2.6-2.14, 5.3_
+
+* [ ] 4.4 PositionOrchestrator 持仓管理编排器
+
+  * 编排持仓相关的复合操作：持仓更新→价格刷新→盈亏计算→风险评估
+
+  * 协调 PositionService 和 DataService 完成持仓数据的实时同步
+
+  * 支持批量持仓操作和组合指标计算的事务一致性
+
+  * _Requirements: 1.1-1.7, 5.1, 5.7_
+
+## 阶段5：API接口层（FastAPI）（M1）
+
+* [ ] 5.1 持仓管理接口
 
   * GET/POST/PUT/DELETE /api/v1/positions
 
@@ -214,7 +258,7 @@
 
   * _Requirements: 5.1-5.4, 5.7_
 
-* [ ] 4.2 回测接口
+* [ ] 5.2 回测接口
 
   * POST /api/v1/backtest/run，GET /api/v1/backtest/results/{id}，GET /api/v1/backtest/strategies
 
@@ -222,13 +266,13 @@
 
   * _Requirements: 2.8-2.14, 5.3, 5.6_
 
-* [ ] 4.3 方案接口
+* [ ] 5.3 方案接口
 
   * GET /api/v1/plans/today，GET /api/v1/plans/history?days=N，POST /api/v1/plans/generate
 
   * _Requirements: 3.7, 3.14, 5.1, 5.3_
 
-* [ ] 4.4 系统状态接口
+* [ ] 5.4 系统状态接口
 
   * GET /api/v1/system/health, GET /api/v1/system/stats
 
@@ -236,9 +280,9 @@
 
   * _Requirements: 5.4, 4.6-4.7_
 
-## 阶段5：定时调度（APScheduler）（M2）
+## 阶段6：定时调度（APScheduler）（M2）
 
-* [ ] 5.1 定时任务编排（按交易日）
+* [ ] 6.1 定时任务编排（按交易日）
 
   * 15:30 数据更新 → 16:00 回测 → 18:00 AI分析 → 19:00 方案生成
 
@@ -246,15 +290,15 @@
 
   * _Requirements: 4.1-4.8_
 
-* [ ] 5.2 失败恢复与幂等
+* [ ] 6.2 失败恢复与幂等
 
   * 失败记录/断点续跑/重试上限（数据获取重试3次）
 
   * _Requirements: 2.3, 4.6-4.7_
 
-## 阶段6：质量保障与非功能（M2-M3）
+## 阶段7：质量保障与非功能（M2-M3）
 
-* [ ] 6.1 单元测试
+* [ ] 7.1 单元测试
 
   * Repos/Services/API 覆盖；Mock 外部依赖（数据采集、阿里百炼）
 
@@ -262,7 +306,7 @@
 
   * _Requirements: 2.9-2.13, 3.3, 3.7, 5.6_
 
-* [ ] 6.2 集成与端到端测试
+* [ ] 7.2 集成与端到端测试
 
   * 从“持仓+数据→回测→AI→Markdown方案”的完整链路
 
@@ -270,7 +314,7 @@
 
   * _Requirements: 3.3, 3.16, 4.6_
 
-* [ ] 6.3 性能与稳定性基线
+* [ ] 7.3 性能与稳定性基线
 
   * API <3s，AI调用<10s，数据获取<5min，回测批量<30min（并行与缓存）
 
@@ -281,10 +325,11 @@
 ## 交付顺序（MVP优先）
 
 1. 阶段0→阶段1→阶段2（完成数据面）
-2. 阶段3（Position/Data/Backtest/AI/Plan 服务）
-3. 阶段4（API）
-4. 阶段5（调度）
-5. 阶段6（测试与性能）
+2. 阶段3（Services：Position/Data/Backtest/AI/Plan 服务）
+3. 阶段4（业务编排：Base/Plan/Backtest/Position 编排器）
+4. 阶段5（API）
+5. 阶段6（调度）
+6. 阶段7（测试与性能）
 
 ## 风险与应对
 
@@ -292,5 +337,4 @@
 
 * 回测耗时：并行/缓存、策略分批、指标采集优化
 
-* AI不确定性：提示词工程+结构化解析+置信度评估，失败回退到历史方案
-
+* AI不确定：提示词工程+结构化解析+置信度评估，失败回退到历史方案
