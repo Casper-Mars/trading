@@ -92,7 +92,7 @@
 
   * _Requirements: 3.14, 5.3_
 
-* [ ] 2.4 External/DataCollection Client
+*- [x] 2.4 External/DataCollection Client
 
   * 封装数据采集系统HTTP客户端（重试、超时、熔断占位）
 

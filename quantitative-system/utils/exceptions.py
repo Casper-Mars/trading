@@ -90,6 +90,11 @@ class ResourceNotFoundError(QuantitativeSystemError):
     pass
 
 
+class NotFoundError(QuantitativeSystemError):
+    """未找到错误（通用）"""
+    pass
+
+
 class ResourceConflictError(QuantitativeSystemError):
     """资源冲突错误"""
     pass

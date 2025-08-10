@@ -2,14 +2,16 @@ openapi: 3.0.3
 info:
   title: 数据采集系统 API
   description: |
-    数据采集系统提供股票、财务、宏观经济、市场情绪等金融数据的采集和查询服务。
+    数据采集系统提供股票、行情、财务、新闻等金融数据的采集、查询和管理功能。
     
     ## 功能特性
-    - 支持多种数据源的数据采集（Tushare、新闻网站等）
-    - 提供实时和历史数据采集
-    - 支持批量数据处理
-    - 提供数据查询和分析接口
-    - 支持任务调度和监控
+    - 股票基础数据查询
+    - 实时和历史行情数据
+    - 财务数据查询
+    - 新闻数据采集和查询
+    - 宏观经济数据
+    - 任务管理和调度
+    - 数据采集控制
     
     ## 认证方式
     目前系统暂未启用认证，所有接口均可直接访问。
@@ -17,138 +19,963 @@ info:
   version: 1.0.0
   contact:
     name: 数据采集系统开发团队
-    email: dev@datacollection.com
+    email: dev@trading-system.com
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
 
 servers:
-  - url: http://localhost:8080/api/v1
-    description: 开发环境
-  - url: https://api.datacollection.com/v1
+  - url: http://localhost:8080
+    description: 本地开发环境
+  - url: https://api.trading-system.com
     description: 生产环境
 
 paths:
-  # 健康检查
   /health:
     get:
       tags:
         - 系统监控
       summary: 健康检查
       description: 检查系统运行状态
-      operationId: healthCheck
       responses:
         '200':
           description: 系统正常运行
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
-              example:
-                code: 200
-                message: "success"
-                data:
-                  status: "ok"
-                timestamp: "2024-01-15T10:30:00Z"
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  message:
+                    type: string
+                    example: "Data collection system is running"
 
-  # 数据采集相关接口
-  /collection/stock/basic:
-    post:
+  /api/v1/data/stocks:
+    get:
       tags:
-        - 数据采集
-      summary: 采集股票基础数据
-      description: 采集所有股票的基础信息，包括股票代码、名称、上市日期等
-      operationId: collectStockBasicData
-      responses:
-        '200':
-          description: 采集任务启动成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CollectionResponse'
-        '500':
-          description: 服务器内部错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /collection/stock/daily:
-    post:
-      tags:
-        - 数据采集
-      summary: 采集日线行情数据
-      description: 采集指定交易日的股票日线行情数据
-      operationId: collectDailyMarketData
+        - 股票数据查询
+      summary: 获取股票列表
+      description: 分页查询股票基础信息，支持按交易所、行业、状态等条件筛选
       parameters:
-        - name: trade_date
+        - name: symbol
           in: query
-          description: 交易日期，格式：YYYYMMDD，默认为今日
-          required: false
+          description: 股票代码
           schema:
             type: string
-            pattern: '^\d{8}$'
-            example: "20240115"
+            example: "000001"
+        - name: exchange
+          in: query
+          description: 交易所
+          schema:
+            type: string
+            enum: ["SSE", "SZSE"]
+            example: "SSE"
+        - name: industry
+          in: query
+          description: 行业
+          schema:
+            type: string
+            example: "银行"
+        - name: status
+          in: query
+          description: 股票状态
+          schema:
+            type: string
+            enum: ["0", "1", "2"]
+            example: "1"
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          description: 每页数量
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
       responses:
         '200':
-          description: 采集任务启动成功
+          description: 查询成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CollectionResponse'
+                $ref: '#/components/schemas/PageResponse'
+              examples:
+                success:
+                  value:
+                    code: 0
+                    message: "success"
+                    data:
+                      - id: 1
+                        symbol: "000001"
+                        name: "平安银行"
+                        exchange: "SZSE"
+                        industry: "银行"
+                        sector: "金融"
+                        list_date: "1991-04-03"
+                        status: 1
+                        created_at: "2024-01-01T00:00:00Z"
+                        updated_at: "2024-01-01T00:00:00Z"
+                    pagination:
+                      page: 1
+                      page_size: 20
+                      total: 5000
+                      pages: 250
+                    timestamp: 1640995200
+                    request_id: "req-123456"
         '400':
-          description: 请求参数错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/BadRequest'
         '500':
-          description: 服务器内部错误
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/data/stocks/{symbol}:
+    get:
+      tags:
+        - 股票数据查询
+      summary: 获取指定股票信息
+      description: 根据股票代码获取详细的股票信息
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          description: 股票代码
+          schema:
+            type: string
+            example: "000001"
+      responses:
+        '200':
+          description: 查询成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Stock'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
-  /collection/stock/history:
+  /api/v1/data/market:
+    get:
+      tags:
+        - 行情数据查询
+      summary: 获取行情数据
+      description: 分页查询指定股票的历史行情数据
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          description: 股票代码
+          schema:
+            type: string
+            example: "000001"
+        - name: start_date
+          in: query
+          description: 开始日期
+          schema:
+            type: string
+            format: date
+            example: "2024-01-01"
+        - name: end_date
+          in: query
+          description: 结束日期
+          schema:
+            type: string
+            format: date
+            example: "2024-12-31"
+        - name: period
+          in: query
+          description: 数据周期
+          schema:
+            type: string
+            enum: ["1m", "5m", "15m", "30m", "1h", "1d"]
+            default: "1d"
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          description: 每页数量
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/MarketData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/data/market/{symbol}/latest:
+    get:
+      tags:
+        - 行情数据查询
+      summary: 获取最新行情数据
+      description: 获取指定股票的最新行情数据
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          description: 股票代码
+          schema:
+            type: string
+            example: "000001"
+        - name: period
+          in: query
+          description: 数据周期
+          schema:
+            type: string
+            enum: ["1m", "5m", "15m", "30m", "1h", "1d"]
+            default: "1d"
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/MarketData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/data/financial:
+    get:
+      tags:
+        - 财务数据查询
+      summary: 获取财务数据
+      description: 分页查询指定股票的财务数据
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          description: 股票代码
+          schema:
+            type: string
+            example: "000001"
+        - name: start_date
+          in: query
+          description: 开始日期
+          schema:
+            type: string
+            format: date
+            example: "2024-01-01"
+        - name: end_date
+          in: query
+          description: 结束日期
+          schema:
+            type: string
+            format: date
+            example: "2024-12-31"
+        - name: report_type
+          in: query
+          description: 报告类型
+          schema:
+            type: string
+            enum: ["Q1", "Q2", "Q3", "A"]
+            example: "A"
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          description: 每页数量
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/FinancialData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/data/financial/{symbol}/latest:
+    get:
+      tags:
+        - 财务数据查询
+      summary: 获取最新财务数据
+      description: 获取指定股票的最新财务数据
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          description: 股票代码
+          schema:
+            type: string
+            example: "000001"
+        - name: report_type
+          in: query
+          description: 报告类型
+          schema:
+            type: string
+            enum: ["Q1", "Q2", "Q3", "A"]
+            example: "A"
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/FinancialData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/data/news:
+    get:
+      tags:
+        - 新闻数据查询
+      summary: 获取新闻列表
+      description: 分页查询新闻数据，支持按关键词、分类、相关股票等条件筛选
+      parameters:
+        - name: keyword
+          in: query
+          description: 关键词搜索
+          schema:
+            type: string
+            example: "平安银行"
+        - name: category
+          in: query
+          description: 新闻分类
+          schema:
+            type: string
+            example: "公司新闻"
+        - name: related_stock
+          in: query
+          description: 相关股票代码
+          schema:
+            type: string
+            example: "000001"
+        - name: sentiment
+          in: query
+          description: 情感倾向
+          schema:
+            type: integer
+            enum: [-1, 0, 1]
+            example: 1
+        - name: importance
+          in: query
+          description: 重要程度
+          schema:
+            type: integer
+            enum: [1, 2, 3, 4, 5]
+            example: 4
+        - name: start_time
+          in: query
+          description: 开始时间
+          schema:
+            type: string
+            format: date-time
+            example: "2024-01-01T00:00:00Z"
+        - name: end_time
+          in: query
+          description: 结束时间
+          schema:
+            type: string
+            format: date-time
+            example: "2024-12-31T23:59:59Z"
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          description: 每页数量
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/NewsData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/data/news/{id}:
+    get:
+      tags:
+        - 新闻数据查询
+      summary: 获取新闻详情
+      description: 根据新闻ID获取详细的新闻信息
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 新闻ID
+          schema:
+            type: integer
+            format: int64
+            example: 12345
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/NewsData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/data/news/hot:
+    get:
+      tags:
+        - 新闻数据查询
+      summary: 获取热门新闻
+      description: 获取指定时间范围内的热门新闻
+      parameters:
+        - name: limit
+          in: query
+          description: 返回数量限制
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: hours
+          in: query
+          description: 时间范围（小时）
+          schema:
+            type: integer
+            minimum: 1
+            default: 24
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/NewsData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/data/news/latest:
+    get:
+      tags:
+        - 新闻数据查询
+      summary: 获取最新新闻
+      description: 获取最新发布的新闻
+      parameters:
+        - name: limit
+          in: query
+          description: 返回数量限制
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/NewsData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/data/macro:
+    get:
+      tags:
+        - 宏观数据查询
+      summary: 获取宏观经济数据
+      description: 分页查询宏观经济指标数据
+      parameters:
+        - name: indicator_code
+          in: query
+          description: 指标代码
+          schema:
+            type: string
+            example: "GDP"
+        - name: period_type
+          in: query
+          description: 周期类型
+          schema:
+            type: string
+            enum: ["月度", "季度", "年度"]
+            example: "季度"
+        - name: start_date
+          in: query
+          description: 开始日期
+          schema:
+            type: string
+            format: date
+            example: "2024-01-01"
+        - name: end_date
+          in: query
+          description: 结束日期
+          schema:
+            type: string
+            format: date
+            example: "2024-12-31"
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          description: 每页数量
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/MacroData'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/tasks:
+    get:
+      tags:
+        - 任务管理
+      summary: 获取任务列表
+      description: 分页查询数据采集任务列表
+      parameters:
+        - name: task_type
+          in: query
+          description: 任务类型
+          schema:
+            type: string
+            enum: ["stock_data", "market_data", "financial_data", "news_data", "macro_data", "data_cleanup", "data_backup"]
+        - name: status
+          in: query
+          description: 任务状态
+          schema:
+            type: integer
+            enum: [0, 1, 2, 3]
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          description: 每页数量
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/DataTask'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
     post:
       tags:
-        - 数据采集
-      summary: 采集股票历史数据
-      description: 采集指定股票在指定时间范围内的历史行情数据
-      operationId: collectStockHistoryData
+        - 任务管理
+      summary: 创建任务
+      description: 创建新的数据采集任务
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/StockHistoryRequest'
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '200':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/DataTask'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/tasks/{id}:
+    put:
+      tags:
+        - 任务管理
+      summary: 更新任务
+      description: 更新指定的数据采集任务
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 任务ID
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/DataTask'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags:
+        - 任务管理
+      summary: 删除任务
+      description: 删除指定的数据采集任务
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 任务ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/tasks/{id}/run:
+    post:
+      tags:
+        - 任务管理
+      summary: 执行任务
+      description: 立即执行指定的数据采集任务
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 任务ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 任务启动成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/tasks/{id}/status:
+    get:
+      tags:
+        - 任务管理
+      summary: 获取任务状态
+      description: 获取指定任务的执行状态
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 任务ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TaskStatus'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/collection/stock/basic:
+    post:
+      tags:
+        - 数据采集
+      summary: 采集股票基础数据
+      description: 启动股票基础信息采集任务
       responses:
         '200':
           description: 采集任务启动成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CollectionResponse'
-        '400':
-          description: 请求参数错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          message:
+                            type: string
+                            example: "股票基础数据采集任务已启动"
+                          timestamp:
+                            type: string
+                            format: date-time
         '500':
-          description: 服务器内部错误
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/collection/stock/daily:
+    post:
+      tags:
+        - 数据采集
+      summary: 采集日线行情数据
+      description: 采集指定交易日的日线行情数据
+      parameters:
+        - name: trade_date
+          in: query
+          description: 交易日期（格式：YYYYMMDD）
+          schema:
+            type: string
+            pattern: '^\d{8}$'
+            example: "20240101"
+      responses:
+        '200':
+          description: 采集任务启动成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          message:
+                            type: string
+                            example: "日线行情数据采集任务已启动"
+                          trade_date:
+                            type: string
+                            example: "20240101"
+                          timestamp:
+                            type: string
+                            format: date-time
+        '500':
+          $ref: '#/components/responses/InternalServerError'
 
-  /collection/stock/batch:
+  /api/v1/collection/stock/history:
+    post:
+      tags:
+        - 数据采集
+      summary: 采集股票历史数据
+      description: 采集指定股票在指定时间范围内的历史行情数据
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HistoryDataRequest'
+      responses:
+        '200':
+          description: 采集任务启动成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          message:
+                            type: string
+                            example: "股票历史数据采集任务已启动"
+                          symbol:
+                            type: string
+                            example: "000001"
+                          start_date:
+                            type: string
+                            example: "20240101"
+                          end_date:
+                            type: string
+                            example: "20241231"
+                          timestamp:
+                            type: string
+                            format: date-time
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/collection/stock/batch:
     post:
       tags:
         - 数据采集
       summary: 批量采集股票数据
-      description: 批量采集多只股票在指定时间范围内的数据
-      operationId: batchCollectStockData
+      description: 批量采集多只股票的数据
       requestBody:
         required: true
         content:
@@ -161,48 +988,34 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CollectionResponse'
+                $ref: '#/components/schemas/Response'
         '400':
-          description: 请求参数错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/BadRequest'
         '500':
-          description: 服务器内部错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
-  /collection/stock/sync:
+  /api/v1/collection/stock/sync:
     post:
       tags:
         - 数据采集
       summary: 同步股票列表
       description: 同步最新的股票列表信息
-      operationId: syncStockList
       responses:
         '200':
           description: 同步任务启动成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CollectionResponse'
+                $ref: '#/components/schemas/Response'
         '500':
-          description: 服务器内部错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
-  /collection/stock/realtime:
+  /api/v1/collection/stock/realtime:
     post:
       tags:
         - 数据采集
-      summary: 采集实时行情数据
-      description: 采集指定股票的实时行情数据
-      operationId: collectRealtimeData
+      summary: 采集实时数据
+      description: 采集实时行情数据
       requestBody:
         required: true
         content:
@@ -215,27 +1028,18 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CollectionResponse'
+                $ref: '#/components/schemas/Response'
         '400':
-          description: 请求参数错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/BadRequest'
         '500':
-          description: 服务器内部错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
-  /collection/financial:
+  /api/v1/collection/financial:
     post:
       tags:
         - 数据采集
       summary: 采集财务数据
       description: 采集指定股票的财务数据
-      operationId: collectFinancialData
       requestBody:
         required: true
         content:
@@ -248,27 +1052,18 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CollectionResponse'
+                $ref: '#/components/schemas/Response'
         '400':
-          description: 请求参数错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/BadRequest'
         '500':
-          description: 服务器内部错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
-  /collection/macro:
+  /api/v1/collection/macro:
     post:
       tags:
         - 数据采集
-      summary: 采集宏观经济数据
-      description: 采集指定时间范围内的宏观经济数据
-      operationId: collectMacroData
+      summary: 采集宏观数据
+      description: 采集宏观经济数据
       requestBody:
         required: true
         content:
@@ -281,932 +1076,281 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CollectionResponse'
+                $ref: '#/components/schemas/Response'
         '400':
-          description: 请求参数错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/BadRequest'
         '500':
-          description: 服务器内部错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
-  /collection/sentiment/money-flow:
+  /api/v1/collection/sentiment/money-flow:
     post:
       tags:
-        - 市场情绪数据采集
+        - 情感数据采集
       summary: 采集资金流向数据
-      description: 采集指定股票的资金流向数据
-      operationId: collectMoneyFlowData
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MoneyFlowRequest'
+      description: 采集市场资金流向数据
       responses:
         '200':
           description: 资金流向数据采集任务启动成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CollectionResponse'
-        '400':
-          description: 请求参数错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/Response'
         '500':
-          description: 服务器内部错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
-  /collection/sentiment/northbound-fund:
+  /api/v1/collection/sentiment/northbound-fund:
     post:
       tags:
-        - 市场情绪数据采集
+        - 情感数据采集
       summary: 采集北向资金数据
-      description: 采集指定交易日的北向资金数据
-      operationId: collectNorthboundFundData
-      parameters:
-        - name: trade_date
-          in: query
-          description: 交易日期，格式：YYYYMMDD，默认为今日
-          required: false
-          schema:
-            type: string
-            pattern: '^\d{8}$'
-            example: "20240115"
+      description: 采集北向资金流入流出数据
       responses:
         '200':
           description: 北向资金数据采集任务启动成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CollectionResponse'
-        '400':
-          description: 请求参数错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/Response'
         '500':
-          description: 服务器内部错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
-  /collection/sentiment/northbound-top-stocks:
+  /api/v1/collection/sentiment/northbound-top-stocks:
     post:
       tags:
-        - 市场情绪数据采集
-      summary: 采集北向资金十大成交股数据
+        - 情感数据采集
+      summary: 采集北向资金十大成交股
       description: 采集北向资金十大成交股数据
-      operationId: collectNorthboundTopStocksData
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/NorthboundTopStocksRequest'
-      parameters:
-        - name: trade_date
-          in: query
-          description: 交易日期，格式：YYYYMMDD，默认为今日
-          required: false
-          schema:
-            type: string
-            pattern: '^\d{8}$'
-            example: "20240115"
-        - name: market
-          in: query
-          description: 市场代码，默认为全市场
-          required: false
-          schema:
-            type: string
-            example: "SH"
       responses:
         '200':
           description: 北向资金十大成交股数据采集任务启动成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CollectionResponse'
-        '400':
-          description: 请求参数错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/Response'
         '500':
-          description: 服务器内部错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
-  /collection/sentiment/margin-trading:
+  /api/v1/collection/sentiment/margin-trading:
     post:
       tags:
-        - 市场情绪数据采集
+        - 情感数据采集
       summary: 采集融资融券数据
-      description: 采集融资融券数据
-      operationId: collectMarginTradingData
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MarginTradingRequest'
-      parameters:
-        - name: trade_date
-          in: query
-          description: 交易日期，格式：YYYYMMDD，默认为今日
-          required: false
-          schema:
-            type: string
-            pattern: '^\d{8}$'
-            example: "20240115"
-        - name: exchange
-          in: query
-          description: 交易所代码，默认为全交易所
-          required: false
-          schema:
-            type: string
-            example: "SSE"
+      description: 采集融资融券交易数据
       responses:
         '200':
           description: 融资融券数据采集任务启动成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CollectionResponse'
-        '400':
-          description: 请求参数错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/Response'
         '500':
-          description: 服务器内部错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
-  /collection/sentiment/etf-basic:
+  /api/v1/collection/sentiment/etf-basic:
     post:
       tags:
-        - 市场情绪数据采集
+        - 情感数据采集
       summary: 采集ETF基础数据
-      description: 采集ETF基础数据
-      operationId: collectETFBasicData
-      parameters:
-        - name: market
-          in: query
-          description: 市场代码，默认为全市场
-          required: false
-          schema:
-            type: string
-            example: "SH"
+      description: 采集ETF基础信息数据
       responses:
         '200':
           description: ETF基础数据采集任务启动成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CollectionResponse'
-        '400':
-          description: 请求参数错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/Response'
         '500':
-          description: 服务器内部错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
-  /collection/sentiment/all:
+  /api/v1/collection/sentiment/all:
     post:
       tags:
-        - 市场情绪数据采集
-      summary: 采集所有市场情绪数据
-      description: 采集所有市场情绪和资金流向数据
-      operationId: collectAllSentimentData
-      parameters:
-        - name: trade_date
-          in: query
-          description: 交易日期，格式：YYYYMMDD，默认为今日
-          required: false
-          schema:
-            type: string
-            pattern: '^\d{8}$'
-            example: "20240115"
+        - 情感数据采集
+      summary: 采集所有情感数据
+      description: 一次性采集所有市场情感相关数据
       responses:
         '200':
-          description: 所有市场情绪数据采集任务启动成功
+          description: 所有情感数据采集任务启动成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CollectionResponse'
-        '400':
-          description: 请求参数错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/Response'
         '500':
-          description: 服务器内部错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
-  /collection/sentiment/active-stocks-money-flow:
+  /api/v1/collection/sentiment/active-stocks-money-flow:
     post:
       tags:
-        - 市场情绪数据采集
-      summary: 采集活跃股票资金流向数据
-      description: 采集指定活跃股票的资金流向数据
-      operationId: collectActiveStocksMoneyFlow
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ActiveStocksMoneyFlowRequest'
+        - 情感数据采集
+      summary: 采集活跃股票资金流向
+      description: 采集活跃股票的资金流向数据
       responses:
         '200':
           description: 活跃股票资金流向数据采集任务启动成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CollectionResponse'
-        '400':
-          description: 请求参数错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/Response'
         '500':
-          description: 服务器内部错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
-  /collection/today:
+  /api/v1/collection/today:
     post:
       tags:
         - 数据采集
-      summary: 采集今日综合数据
-      description: 执行今日数据采集综合任务，包括行情、宏观、情绪等数据
-      operationId: collectTodayData
+      summary: 采集今日数据
+      description: 一次性采集今日所有相关数据
       responses:
         '200':
           description: 今日数据采集任务启动成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CollectionResponse'
+                $ref: '#/components/schemas/Response'
         '500':
-          description: 服务器内部错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
-  /collection/status:
+  /api/v1/collection/status:
     get:
       tags:
         - 数据采集
       summary: 获取采集器状态
-      description: 获取数据采集器的运行状态信息
-      operationId: getCollectorStatus
+      description: 获取数据采集器的运行状态
       responses:
         '200':
-          description: 成功获取采集器状态
+          description: 查询成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StatusResponse'
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CollectorStatus'
         '500':
-          description: 服务器内部错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
-  /collection/sentiment/status:
+  /api/v1/collection/sentiment/status:
     get:
       tags:
-        - 市场情绪数据采集
-      summary: 获取市场情绪采集器状态
-      description: 获取市场情绪数据采集器的运行状态信息
-      operationId: getSentimentCollectorStatus
+        - 情感数据采集
+      summary: 获取情感数据采集器状态
+      description: 获取情感数据采集器的运行状态
       responses:
         '200':
-          description: 成功获取市场情绪采集器状态
+          description: 查询成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StatusResponse'
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/SentimentCollectorStatus'
         '500':
-          description: 服务器内部错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
-  # 数据查询相关接口
-  /stocks:
+  /api/v1/monitor/stats:
     get:
       tags:
-        - 数据查询
-      summary: 查询股票列表
-      description: 分页查询股票基础信息
-      operationId: getStocks
-      parameters:
-        - name: page
-          in: query
-          description: 页码，从1开始
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: page_size
-          in: query
-          description: 每页数量
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 20
-        - name: symbol
-          in: query
-          description: 股票代码（模糊匹配）
-          required: false
-          schema:
-            type: string
-        - name: name
-          in: query
-          description: 股票名称（模糊匹配）
-          required: false
-          schema:
-            type: string
-        - name: market
-          in: query
-          description: 市场代码
-          required: false
-          schema:
-            type: string
-            enum: ["SH", "SZ"]
+        - 系统监控
+      summary: 获取系统统计信息
+      description: 获取系统运行统计信息
       responses:
         '200':
-          description: 成功获取股票列表
+          description: 查询成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StockListResponse'
-        '400':
-          description: 请求参数错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/SystemStats'
         '500':
-          description: 服务器内部错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
-  /market-data:
+  /api/v1/monitor/metrics:
     get:
       tags:
-        - 数据查询
-      summary: 查询行情数据
-      description: 分页查询股票行情数据
-      operationId: getMarketData
-      parameters:
-        - name: page
-          in: query
-          description: 页码，从1开始
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: page_size
-          in: query
-          description: 每页数量
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 100
-        - name: symbol
-          in: query
-          description: 股票代码
-          required: false
-          schema:
-            type: string
-        - name: start_date
-          in: query
-          description: 开始日期，格式：YYYY-MM-DD
-          required: false
-          schema:
-            type: string
-            format: date
-        - name: end_date
-          in: query
-          description: 结束日期，格式：YYYY-MM-DD
-          required: false
-          schema:
-            type: string
-            format: date
+        - 系统监控
+      summary: 获取系统指标
+      description: 获取系统性能指标
       responses:
         '200':
-          description: 成功获取行情数据
+          description: 查询成功
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MarketDataListResponse'
-        '400':
-          description: 请求参数错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                allOf:
+                  - $ref: '#/components/schemas/Response'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/SystemMetrics'
         '500':
-          description: 服务器内部错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/InternalServerError'
 
 components:
   schemas:
-    # 基础响应结构
-    SuccessResponse:
+    Response:
       type: object
       properties:
         code:
           type: integer
-          description: 响应状态码
-          example: 200
+          description: 响应码，0表示成功
+          example: 0
         message:
           type: string
           description: 响应消息
           example: "success"
         data:
-          type: object
           description: 响应数据
         timestamp:
+          type: integer
+          format: int64
+          description: 时间戳
+          example: 1640995200
+        request_id:
           type: string
-          format: date-time
-          description: 响应时间戳
-          example: "2024-01-15T10:30:00Z"
+          description: 请求ID
+          example: "req-123456"
       required:
         - code
         - message
         - timestamp
 
-    ErrorResponse:
+    PageResponse:
       type: object
       properties:
         code:
           type: integer
-          description: 错误状态码
-          example: 500
-        message:
-          type: string
-          description: 错误消息
-          example: "Internal Server Error"
-        error:
-          type: string
-          description: 详细错误信息
-          example: "Database connection failed"
-        timestamp:
-          type: string
-          format: date-time
-          description: 响应时间戳
-          example: "2024-01-15T10:30:00Z"
-      required:
-        - code
-        - message
-        - timestamp
-
-    CollectionResponse:
-      type: object
-      properties:
-        code:
-          type: integer
-          description: 响应状态码
-          example: 200
+          description: 响应码，0表示成功
+          example: 0
         message:
           type: string
           description: 响应消息
           example: "success"
         data:
-          type: object
-          properties:
-            message:
-              type: string
-              description: 任务启动消息
-              example: "数据采集任务已启动"
-            timestamp:
-              type: string
-              format: date-time
-              description: 任务启动时间
-              example: "2024-01-15T10:30:00Z"
-        timestamp:
-          type: string
-          format: date-time
-          description: 响应时间戳
-          example: "2024-01-15T10:30:00Z"
-      required:
-        - code
-        - message
-        - data
-        - timestamp
-
-    StatusResponse:
-      type: object
-      properties:
-        code:
-          type: integer
-          description: 响应状态码
-          example: 200
-        message:
-          type: string
-          description: 响应消息
-          example: "success"
-        data:
-          type: object
-          properties:
-            status:
-              type: object
-              description: 采集器状态信息
-              properties:
-                is_running:
-                  type: boolean
-                  description: 是否正在运行
-                  example: true
-                last_run_time:
-                  type: string
-                  format: date-time
-                  description: 最后运行时间
-                  example: "2024-01-15T10:00:00Z"
-                total_requests:
-                  type: integer
-                  description: 总请求数
-                  example: 1000
-                success_rate:
-                  type: number
-                  format: float
-                  description: 成功率
-                  example: 0.95
-            timestamp:
-              type: string
-              format: date-time
-              description: 状态查询时间
-              example: "2024-01-15T10:30:00Z"
-        timestamp:
-          type: string
-          format: date-time
-          description: 响应时间戳
-          example: "2024-01-15T10:30:00Z"
-      required:
-        - code
-        - message
-        - data
-        - timestamp
-
-    # 请求参数结构
-    StockHistoryRequest:
-      type: object
-      properties:
-        symbol:
-          type: string
-          description: 股票代码
-          example: "000001.SZ"
-        start_date:
-          type: string
-          pattern: '^\d{8}$'
-          description: 开始日期，格式：YYYYMMDD
-          example: "20240101"
-        end_date:
-          type: string
-          pattern: '^\d{8}$'
-          description: 结束日期，格式：YYYYMMDD
-          example: "20240115"
-      required:
-        - symbol
-        - start_date
-        - end_date
-
-    BatchCollectRequest:
-      type: object
-      properties:
-        symbols:
-          type: array
-          items:
-            type: string
-          description: 股票代码列表
-          example: ["000001.SZ", "000002.SZ", "600000.SH"]
-        start_date:
-          type: string
-          pattern: '^\d{8}$'
-          description: 开始日期，格式：YYYYMMDD
-          example: "20240101"
-        end_date:
-          type: string
-          pattern: '^\d{8}$'
-          description: 结束日期，格式：YYYYMMDD
-          example: "20240115"
-      required:
-        - symbols
-        - start_date
-        - end_date
-
-    RealtimeDataRequest:
-      type: object
-      properties:
-        symbols:
-          type: array
-          items:
-            type: string
-          description: 股票代码列表
-          example: ["000001.SZ", "000002.SZ", "600000.SH"]
-      required:
-        - symbols
-
-    FinancialDataRequest:
-      type: object
-      properties:
-        symbol:
-          type: string
-          description: 股票代码
-          example: "000001.SZ"
-        period:
-          type: string
-          description: 报告期，可选
-          example: "20231231"
-      required:
-        - symbol
-
-    MacroDataRequest:
-      type: object
-      properties:
-        start_date:
-          type: string
-          pattern: '^\d{8}$'
-          description: 开始日期，格式：YYYYMMDD
-          example: "20240101"
-        end_date:
-          type: string
-          pattern: '^\d{8}$'
-          description: 结束日期，格式：YYYYMMDD
-          example: "20240115"
-      required:
-        - start_date
-        - end_date
-
-    MoneyFlowRequest:
-      type: object
-      properties:
-        symbol:
-          type: string
-          description: 股票代码
-          example: "000001.SZ"
-        trade_date:
-          type: string
-          pattern: '^\d{8}$'
-          description: 交易日期，格式：YYYYMMDD，可选，默认为今日
-          example: "20240115"
-      required:
-        - symbol
-
-    NorthboundTopStocksRequest:
-      type: object
-      properties:
-        trade_date:
-          type: string
-          pattern: '^\d{8}$'
-          description: 交易日期，格式：YYYYMMDD，可选，默认为今日
-          example: "20240115"
-        market:
-          type: string
-          description: 市场代码，可选，默认为全市场
-          example: "SH"
-
-    MarginTradingRequest:
-      type: object
-      properties:
-        trade_date:
-          type: string
-          pattern: '^\d{8}$'
-          description: 交易日期，格式：YYYYMMDD，可选，默认为今日
-          example: "20240115"
-        exchange:
-          type: string
-          description: 交易所代码，可选，默认为全交易所
-          example: "SSE"
-
-    ActiveStocksMoneyFlowRequest:
-      type: object
-      properties:
-        trade_date:
-          type: string
-          pattern: '^\d{8}$'
-          description: 交易日期，格式：YYYYMMDD，可选，默认为今日
-          example: "20240115"
-        symbols:
-          type: array
-          items:
-            type: string
-          description: 活跃股票代码列表
-          example: ["000001.SZ", "000002.SZ", "600000.SH"]
-      required:
-        - symbols
-
-    # 响应数据结构
-    StockListResponse:
-      type: object
-      properties:
-        code:
-          type: integer
-          example: 200
-        message:
-          type: string
-          example: "success"
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/Stock'
+          description: 响应数据
         pagination:
           $ref: '#/components/schemas/Pagination'
         timestamp:
+          type: integer
+          format: int64
+          description: 时间戳
+          example: 1640995200
+        request_id:
           type: string
-          format: date-time
-          example: "2024-01-15T10:30:00Z"
+          description: 请求ID
+          example: "req-123456"
       required:
         - code
         - message
-        - data
-        - pagination
         - timestamp
-
-    MarketDataListResponse:
-      type: object
-      properties:
-        code:
-          type: integer
-          example: 200
-        message:
-          type: string
-          example: "success"
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/MarketData'
-        pagination:
-          $ref: '#/components/schemas/Pagination'
-        timestamp:
-          type: string
-          format: date-time
-          example: "2024-01-15T10:30:00Z"
-      required:
-        - code
-        - message
-        - data
-        - pagination
-        - timestamp
-
-    Stock:
-      type: object
-      properties:
-        id:
-          type: integer
-          description: 股票ID
-          example: 1
-        symbol:
-          type: string
-          description: 股票代码
-          example: "000001.SZ"
-        name:
-          type: string
-          description: 股票名称
-          example: "平安银行"
-        market:
-          type: string
-          description: 市场代码
-          example: "SZ"
-        list_date:
-          type: string
-          format: date
-          description: 上市日期
-          example: "1991-04-03"
-        industry:
-          type: string
-          description: 所属行业
-          example: "银行"
-        created_at:
-          type: string
-          format: date-time
-          description: 创建时间
-          example: "2024-01-15T10:30:00Z"
-        updated_at:
-          type: string
-          format: date-time
-          description: 更新时间
-          example: "2024-01-15T10:30:00Z"
-      required:
-        - id
-        - symbol
-        - name
-        - market
-
-    MarketData:
-      type: object
-      properties:
-        id:
-          type: integer
-          description: 行情数据ID
-          example: 1
-        symbol:
-          type: string
-          description: 股票代码
-          example: "000001.SZ"
-        trade_date:
-          type: string
-          format: date
-          description: 交易日期
-          example: "2024-01-15"
-        open:
-          type: number
-          format: float
-          description: 开盘价
-          example: 12.50
-        high:
-          type: number
-          format: float
-          description: 最高价
-          example: 12.80
-        low:
-          type: number
-          format: float
-          description: 最低价
-          example: 12.30
-        close:
-          type: number
-          format: float
-          description: 收盘价
-          example: 12.65
-        volume:
-          type: integer
-          description: 成交量
-          example: 1000000
-        amount:
-          type: number
-          format: float
-          description: 成交额
-          example: 12650000.00
-        pct_change:
-          type: number
-          format: float
-          description: 涨跌幅
-          example: 1.20
-        created_at:
-          type: string
-          format: date-time
-          description: 创建时间
-          example: "2024-01-15T10:30:00Z"
-      required:
-        - id
-        - symbol
-        - trade_date
-        - open
-        - high
-        - low
-        - close
-        - volume
-        - amount
 
     Pagination:
       type: object
@@ -1221,34 +1365,922 @@ components:
           example: 20
         total:
           type: integer
+          format: int64
           description: 总记录数
-          example: 1000
-        total_pages:
+          example: 5000
+        pages:
           type: integer
           description: 总页数
-          example: 50
-        has_next:
-          type: boolean
-          description: 是否有下一页
-          example: true
-        has_prev:
-          type: boolean
-          description: 是否有上一页
-          example: false
+          example: 250
       required:
         - page
         - page_size
         - total
-        - total_pages
-        - has_next
-        - has_prev
+        - pages
+
+    Stock:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 股票ID
+          example: 1
+        symbol:
+          type: string
+          description: 股票代码
+          example: "000001"
+        name:
+          type: string
+          description: 股票名称
+          example: "平安银行"
+        exchange:
+          type: string
+          description: 交易所
+          enum: ["SSE", "SZSE"]
+          example: "SZSE"
+        industry:
+          type: string
+          description: 行业
+          example: "银行"
+        sector:
+          type: string
+          description: 板块
+          example: "金融"
+        list_date:
+          type: string
+          format: date
+          description: 上市日期
+          example: "1991-04-03"
+        status:
+          type: integer
+          description: 股票状态（0-停牌，1-正常，2-退市）
+          enum: [0, 1, 2]
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+      required:
+        - id
+        - symbol
+        - name
+        - exchange
+        - status
+        - created_at
+        - updated_at
+
+    MarketData:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 行情数据ID
+          example: 1
+        symbol:
+          type: string
+          description: 股票代码
+          example: "000001"
+        trade_date:
+          type: string
+          format: date
+          description: 交易日期
+          example: "2024-01-01"
+        period:
+          type: string
+          description: 数据周期
+          enum: ["1m", "5m", "15m", "30m", "1h", "1d"]
+          example: "1d"
+        trade_time:
+          type: string
+          format: date-time
+          description: 交易时间
+        open_price:
+          type: number
+          format: double
+          description: 开盘价
+          example: 10.50
+        high_price:
+          type: number
+          format: double
+          description: 最高价
+          example: 10.80
+        low_price:
+          type: number
+          format: double
+          description: 最低价
+          example: 10.30
+        close_price:
+          type: number
+          format: double
+          description: 收盘价
+          example: 10.65
+        volume:
+          type: integer
+          format: int64
+          description: 成交量
+          example: 1000000
+        amount:
+          type: number
+          format: double
+          description: 成交额
+          example: 10650000.00
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+      required:
+        - id
+        - symbol
+        - trade_date
+        - period
+        - trade_time
+        - open_price
+        - high_price
+        - low_price
+        - close_price
+        - volume
+        - amount
+        - created_at
+
+    FinancialData:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 财务数据ID
+          example: 1
+        symbol:
+          type: string
+          description: 股票代码
+          example: "000001"
+        report_date:
+          type: string
+          format: date
+          description: 报告期
+          example: "2024-03-31"
+        report_type:
+          type: string
+          description: 报告类型
+          enum: ["Q1", "Q2", "Q3", "A"]
+          example: "Q1"
+        revenue:
+          type: number
+          format: double
+          description: 营业收入
+          example: 1000000000.00
+        net_profit:
+          type: number
+          format: double
+          description: 净利润
+          example: 100000000.00
+        total_assets:
+          type: number
+          format: double
+          description: 总资产
+          example: 10000000000.00
+        total_equity:
+          type: number
+          format: double
+          description: 股东权益
+          example: 1000000000.00
+        roe:
+          type: number
+          format: double
+          description: ROE
+          example: 0.10
+        roa:
+          type: number
+          format: double
+          description: ROA
+          example: 0.01
+        gross_margin:
+          type: number
+          format: double
+          description: 毛利率
+          example: 0.30
+        net_margin:
+          type: number
+          format: double
+          description: 净利率
+          example: 0.10
+        current_ratio:
+          type: number
+          format: double
+          description: 流动比率
+          example: 1.50
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+      required:
+        - id
+        - symbol
+        - report_date
+        - report_type
+        - created_at
+        - updated_at
+
+    NewsData:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 新闻ID
+          example: 1
+        title:
+          type: string
+          description: 新闻标题
+          example: "平安银行发布2024年第一季度业绩报告"
+        content:
+          type: string
+          description: 新闻内容
+        url:
+          type: string
+          format: uri
+          description: 新闻链接
+          example: "https://example.com/news/123"
+        source:
+          type: string
+          description: 新闻来源
+          example: "财经网"
+        publish_time:
+          type: string
+          format: date-time
+          description: 发布时间
+        category:
+          type: string
+          description: 新闻分类
+          example: "公司新闻"
+        sentiment:
+          type: integer
+          description: 情感倾向（-1负面，0中性，1正面）
+          enum: [-1, 0, 1]
+          example: 1
+        sentiment_score:
+          type: number
+          format: double
+          description: 情感得分
+          example: 0.75
+        importance_level:
+          type: integer
+          description: 重要程度（1-5级）
+          enum: [1, 2, 3, 4, 5]
+          example: 4
+        related_stocks:
+          type: array
+          items:
+            type: string
+          description: 相关股票列表
+          example: ["000001", "000002"]
+        related_industries:
+          type: array
+          items:
+            type: string
+          description: 相关行业列表
+          example: ["银行", "金融"]
+        processed_at:
+          type: string
+          format: date-time
+          description: 处理时间
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+      required:
+        - id
+        - title
+        - url
+        - publish_time
+        - importance_level
+        - created_at
+
+    MacroData:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 宏观数据ID
+          example: 1
+        indicator_code:
+          type: string
+          description: 指标代码
+          example: "GDP"
+        indicator_name:
+          type: string
+          description: 指标名称
+          example: "国内生产总值"
+        period_type:
+          type: string
+          description: 周期类型
+          enum: ["月度", "季度", "年度"]
+          example: "季度"
+        period:
+          type: string
+          description: 统计期间
+          example: "2024Q1"
+        value:
+          type: number
+          format: double
+          description: 指标值
+          example: 296299.0
+        unit:
+          type: string
+          description: 单位
+          example: "亿元"
+        publish_date:
+          type: string
+          format: date
+          description: 发布日期
+          example: "2024-04-16"
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+      required:
+        - id
+        - indicator_code
+        - indicator_name
+        - period_type
+        - period
+        - value
+        - publish_date
+        - created_at
+
+    DataTask:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 任务ID
+          example: 1
+        task_name:
+          type: string
+          description: 任务名称
+          example: "股票基础数据采集"
+        task_type:
+          type: string
+          description: 任务类型
+          enum: ["stock_data", "market_data", "financial_data", "news_data", "macro_data", "data_cleanup", "data_backup"]
+          example: "stock_data"
+        description:
+          type: string
+          description: 任务描述
+          example: "定时采集股票基础信息"
+        cron_expr:
+          type: string
+          description: Cron表达式
+          example: "0 0 9 * * ?"
+        status:
+          type: integer
+          description: 任务状态（0-禁用，1-启用，2-运行中，3-暂停）
+          enum: [0, 1, 2, 3]
+          example: 1
+        config:
+          type: object
+          description: 任务配置
+          additionalProperties: true
+        last_run_at:
+          type: string
+          format: date-time
+          description: 上次执行时间
+        next_run_at:
+          type: string
+          format: date-time
+          description: 下次执行时间
+        run_count:
+          type: integer
+          format: int64
+          description: 执行次数
+          example: 100
+        success_count:
+          type: integer
+          format: int64
+          description: 成功次数
+          example: 95
+        failure_count:
+          type: integer
+          format: int64
+          description: 失败次数
+          example: 5
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+      required:
+        - id
+        - task_name
+        - task_type
+        - cron_expr
+        - status
+        - run_count
+        - success_count
+        - failure_count
+        - created_at
+        - updated_at
+
+    CreateTaskRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 任务名称
+          example: "股票基础数据采集"
+        type:
+          type: string
+          description: 任务类型
+          enum: ["stock_data", "market_data", "financial_data", "news_data", "macro_data", "data_cleanup", "data_backup"]
+          example: "stock_data"
+        description:
+          type: string
+          description: 任务描述
+          example: "定时采集股票基础信息"
+        config:
+          type: object
+          description: 任务配置
+          additionalProperties: true
+        schedule:
+          type: string
+          description: Cron表达式
+          example: "0 0 9 * * ?"
+      required:
+        - name
+        - type
+        - schedule
+
+    UpdateTaskRequest:
+      type: object
+      properties:
+        task_name:
+          type: string
+          description: 任务名称
+        description:
+          type: string
+          description: 任务描述
+        cron_expr:
+          type: string
+          description: Cron表达式
+        status:
+          type: integer
+          description: 任务状态
+          enum: [0, 1, 2, 3]
+        config:
+          type: object
+          description: 任务配置
+          additionalProperties: true
+
+    TaskStatus:
+      type: object
+      properties:
+        task_id:
+          type: integer
+          format: int64
+          description: 任务ID
+          example: 1
+        status:
+          type: string
+          description: 当前状态
+          enum: ["idle", "running", "completed", "failed"]
+          example: "running"
+        progress:
+          type: number
+          format: double
+          description: 执行进度（0-1）
+          example: 0.75
+        start_time:
+          type: string
+          format: date-time
+          description: 开始时间
+        end_time:
+          type: string
+          format: date-time
+          description: 结束时间
+        error_message:
+          type: string
+          description: 错误信息
+        result:
+          type: object
+          description: 执行结果
+          additionalProperties: true
+      required:
+        - task_id
+        - status
+
+    HistoryDataRequest:
+      type: object
+      properties:
+        symbol:
+          type: string
+          description: 股票代码
+          example: "000001"
+        start_date:
+          type: string
+          description: 开始日期（格式：YYYYMMDD）
+          pattern: '^\d{8}$'
+          example: "20240101"
+        end_date:
+          type: string
+          description: 结束日期（格式：YYYYMMDD）
+          pattern: '^\d{8}$'
+          example: "20241231"
+      required:
+        - symbol
+        - start_date
+        - end_date
+
+    BatchCollectRequest:
+      type: object
+      properties:
+        symbols:
+          type: array
+          items:
+            type: string
+          description: 股票代码列表
+          example: ["000001", "000002", "600000"]
+        data_types:
+          type: array
+          items:
+            type: string
+            enum: ["basic", "daily", "financial"]
+          description: 数据类型列表
+          example: ["basic", "daily"]
+        trade_date:
+          type: string
+          description: 交易日期（格式：YYYYMMDD）
+          pattern: '^\d{8}$'
+          example: "20240101"
+      required:
+        - symbols
+        - data_types
+
+    RealtimeDataRequest:
+      type: object
+      properties:
+        symbols:
+          type: array
+          items:
+            type: string
+          description: 股票代码列表
+          example: ["000001", "000002"]
+        interval:
+          type: integer
+          description: 采集间隔（秒）
+          minimum: 1
+          example: 60
+        duration:
+          type: integer
+          description: 采集持续时间（分钟）
+          minimum: 1
+          example: 30
+      required:
+        - symbols
+
+    FinancialDataRequest:
+      type: object
+      properties:
+        symbol:
+          type: string
+          description: 股票代码
+          example: "000001"
+        period:
+          type: string
+          description: 报告期
+          example: "2024Q1"
+      required:
+        - symbol
+
+    MacroDataRequest:
+      type: object
+      properties:
+        indicator_codes:
+          type: array
+          items:
+            type: string
+          description: 指标代码列表
+          example: ["GDP", "CPI", "PPI"]
+        start_date:
+          type: string
+          format: date
+          description: 开始日期
+          example: "2024-01-01"
+      required:
+        - indicator_codes
+
+    CollectorStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          description: 采集器状态
+          enum: ["running", "stopped", "error"]
+          example: "running"
+        last_update:
+          type: string
+          format: date-time
+          description: 最后更新时间
+        active_tasks:
+          type: integer
+          description: 活跃任务数
+          example: 5
+        completed_tasks:
+          type: integer
+          description: 已完成任务数
+          example: 100
+        failed_tasks:
+          type: integer
+          description: 失败任务数
+          example: 2
+        uptime:
+          type: string
+          description: 运行时长
+          example: "2d 5h 30m"
+      required:
+        - status
+        - last_update
+        - active_tasks
+        - completed_tasks
+        - failed_tasks
+
+    SentimentCollectorStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          description: 情感数据采集器状态
+          enum: ["running", "stopped", "error"]
+          example: "running"
+        last_update:
+          type: string
+          format: date-time
+          description: 最后更新时间
+        money_flow_status:
+          type: string
+          description: 资金流向采集状态
+          example: "active"
+        northbound_fund_status:
+          type: string
+          description: 北向资金采集状态
+          example: "active"
+        margin_trading_status:
+          type: string
+          description: 融资融券采集状态
+          example: "active"
+        etf_status:
+          type: string
+          description: ETF数据采集状态
+          example: "active"
+      required:
+        - status
+        - last_update
+
+    SystemStats:
+      type: object
+      properties:
+        total_stocks:
+          type: integer
+          description: 股票总数
+          example: 5000
+        total_market_data:
+          type: integer
+          format: int64
+          description: 行情数据总数
+          example: 10000000
+        total_financial_data:
+          type: integer
+          format: int64
+          description: 财务数据总数
+          example: 500000
+        total_news:
+          type: integer
+          format: int64
+          description: 新闻总数
+          example: 1000000
+        total_tasks:
+          type: integer
+          description: 任务总数
+          example: 50
+        active_tasks:
+          type: integer
+          description: 活跃任务数
+          example: 10
+        data_size:
+          type: string
+          description: 数据总大小
+          example: "500GB"
+        last_update:
+          type: string
+          format: date-time
+          description: 最后更新时间
+      required:
+        - total_stocks
+        - total_market_data
+        - total_financial_data
+        - total_news
+        - total_tasks
+        - active_tasks
+        - last_update
+
+    SystemMetrics:
+      type: object
+      properties:
+        cpu_usage:
+          type: number
+          format: double
+          description: CPU使用率
+          example: 0.65
+        memory_usage:
+          type: number
+          format: double
+          description: 内存使用率
+          example: 0.75
+        disk_usage:
+          type: number
+          format: double
+          description: 磁盘使用率
+          example: 0.45
+        network_in:
+          type: integer
+          format: int64
+          description: 网络入流量（字节/秒）
+          example: 1048576
+        network_out:
+          type: integer
+          format: int64
+          description: 网络出流量（字节/秒）
+          example: 524288
+        database_connections:
+          type: integer
+          description: 数据库连接数
+          example: 20
+        cache_hit_rate:
+          type: number
+          format: double
+          description: 缓存命中率
+          example: 0.85
+        api_requests_per_minute:
+          type: integer
+          description: 每分钟API请求数
+          example: 1000
+        timestamp:
+          type: string
+          format: date-time
+          description: 指标采集时间
+      required:
+        - cpu_usage
+        - memory_usage
+        - disk_usage
+        - timestamp
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: 错误码
+          example: 400
+        message:
+          type: string
+          description: 错误消息
+          example: "参数错误"
+        details:
+          type: string
+          description: 错误详情
+        timestamp:
+          type: integer
+          format: int64
+          description: 时间戳
+          example: 1640995200
+        request_id:
+          type: string
+          description: 请求ID
+          example: "req-123456"
+      required:
+        - code
+        - message
+        - timestamp
+
+  responses:
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Error'
+              - type: object
+                properties:
+                  code:
+                    example: 400
+                  message:
+                    example: "请求参数错误"
+
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Error'
+              - type: object
+                properties:
+                  code:
+                    example: 404
+                  message:
+                    example: "资源不存在"
+
+    InternalServerError:
+      description: 服务器内部错误
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Error'
+              - type: object
+                properties:
+                  code:
+                    example: 500
+                  message:
+                    example: "服务器内部错误"
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      description: 页码
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    PageSizeParam:
+      name: page_size
+      in: query
+      description: 每页数量
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+    SymbolParam:
+      name: symbol
+      in: query
+      description: 股票代码
+      schema:
+        type: string
+        example: "000001"
+
+    StartDateParam:
+      name: start_date
+      in: query
+      description: 开始日期
+      schema:
+        type: string
+        format: date
+        example: "2024-01-01"
+
+    EndDateParam:
+      name: end_date
+      in: query
+      description: 结束日期
+      schema:
+        type: string
+        format: date
+        example: "2024-12-31"
 
 tags:
   - name: 系统监控
     description: 系统健康检查和监控相关接口
+  - name: 股票数据查询
+    description: 股票基础信息查询接口
+  - name: 行情数据查询
+    description: 股票行情数据查询接口
+  - name: 财务数据查询
+    description: 股票财务数据查询接口
+  - name: 新闻数据查询
+    description: 新闻数据查询接口
+  - name: 宏观数据查询
+    description: 宏观经济数据查询接口
+  - name: 任务管理
+    description: 数据采集任务管理接口
   - name: 数据采集
-    description: 各类金融数据采集相关接口
-  - name: 市场情绪数据采集
-    description: 市场情绪和资金流向数据采集相关接口
-  - name: 数据查询
-    description: 数据查询和检索相关接口
+    description: 数据采集控制接口
+  - name: 情感数据采集
+    description: 市场情感数据采集接口
