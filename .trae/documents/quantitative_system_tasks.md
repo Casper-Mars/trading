@@ -86,7 +86,7 @@
 
   * _Requirements: 2.14, 5.3_
 
-* [ ] 2.3 PlanRepo
+*- [x] 2.3 PlanRepo
 
   * 以日期查询、保存方案、历史分页/范围查询
 
