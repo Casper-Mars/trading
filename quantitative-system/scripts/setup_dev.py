@@ -4,6 +4,7 @@
 用于快速设置量化系统的开发环境
 """
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -13,12 +14,21 @@ def run_command(cmd: list[str], description: str) -> bool:
     """运行命令并处理错误"""
     print(f"\n🔄 {description}...")
     try:
+        # 检查命令是否存在并获取完整路径
+        cmd_path = shutil.which(cmd[0])
+        if not cmd_path:
+            print(f"❌ 命令 '{cmd[0]}' 不可用")
+            return False
+
+        # 使用完整路径构建命令
+        full_cmd = [cmd_path, *cmd[1:]]
         result = subprocess.run(
-            cmd,
+            full_cmd,
             check=True,
             capture_output=True,
             text=True,
             cwd=Path(__file__).parent.parent,
+            timeout=300,  # 添加5分钟超时
         )
         print(f"✅ {description} 完成")
         if result.stdout:
@@ -35,25 +45,33 @@ def run_command(cmd: list[str], description: str) -> bool:
 
 def check_uv_installed() -> bool:
     """检查uv是否已安装"""
-    try:
-        subprocess.run(["uv", "--version"], check=True, capture_output=True)
-        return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return False
+    return shutil.which("uv") is not None
 
 
 def install_uv() -> bool:
     """安装uv包管理器"""
-    print("\n📦 检测到uv未安装，正在安装...")
+    print("\n📦 检测到uv未安装, 正在安装...")
     try:
+        # 检查curl是否可用
+        if not shutil.which("curl"):
+            print("❌ curl 命令不可用,请手动安装 uv")
+            return False
+
         # 使用官方安装脚本
+        curl_path = shutil.which("curl")
         result = subprocess.run(
-            ["curl", "-LsSf", "https://astral.sh/uv/install.sh"],
+            [curl_path, "-LsSf", "https://astral.sh/uv/install.sh"],
             capture_output=True,
             text=True,
+            timeout=30,  # 添加超时
         )
         if result.returncode == 0:
-            subprocess.run(["sh"], input=result.stdout, text=True, check=True)
+            # 检查sh是否可用
+            sh_path = shutil.which("sh")
+            if not sh_path:
+                print("❌ sh 命令不可用")
+                return False
+            subprocess.run([sh_path], input=result.stdout, text=True, check=True, timeout=60)
             print("✅ uv 安装完成")
             return True
         else:
@@ -70,9 +88,8 @@ def setup_development_environment() -> bool:
     print("🚀 开始设置量化系统开发环境")
 
     # 检查uv是否安装
-    if not check_uv_installed():
-        if not install_uv():
-            return False
+    if not check_uv_installed() and not install_uv():
+        return False
 
     success = True
 
@@ -95,7 +112,7 @@ def setup_development_environment() -> bool:
     # 修复可自动修复的问题
     run_command(["uv", "run", "ruff", "check", "--fix", "."], "修复代码问题")
 
-    # 运行类型检查（可能会有错误，但不影响设置）
+    # 运行类型检查(可能会有错误, 但不影响设置)
     run_command(["uv", "run", "mypy", "."], "运行类型检查")
 
     return success
@@ -104,7 +121,7 @@ def setup_development_environment() -> bool:
 def print_usage_instructions():
     """打印使用说明"""
     print("\n" + "=" * 60)
-    print("🎉 开发环境设置完成！")
+    print("🎉 开发环境设置完成!")
     print("=" * 60)
     print("\n📋 可用的开发命令:")
     print("  make help        - 查看所有可用命令")
@@ -143,7 +160,7 @@ def main():
             print_usage_instructions()
             sys.exit(0)
         else:
-            print("\n❌ 开发环境设置失败，请检查错误信息")
+            print("\n❌ 开发环境设置失败, 请检查错误信息")
             sys.exit(1)
     except KeyboardInterrupt:
         print("\n\n⚠️  设置被用户中断")

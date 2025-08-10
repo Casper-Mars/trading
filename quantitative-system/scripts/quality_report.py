@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
 代码质量报告脚本
-生成项目的代码质量报告，包括代码检查、类型检查和测试覆盖率
+生成项目的代码质量报告,包括代码检查、类型检查和测试覆盖率
 """
 
 import json
+import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -15,15 +16,25 @@ from typing import Any
 def run_command_capture(cmd: list[str]) -> tuple[int, str, str]:
     """运行命令并捕获输出"""
     try:
+        # 检查命令是否存在并获取完整路径
+        cmd_path = shutil.which(cmd[0])
+        if not cmd_path:
+            return 1, "", f"Command not found: {cmd[0]}"
+
+        # 使用完整路径构建命令
+        full_cmd = [cmd_path, *cmd[1:]]
         result = subprocess.run(
-            cmd,
+            full_cmd,
             capture_output=True,
             text=True,
             cwd=Path(__file__).parent.parent,
+            timeout=300,  # 添加5分钟超时
         )
         return result.returncode, result.stdout, result.stderr
     except FileNotFoundError:
         return 1, "", f"Command not found: {' '.join(cmd)}"
+    except subprocess.TimeoutExpired:
+        return 1, "", f"Command timeout: {' '.join(cmd)}"
 
 
 def analyze_ruff_output(stdout: str, stderr: str) -> dict[str, Any]:
@@ -107,7 +118,8 @@ def get_file_stats() -> dict[str, Any]:
                         comment_lines += 1
                     else:
                         code_lines += 1
-        except Exception:
+        except Exception as e:
+            print(f"Warning: Failed to read file {py_file}: {e}")
             continue
 
     return {
@@ -146,7 +158,7 @@ def generate_quality_report() -> dict[str, Any]:
         'analysis': analyze_mypy_output(mypy_out, mypy_err)
     }
 
-    # 运行测试（如果有的话）
+    # 运行测试(如果有的话)
     print("  🧪 运行测试...")
     test_code, test_out, test_err = run_command_capture(['uv', 'run', 'pytest', '--tb=no', '-q'])
     report['tests'] = {
@@ -219,13 +231,13 @@ def print_report(report: dict[str, Any]) -> None:
     print("\n📈 总体评估:")
     total_issues = ruff_analysis['total_errors'] + mypy_analysis['total_errors']
     if total_issues == 0 and tests['exit_code'] == 0:
-        print("  🎉 代码质量优秀！")
+        print("  🎉 代码质量优秀!")
     elif total_issues < 50:
-        print("  👍 代码质量良好，建议修复剩余问题")
+        print("  👍 代码质量良好,建议修复剩余问题")
     elif total_issues < 200:
-        print("  ⚠️  代码质量一般，需要重点改进")
+        print("  ⚠️  代码质量一般,需要重点改进")
     else:
-        print("  🚨 代码质量较差，需要大量改进")
+        print("  🚨 代码质量较差,需要大量改进")
 
     print("\n🔧 改进建议:")
     if ruff_analysis['total_errors'] > 0:

@@ -61,12 +61,12 @@ class DataCollectionClient:
 
             return response.json()
 
-        except requests.exceptions.Timeout:
-            raise TimeoutError(f"Request timeout: {url}")
-        except requests.exceptions.ConnectionError:
-            raise ExternalServiceError(f"Connection error: {url}")
+        except requests.exceptions.Timeout as e:
+            raise TimeoutError(f"Request timeout: {url}") from e
+        except requests.exceptions.ConnectionError as e:
+            raise ExternalServiceError(f"Connection error: {url}") from e
         except requests.exceptions.RequestException as e:
-            raise ExternalServiceError(f"Request failed: {e!s}")
+            raise ExternalServiceError(f"Request failed: {e!s}") from e
 
     # 股票数据查询
     def get_stocks(
@@ -364,10 +364,12 @@ class AsyncDataCollectionClient:
         url = f"{self.base_url}{endpoint}"
 
         try:
-            async with aiohttp.ClientSession(timeout=self.timeout) as session:
-                async with session.request(
+            async with (
+                aiohttp.ClientSession(timeout=self.timeout) as session,
+                session.request(
                     method=method, url=url, params=params, json=json_data, **kwargs
-                ) as response:
+                ) as response,
+            ):
                     # 处理HTTP状态码
                     if response.status == 404:
                         raise NotFoundError(f"Resource not found: {url}")
@@ -379,18 +381,18 @@ class AsyncDataCollectionClient:
                             error_msg = error_data.get(
                                 "message", f"HTTP {response.status}"
                             )
-                        except:
+                        except Exception:
                             error_msg = f"HTTP {response.status}"
                         raise ExternalServiceError(f"Client error: {error_msg}")
 
                     return await response.json()
 
-        except asyncio.TimeoutError:
-            raise TimeoutError(f"Request timeout: {url}")
+        except asyncio.TimeoutError as e:
+            raise TimeoutError(f"Request timeout: {url}") from e
         except aiohttp.ClientError as e:
-            raise ExternalServiceError(f"Request failed: {e!s}")
+            raise ExternalServiceError(f"Request failed: {e!s}") from e
 
-    # 为了简洁，这里只实现几个关键方法，其他方法可以按需添加
+    # 为了简洁,这里只实现几个关键方法,其他方法可以按需添加
     async def get_stocks(self, **kwargs) -> dict[str, Any]:
         """获取股票列表"""
         return await self._make_request("GET", "/api/v1/data/stocks", params=kwargs)
@@ -410,5 +412,5 @@ class AsyncDataCollectionClient:
 
     async def close(self):
         """关闭客户端"""
-        # aiohttp会自动管理连接，这里保留接口以备将来使用
+        # aiohttp会自动管理连接,这里保留接口以备将来使用
         pass

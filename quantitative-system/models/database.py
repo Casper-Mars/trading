@@ -31,7 +31,7 @@ class Position(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     symbol: str = Field(max_length=20, description="股票代码")
     name: str = Field(max_length=100, description="股票名称")
-    position_type: PositionType = Field(description="持仓类型：1-多头，2-空头")
+    position_type: PositionType = Field(description="持仓类型:1-多头,2-空头")
     quantity: int = Field(description="持仓数量")
     avg_cost: Decimal = Field(max_digits=10, decimal_places=4, description="平均成本")
     current_price: Decimal | None = Field(
@@ -47,7 +47,7 @@ class Position(SQLModel, table=True):
         default=0, max_digits=15, decimal_places=2, description="已实现盈亏"
     )
     status: PositionStatus = Field(
-        default=PositionStatus.ACTIVE, description="状态：1-活跃，2-已平仓，3-暂停"
+        default=PositionStatus.ACTIVE, description="状态:1-活跃,2-已平仓,3-暂停"
     )
     open_date: date = Field(description="开仓日期")
     close_date: date | None = Field(default=None, description="平仓日期")
@@ -132,9 +132,9 @@ class TradingPlan(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     plan_date: date = Field(description="方案日期")
     title: str = Field(max_length=200, description="方案标题")
-    content: str = Field(sa_column=Column(Text), description="方案内容（Markdown格式）")
-    plan_type: PlanType = Field(description="方案类型：1-手动，2-自动，3-混合")
-    risk_level: RiskLevel = Field(description="风险等级：1-低，2-中，3-高，4-极高")
+    content: str = Field(sa_column=Column(Text), description="方案内容(Markdown格式)")
+    plan_type: PlanType = Field(description="方案类型:1-手动,2-自动,3-混合")
+    risk_level: RiskLevel = Field(description="风险等级:1-低,2-中,3-高,4-极高")
     target_return: Decimal | None = Field(
         default=None, max_digits=8, decimal_places=4, description="目标收益率"
     )
@@ -186,7 +186,7 @@ class MarketDataCache(SQLModel, table=True):
     end_date: date | None = Field(default=None, description="结束日期")
     data_source: DataSource = Field(description="数据源")
     data_content: dict[str, Any] = Field(sa_column=Column(JSON), description="数据内容")
-    data_size: int = Field(description="数据大小（字节）")
+    data_size: int = Field(description="数据大小(字节)")
     hit_count: int = Field(default=0, description="命中次数")
     last_hit_at: datetime | None = Field(default=None, description="最后命中时间")
     expires_at: datetime | None = Field(default=None, description="过期时间")
@@ -221,7 +221,7 @@ class SystemLog(SQLModel, table=True):
     ip_address: str | None = Field(default=None, max_length=45, description="IP地址")
     user_agent: str | None = Field(default=None, max_length=500, description="用户代理")
     execution_time: Decimal | None = Field(
-        default=None, max_digits=10, decimal_places=6, description="执行时间（秒）"
+        default=None, max_digits=10, decimal_places=6, description="执行时间(秒)"
     )
     stack_trace: str | None = Field(
         default=None, sa_column=Column(Text), description="堆栈跟踪"
@@ -245,7 +245,7 @@ class Task(SQLModel, table=True):
     name: str = Field(max_length=200, description="任务名称")
     task_type: TaskType = Field(description="任务类型")
     status: TaskStatus = Field(default=TaskStatus.PENDING, description="任务状态")
-    priority: int = Field(default=5, description="优先级（1-10，数字越小优先级越高）")
+    priority: int = Field(default=5, description="优先级(1-10,数字越小优先级越高)")
     params: dict[str, Any] | None = Field(
         default=None, sa_column=Column(JSON), description="任务参数"
     )
@@ -261,7 +261,7 @@ class Task(SQLModel, table=True):
     started_at: datetime | None = Field(default=None, description="开始执行时间")
     completed_at: datetime | None = Field(default=None, description="完成时间")
     execution_time: Decimal | None = Field(
-        default=None, max_digits=10, decimal_places=6, description="执行时间（秒）"
+        default=None, max_digits=10, decimal_places=6, description="执行时间(秒)"
     )
     created_by: str | None = Field(default=None, max_length=50, description="创建者")
     created_at: datetime = Field(default_factory=datetime.now, description="创建时间")

@@ -23,7 +23,7 @@ def init_database():
         create_db_and_tables()
 
         logger.info("数据库初始化完成")
-        logger.info("已创建的表：")
+        logger.info("已创建的表:")
         logger.info("- positions (持仓表)")
         logger.info("- backtest_results (回测结果表)")
         logger.info("- trading_plans (交易方案表)")
@@ -45,7 +45,7 @@ def check_database():
 
         # 测试数据库连接
         with engine.connect() as conn:
-            result = conn.execute("SELECT 1")
+            conn.execute("SELECT 1")
             logger.info("数据库连接正常")
             return True
 

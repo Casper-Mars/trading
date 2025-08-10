@@ -83,7 +83,7 @@ class PlanRepo:
 
         except Exception as e:
             logger.error(f"创建交易方案失败: {e}")
-            raise DatabaseError(f"创建交易方案失败: {e}")
+            raise DatabaseError(f"创建交易方案失败: {e}") from e
 
     def get_by_id(self, plan_id: int) -> TradingPlan | None:
         """根据ID获取交易方案
@@ -262,7 +262,7 @@ class PlanRepo:
         """分页获取交易方案列表
 
         Args:
-            page: 页码（从1开始）
+            page: 页码(从1开始)
             size: 每页大小
             status: 方案状态过滤
             plan_type: 方案类型过滤
@@ -364,7 +364,7 @@ class PlanRepo:
             raise
         except Exception as e:
             logger.error(f"更新交易方案失败: ID={plan_id}, 错误: {e}")
-            raise DatabaseError(f"更新交易方案失败: {e}")
+            raise DatabaseError(f"更新交易方案失败: {e}") from e
 
     def update_status(self, plan_id: int, status: PlanStatus) -> bool:
         """更新方案状态
@@ -430,7 +430,7 @@ class PlanRepo:
             raise
         except Exception as e:
             logger.error(f"删除交易方案失败: ID={plan_id}, 错误: {e}")
-            raise DatabaseError(f"删除交易方案失败: {e}")
+            raise DatabaseError(f"删除交易方案失败: {e}") from e
 
     def get_plan_statistics(self) -> dict[str, Any]:
         """获取方案统计信息

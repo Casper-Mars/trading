@@ -69,6 +69,7 @@ exclude = [
     "node_modules",
     "venv",
     "migrations",
+    "scripts",
 ]
 
 [tool.ruff.lint]

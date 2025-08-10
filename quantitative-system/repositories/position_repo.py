@@ -75,7 +75,7 @@ class PositionRepo:
 
         except Exception as e:
             logger.error(f"创建持仓失败: {e}")
-            raise DatabaseError(f"创建持仓失败: {e}")
+            raise DatabaseError(f"创建持仓失败: {e}") from e
 
     def get_by_id(self, position_id: int) -> Position | None:
         """根据ID获取持仓
@@ -169,7 +169,7 @@ class PositionRepo:
         """分页获取持仓列表
 
         Args:
-            page: 页码（从1开始）
+            page: 页码(从1开始)
             size: 每页大小
             status: 持仓状态过滤
             position_type: 持仓类型过滤
@@ -262,7 +262,7 @@ class PositionRepo:
             raise
         except Exception as e:
             logger.error(f"更新持仓失败: ID={position_id}, 错误: {e}")
-            raise DatabaseError(f"更新持仓失败: {e}")
+            raise DatabaseError(f"更新持仓失败: {e}") from e
 
     def delete(self, position_id: int) -> bool:
         """删除持仓
@@ -296,7 +296,7 @@ class PositionRepo:
             raise
         except Exception as e:
             logger.error(f"删除持仓失败: ID={position_id}, 错误: {e}")
-            raise DatabaseError(f"删除持仓失败: {e}")
+            raise DatabaseError(f"删除持仓失败: {e}") from e
 
     def get_portfolio_summary(self) -> dict[str, any]:
         """获取投资组合汇总信息

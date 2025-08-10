@@ -216,7 +216,7 @@ class TradingPlanResponse(TradingPlanBase):
 class PlanGenerationRequest(BaseSchema):
     """方案生成请求Schema"""
 
-    plan_date: date | None = Field(None, description="方案日期，默认为今天")
+    plan_date: date | None = Field(None, description="方案日期, 默认为今天")
     risk_level: RiskLevel | None = Field(None, description="风险等级")
     target_return: Decimal | None = Field(None, description="目标收益率")
     position_limit: Decimal | None = Field(None, description="仓位限制")

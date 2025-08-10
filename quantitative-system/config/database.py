@@ -34,5 +34,5 @@ def get_session() -> Generator[Session, None, None]:
 
 
 def get_db_session() -> Session:
-    """获取数据库会话（同步版本）"""
+    """获取数据库会话(同步版本)"""
     return Session(engine)

@@ -23,11 +23,11 @@ def validate_stock_code(stock_code: str) -> bool:
     if not stock_code:
         raise DataValidationError("股票代码不能为空")
 
-    # 匹配格式：6位数字.交易所代码
+    # 匹配格式: 6位数字.交易所代码
     pattern = r"^\d{6}\.(SH|SZ|BJ)$"
     if not re.match(pattern, stock_code.upper()):
         raise DataValidationError(
-            f"股票代码格式错误: {stock_code}，应为6位数字.交易所代码"
+            f"股票代码格式错误: {stock_code}, 应为6位数字.交易所代码"
         )
 
     return True
@@ -52,16 +52,16 @@ def validate_date_range(
     if isinstance(start_date, str):
         try:
             start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
-        except ValueError:
-            raise DataValidationError(f"开始日期格式错误: {start_date}，应为YYYY-MM-DD")
+        except ValueError as err:
+            raise DataValidationError(f"开始日期格式错误: {start_date}, 应为YYYY-MM-DD") from err
     elif isinstance(start_date, datetime):
         start_date = start_date.date()
 
     if isinstance(end_date, str):
         try:
             end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
-        except ValueError:
-            raise DataValidationError(f"结束日期格式错误: {end_date}，应为YYYY-MM-DD")
+        except ValueError as err:
+            raise DataValidationError(f"结束日期格式错误: {end_date}, 应为YYYY-MM-DD") from err
     elif isinstance(end_date, datetime):
         end_date = end_date.date()
 
@@ -89,7 +89,7 @@ def validate_positive_number(
     if value is None:
         raise DataValidationError(f"{field_name}不能为空")
 
-    if not isinstance(value, (int, float, Decimal)):
+    if not isinstance(value, int | float | Decimal):
         raise DataValidationError(f"{field_name}必须是数字类型")
 
     if value <= 0:
@@ -101,7 +101,7 @@ def validate_positive_number(
 def validate_percentage(
     value: int | float | Decimal, field_name: str = "百分比"
 ) -> bool:
-    """验证百分比（0-100）
+    """验证百分比(0-100)
 
     Args:
         value: 待验证的百分比值
@@ -116,7 +116,7 @@ def validate_percentage(
     if value is None:
         raise DataValidationError(f"{field_name}不能为空")
 
-    if not isinstance(value, (int, float, Decimal)):
+    if not isinstance(value, int | float | Decimal):
         raise DataValidationError(f"{field_name}必须是数字类型")
 
     if not (0 <= value <= 100):

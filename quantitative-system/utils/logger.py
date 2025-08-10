@@ -59,7 +59,7 @@ def setup_logger():
 app_logger = setup_logger()
 
 
-def get_logger(name: str = None):
+def get_logger(name: str | None = None):
     """获取日志实例"""
     if name:
         return logger.bind(name=name)
@@ -93,5 +93,5 @@ def critical(message: str, **kwargs):
 
 
 def exception(message: str, **kwargs):
-    """异常日志（包含堆栈信息）"""
+    """异常日志(包含堆栈信息)"""
     logger.exception(message, **kwargs)

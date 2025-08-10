@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     api_reload: bool = False
 
     # 安全配置
-    secret_key: str = "your-secret-key-change-in-production"
+    secret_key: str = "your-secret-key-change-in-production"  # noqa: S105
     access_token_expire_minutes: int = 30
 
     class Config:

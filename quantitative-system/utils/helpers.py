@@ -31,16 +31,16 @@ def generate_short_id(length: int = 8) -> str:
     return str(uuid.uuid4()).replace("-", "")[:length]
 
 
-def calculate_md5(text: str) -> str:
-    """计算MD5哈希值
+def calculate_hash(text: str) -> str:
+    """计算SHA256哈希值
 
     Args:
         text: 待计算的文本
 
     Returns:
-        str: MD5哈希值
+        str: SHA256哈希值
     """
-    return hashlib.md5(text.encode("utf-8")).hexdigest()
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def safe_json_loads(json_str: str, default: Any = None) -> Any:
@@ -109,7 +109,7 @@ def parse_datetime(
 
 
 def get_trading_days(start_date: date, end_date: date) -> list[date]:
-    """获取交易日列表（排除周末）
+    """获取交易日列表(排除周末)
 
     Args:
         start_date: 开始日期
@@ -122,7 +122,7 @@ def get_trading_days(start_date: date, end_date: date) -> list[date]:
     current_date = start_date
 
     while current_date <= end_date:
-        # 排除周末（周六=5，周日=6）
+        # 排除周末(周六=5, 周日=6)
         if current_date.weekday() < 5:
             trading_days.append(current_date)
         current_date += timedelta(days=1)
@@ -154,7 +154,7 @@ def calculate_percentage_change(old_value: float, new_value: float) -> float:
         new_value: 新值
 
     Returns:
-        float: 百分比变化（如：0.05表示5%的增长）
+        float: 百分比变化(如：0.05表示5%的增长)
     """
     if old_value == 0:
         return 0.0 if new_value == 0 else float("inf")

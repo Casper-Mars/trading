@@ -85,7 +85,7 @@ class BacktestRepo:
 
         except Exception as e:
             logger.error(f"创建回测任务失败: {e}")
-            raise DatabaseError(f"创建回测任务失败: {e}")
+            raise DatabaseError(f"创建回测任务失败: {e}") from e
 
     def get_by_id(self, backtest_id: int) -> BacktestResult | None:
         """根据ID获取回测结果
@@ -189,7 +189,7 @@ class BacktestRepo:
         """分页获取回测结果列表
 
         Args:
-            page: 页码（从1开始）
+            page: 页码(从1开始)
             size: 每页大小
             status: 回测状态过滤
             strategy_type: 策略类型过滤
@@ -297,7 +297,7 @@ class BacktestRepo:
             raise
         except Exception as e:
             logger.error(f"更新回测结果失败: ID={backtest_id}, 错误: {e}")
-            raise DatabaseError(f"更新回测结果失败: {e}")
+            raise DatabaseError(f"更新回测结果失败: {e}") from e
 
     def update_status(
         self, backtest_id: int, status: BacktestStatus, error_message: str | None = None
@@ -307,7 +307,7 @@ class BacktestRepo:
         Args:
             backtest_id: 回测ID
             status: 新状态
-            error_message: 错误信息（状态为FAILED时使用）
+            error_message: 错误信息(状态为FAILED时使用)
 
         Returns:
             是否更新成功
@@ -354,7 +354,7 @@ class BacktestRepo:
         Args:
             backtest_id: 回测ID
             metrics: 回测指标数据
-            raw_data: 原始回测数据（可选）
+            raw_data: 原始回测数据(可选)
 
         Returns:
             是否保存成功
@@ -373,7 +373,7 @@ class BacktestRepo:
                 # 保存指标数据
                 backtest.metrics = json.dumps(metrics, ensure_ascii=False, default=str)
 
-                # 保存原始数据（如果提供）
+                # 保存原始数据(如果提供)
                 if raw_data:
                     backtest.raw_data = json.dumps(
                         raw_data, ensure_ascii=False, default=str
@@ -435,7 +435,7 @@ class BacktestRepo:
             raise
         except Exception as e:
             logger.error(f"删除回测结果失败: ID={backtest_id}, 错误: {e}")
-            raise DatabaseError(f"删除回测结果失败: {e}")
+            raise DatabaseError(f"删除回测结果失败: {e}") from e
 
     def get_strategy_performance_summary(self, strategy_name: str) -> dict[str, Any]:
         """获取策略性能汇总

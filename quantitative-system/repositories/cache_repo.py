@@ -37,7 +37,7 @@ class CacheRepo:
             logger.info("Redis连接成功")
         except Exception as e:
             logger.error(f"Redis连接失败: {e}")
-            raise CacheError(f"Redis连接失败: {e}")
+            raise CacheError(f"Redis连接失败: {e}") from e
 
     def _build_key(self, cache_type: CacheType, key: str) -> str:
         """构建标准化缓存键
@@ -60,13 +60,13 @@ class CacheRepo:
         return f"quant:{prefix}:{key}"
 
     def _get_default_ttl(self, cache_type: CacheType) -> int:
-        """获取默认过期时间（秒）
+        """获取默认过期时间(秒)
 
         Args:
             cache_type: 缓存类型
 
         Returns:
-            过期时间（秒）
+            过期时间(秒)
         """
         ttl_map = {
             CacheType.MARKET_DATA: 300,  # 5分钟
@@ -91,7 +91,7 @@ class CacheRepo:
             cache_type: 缓存类型
             key: 缓存键
             value: 缓存值
-            ttl: 过期时间（秒），None使用默认值
+            ttl: 过期时间(秒)，None使用默认值
             serialize_method: 序列化方法，json或pickle
 
         Returns:
@@ -146,7 +146,7 @@ class CacheRepo:
             if serialize_method == "json":
                 value = json.loads(serialized_value.decode("utf-8"))
             elif serialize_method == "pickle":
-                value = pickle.loads(serialized_value)
+                value = pickle.loads(serialized_value)  # noqa: S301
             else:
                 raise ValueError(f"不支持的序列化方法: {serialize_method}")
 
@@ -205,7 +205,7 @@ class CacheRepo:
             key: 缓存键
 
         Returns:
-            剩余过期时间（秒），-1表示永不过期，-2表示不存在
+            剩余过期时间(秒)，-1表示永不过期，-2表示不存在
         """
         try:
             cache_key = self._build_key(cache_type, key)
@@ -221,7 +221,7 @@ class CacheRepo:
         Args:
             cache_type: 缓存类型
             key: 缓存键
-            ttl: 新的过期时间（秒）
+            ttl: 新的过期时间(秒)
 
         Returns:
             是否设置成功
