@@ -19,7 +19,7 @@ class CacheRepo:
     统一缓存操作接口，支持多种数据类型和过期策略
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """初始化Redis连接"""
         try:
             self.redis_client = redis.Redis(

@@ -17,7 +17,7 @@ class DataCollectionClient:
     提供股票、行情、财务、新闻等数据的查询和任务管理功能。
     """
 
-    def __init__(self, base_url: str = "http://localhost:8080", timeout: int = 30):
+    def __init__(self, base_url: str = "http://localhost:8080", timeout: int = 30) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.logger = logging.getLogger(__name__)
@@ -26,9 +26,9 @@ class DataCollectionClient:
         self,
         method: str,
         endpoint: str,
-        params: dict | None = None,
-        json_data: dict | None = None,
-        **kwargs,
+        params: dict[str, Any] | None = None,
+        json_data: dict[str, Any] | None = None,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """发起HTTP请求"""
         url = f"{self.base_url}{endpoint}"

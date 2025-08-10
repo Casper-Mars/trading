@@ -22,7 +22,7 @@ else:
     )
 
 
-def create_db_and_tables():
+def create_db_and_tables() -> None:
     """创建数据库表"""
     SQLModel.metadata.create_all(engine)
 

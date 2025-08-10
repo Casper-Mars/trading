@@ -175,7 +175,7 @@ def flatten_dict(
     Returns:
         Dict[str, Any]: 扁平化后的字典
     """
-    items = []
+    items: list[tuple[str, Any]] = []
     for k, v in d.items():
         new_key = f"{parent_key}{sep}{k}" if parent_key else k
         if isinstance(v, dict):
@@ -198,7 +198,7 @@ def chunk_list(lst: list[Any], chunk_size: int) -> list[list[Any]]:
     return [lst[i : i + chunk_size] for i in range(0, len(lst), chunk_size)]
 
 
-def remove_duplicates(lst: list[Any], key_func=None) -> list[Any]:
+def remove_duplicates(lst: list[Any], key_func: Any = None) -> list[Any]:
     """去除列表中的重复项
 
     Args:

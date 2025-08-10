@@ -162,6 +162,11 @@ class CacheType(IntEnum):
     MEMORY = 1  # 内存缓存
     REDIS = 2  # Redis缓存
     FILE = 3  # 文件缓存
+    MARKET_DATA = 4  # 市场数据缓存
+    USER_SESSION = 5  # 用户会话缓存
+    API_RESPONSE = 6  # API响应缓存
+    CALCULATION_RESULT = 7  # 计算结果缓存
+    TEMPORARY = 8  # 临时缓存
 
 
 class APIStatus(IntEnum):

@@ -2,11 +2,12 @@ import sys
 from pathlib import Path
 
 from loguru import logger
+from typing import Any
 
 from config.settings import settings
 
 
-def setup_logger():
+def setup_logger() -> Any:
     """配置日志系统"""
     # 移除默认的控制台处理器
     logger.remove()
@@ -59,7 +60,7 @@ def setup_logger():
 app_logger = setup_logger()
 
 
-def get_logger(name: str | None = None):
+def get_logger(name: str | None = None) -> Any:
     """获取日志实例"""
     if name:
         return logger.bind(name=name)
@@ -67,31 +68,31 @@ def get_logger(name: str | None = None):
 
 
 # 导出常用的日志方法
-def debug(message: str, **kwargs):
+def debug(message: str, **kwargs: Any) -> None:
     """调试日志"""
     logger.debug(message, **kwargs)
 
 
-def info(message: str, **kwargs):
+def info(message: str, **kwargs: Any) -> None:
     """信息日志"""
     logger.info(message, **kwargs)
 
 
-def warning(message: str, **kwargs):
+def warning(message: str, **kwargs: Any) -> None:
     """警告日志"""
     logger.warning(message, **kwargs)
 
 
-def error(message: str, **kwargs):
+def error(message: str, **kwargs: Any) -> None:
     """错误日志"""
     logger.error(message, **kwargs)
 
 
-def critical(message: str, **kwargs):
+def critical(message: str, **kwargs: Any) -> None:
     """严重错误日志"""
     logger.critical(message, **kwargs)
 
 
-def exception(message: str, **kwargs):
+def exception(message: str, **kwargs: Any) -> None:
     """异常日志(包含堆栈信息)"""
     logger.exception(message, **kwargs)
