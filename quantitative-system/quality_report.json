@@ -1,0 +1,91 @@
+{
+  "timestamp": "2025-08-10T20:44:19.858980",
+  "project": "quantitative-system",
+  "file_stats": {
+    "total_files": 35,
+    "total_lines": 4719,
+    "code_lines": 3620,
+    "comment_lines": 131,
+    "blank_lines": 968,
+    "comment_ratio": 2.78
+  },
+  "ruff": {
+    "exit_code": 1,
+    "analysis": {
+      "total_errors": 831,
+      "error_types": {
+        "B904": 17,
+        "SIM117": 1,
+        "E722": 1,
+        "RUF003": 14,
+        "S105": 1,
+        "RUF022": 1,
+        "RUF001": 35,
+        "S301": 1,
+        "E402": 2,
+        "F841": 1,
+        "S603": 2,
+        "S112": 1,
+        "S607": 3,
+        "SIM102": 1,
+        "RUF013": 3,
+        "dict": 2,
+        "S324": 1,
+        "UP038": 2
+      },
+      "fixable": false,
+      "details": [
+        "clients/data_collection_client.py:65:13: B904 Within an `except` clause, raise exceptions with `raise ... from err` or `raise ... from None` to distinguish them from errors in exception handling",
+        "   |",
+        "64 |         except requests.exceptions.Timeout:",
+        "65 |             raise TimeoutError(f\"Request timeout: {url}\")",
+        "   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ B904",
+        "66 |         except requests.exceptions.ConnectionError:",
+        "67 |             raise ExternalServiceError(f\"Connection error: {url}\")",
+        "   |",
+        "clients/data_collection_client.py:67:13: B904 Within an `except` clause, raise exceptions with `raise ... from err` or `raise ... from None` to distinguish them from errors in exception handling",
+        "   |"
+      ]
+    }
+  },
+  "mypy": {
+    "exit_code": 1,
+    "analysis": {
+      "total_errors": 179,
+      "error_types": {
+        "no-untyped-def": 24,
+        "import-untyped": 1,
+        "unreachable": 1,
+        "var-annotated": 3,
+        "assignment": 23,
+        "import-not-found": 1,
+        "no-any-return": 4,
+        "attr-defined": 75,
+        "call-overload": 3,
+        "str": 2,
+        "bytes": 1,
+        "arg-type": 13,
+        "operator": 1,
+        "valid-type": 1,
+        "union-attr": 26
+      },
+      "details": [
+        "main.py:1:1: error: Function is missing a return type annotation  [no-untyped-def]",
+        "utils/helpers.py:10:1: error: Library stubs not installed for \"pandas\"  [import-untyped]",
+        "utils/helpers.py:89:9: error: Statement is unreachable  [unreachable]",
+        "utils/helpers.py:178:5: error: Need type annotation for \"items\" (hint: \"items: list[<type>] = ...\")  [var-annotated]",
+        "utils/helpers.py:201:1: error: Function is missing a type annotation for one or more arguments  [no-untyped-def]",
+        "utils/exceptions.py:7:56: error: Incompatible default for argument \"error_code\" (default has type \"None\", argument has type \"str\")  [assignment]",
+        "utils/exceptions.py:7:78: error: Incompatible default for argument \"details\" (default has type \"None\", argument has type \"dict[Any, Any]\")  [assignment]",
+        "scripts/quality_report.py:35:5: error: Need type annotation for \"error_types\" (hint: \"error_types: dict[<type>, <type>] = ...\")  [var-annotated]",
+        "scripts/quality_report.py:64:5: error: Need type annotation for \"error_types\" (hint: \"error_types: dict[<type>, <type>] = ...\")  [var-annotated]",
+        "clients/data_collection_client.py:7:1: error: Cannot find implementation or library stub for module named \"aiohttp\"  [import-not-found]"
+      ]
+    }
+  },
+  "tests": {
+    "exit_code": 5,
+    "output": "",
+    "error": ""
+  }
+}
