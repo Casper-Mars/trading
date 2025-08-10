@@ -9,13 +9,14 @@ import (
 
 // Config 应用配置结构
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Redis    RedisConfig    `mapstructure:"redis"`
-	Log      LogConfig      `mapstructure:"log"`
-	Tushare  TushareConfig  `mapstructure:"tushare"`
-	Crawler  CrawlerConfig  `mapstructure:"crawler"`
-	BaiduAI  BaiduAIConfig  `mapstructure:"baidu_ai"`
+	Server      ServerConfig       `mapstructure:"server"`
+	Database    DatabaseConfig     `mapstructure:"database"`
+	Redis       RedisConfig        `mapstructure:"redis"`
+	Log         LogConfig          `mapstructure:"log"`
+	Tushare     TushareConfig      `mapstructure:"tushare"`
+	Crawler     CrawlerConfig      `mapstructure:"crawler"`
+	BaiduAI     BaiduAIConfig      `mapstructure:"baidu_ai"`
+	AliCloudNLP AliCloudNLPConfig  `mapstructure:"alicloud_nlp"`
 }
 
 // ServerConfig 服务器配置
@@ -80,6 +81,20 @@ type BaiduAIConfig struct {
 	APIKey    string `mapstructure:"api_key"`
 	SecretKey string `mapstructure:"secret_key"`
 	BaseURL   string `mapstructure:"base_url"`
+	// 缓存配置
+	CacheEnabled bool `mapstructure:"cache_enabled"`
+	CacheTTL     int  `mapstructure:"cache_ttl"`
+	// 限流配置
+	QPS     int `mapstructure:"qps"`
+	Timeout int `mapstructure:"timeout"`
+}
+
+// AliCloudNLPConfig 阿里云NLP配置
+type AliCloudNLPConfig struct {
+	AccessKeyID     string `mapstructure:"access_key_id"`
+	AccessKeySecret string `mapstructure:"access_key_secret"`
+	RegionID        string `mapstructure:"region_id"`
+	Endpoint        string `mapstructure:"endpoint"`
 	// 缓存配置
 	CacheEnabled bool `mapstructure:"cache_enabled"`
 	CacheTTL     int  `mapstructure:"cache_ttl"`

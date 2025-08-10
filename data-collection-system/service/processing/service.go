@@ -13,6 +13,17 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
+// NLPProcessorInterface 定义NLP处理器接口
+type NLPProcessorInterface interface {
+	ProcessNewsContent(news *model.NewsData) error
+	ProcessBatchNews(newsList []*model.NewsData) error
+	ExtractRelatedStocks(text string) []string
+	AnalyzeSentiment(text string) float64
+	ExtractKeywords(text string) []string
+	ExtractEntities(text string) map[string][]string
+	CalculateImportanceLevel(news *model.NewsData) int
+}
+
 // StockMatchingStats 股票匹配统计信息
 type StockMatchingStats struct {
 	NewsWithStocks int64   `json:"news_with_stocks"`
@@ -30,7 +41,7 @@ type ProcessingService struct {
 	validator            *DataValidator
 	deduper              *DataDeduplicator
 	qualityChecker       *QualityChecker
-	nlpProcessor         *BaiduNLPProcessor
+	nlpProcessor         NLPProcessorInterface
 	stockMatcher         *StockMatcher
 	newsDeduplicator     *NewsDeduplicator
 	importanceEvaluator *ImportanceEvaluator
@@ -43,8 +54,9 @@ func NewProcessingService(
 	cfg *config.Config,
 	redisClient *redis.Client,
 ) *ProcessingService {
-	// 创建百度AI NLP处理器
-	nlpProcessor := NewBaiduNLPProcessor(&cfg.BaiduAI, redisClient)
+	// 使用阿里云NLP处理器
+	log.Printf("Using AliCloud NLP processor")
+	nlpProcessor := NewAliCloudNLPProcessor(&cfg.AliCloudNLP, redisClient)
 	
 	// 创建股票匹配器
 	stockMatcher := NewStockMatcher(stockRepo, redisClient)
@@ -127,8 +139,7 @@ func (s *ProcessingService) processBatchNews(ctx context.Context, newsList []*mo
 		len(cleanedNews), len(deduplicatedNews))
 
 	// 3. 批量NLP处理
-	nlpResults, err := s.nlpProcessor.ProcessBatchNews(ctx, deduplicatedNews)
-	if err != nil {
+	if err := s.nlpProcessor.ProcessBatchNews(deduplicatedNews); err != nil {
 		log.Printf("Batch NLP processing failed, error: %v", err)
 		// 降级到单个处理
 		return s.processBatchNewsFallback(ctx, deduplicatedNews)
@@ -136,15 +147,10 @@ func (s *ProcessingService) processBatchNews(ctx context.Context, newsList []*mo
 
 	// 4. 更新新闻数据并保存
 	successCount := 0
-	for i, news := range deduplicatedNews {
-		if i < len(nlpResults) && nlpResults[i] != nil {
-			// 使用NLP结果更新新闻
-			s.updateNewsWithNLPResult(news, nlpResults[i])
-		} else {
-			// NLP处理失败，使用基础股票关联
-			if err := s.associateStocks(ctx, news); err != nil {
-				log.Printf("Basic stock association failed, error: %v, news_id: %d", err, news.ID)
-			}
+	for _, news := range deduplicatedNews {
+		// NLP处理已完成，使用基础股票关联
+		if err := s.associateStocks(ctx, news); err != nil {
+			log.Printf("Basic stock association failed, error: %v, news_id: %d", err, news.ID)
 		}
 
 		// 数据质量检查
@@ -224,8 +230,8 @@ func (s *ProcessingService) processNewsItem(ctx context.Context, news *model.New
 		return nil
 	}
 
-	// 5. NLP处理（百度AI增强）
-	nlpResult, err := s.nlpProcessor.ProcessNewsContent(ctx, cleanedNews)
+	// 5. NLP处理
+	err = s.nlpProcessor.ProcessNewsContent(cleanedNews)
 	if err != nil {
 		log.Printf("NLP processing failed, error: %v, news_id: %d", err, cleanedNews.ID)
 		// NLP处理失败不阻断整个流程，使用基础股票关联处理
@@ -233,10 +239,11 @@ func (s *ProcessingService) processNewsItem(ctx context.Context, news *model.New
 			log.Printf("Basic stock association failed, error: %v, news_id: %d", err, cleanedNews.ID)
 		}
 	} else {
-		// 使用NLP处理结果更新新闻数据
-		s.updateNewsWithNLPResult(cleanedNews, nlpResult)
-		log.Printf("NLP processing completed, news_id: %d, sentiment_score: %f, importance_level: %s, related_stocks_count: %d, keywords_count: %d, cache_hit: %t",
-			cleanedNews.ID, nlpResult.SentimentScore, nlpResult.ImportanceLevel, len(nlpResult.RelatedStocks), len(nlpResult.Keywords), nlpResult.CacheHit)
+		// NLP处理成功，使用基础股票关联
+		if err := s.associateStocks(ctx, cleanedNews); err != nil {
+			log.Printf("Basic stock association failed, error: %v, news_id: %d", err, cleanedNews.ID)
+		}
+		log.Printf("NLP processing completed, news_id: %d", cleanedNews.ID)
 	}
 
 	// 6. 重要程度评估

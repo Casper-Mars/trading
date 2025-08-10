@@ -57,3 +57,29 @@ crawler:
     - "https://finance.sina.com.cn/"
     - "https://www.eastmoney.com/"
     - "https://www.cninfo.com.cn/"
+
+# 百度AI配置
+baidu_ai:
+  app_id: ""         # 建议通过环境变量 DCS_BAIDU_AI_APP_ID 设置
+  api_key: ""        # 建议通过环境变量 DCS_BAIDU_AI_API_KEY 设置
+  secret_key: ""     # 建议通过环境变量 DCS_BAIDU_AI_SECRET_KEY 设置
+  base_url: "https://aip.baidubce.com"
+  # 缓存配置
+  cache_enabled: true
+  cache_ttl: 3600    # 缓存时间（秒）
+  # 限流配置
+  qps: 10            # 每秒请求数
+  timeout: 30        # 请求超时（秒）
+
+# 阿里云NLP配置
+alicloud_nlp:
+  access_key_id: ""     # 建议通过环境变量 DCS_ALICLOUD_ACCESS_KEY_ID 设置
+  access_key_secret: "" # 建议通过环境变量 DCS_ALICLOUD_ACCESS_KEY_SECRET 设置
+  region_id: "cn-hangzhou"  # 阿里云区域
+  endpoint: "nlp-automl.cn-hangzhou.aliyuncs.com"  # NLP服务端点
+  # 缓存配置
+  cache_enabled: true
+  cache_ttl: 3600    # 缓存时间（秒）
+  # 限流配置
+  qps: 10            # 每秒请求数
+  timeout: 30        # 请求超时（秒）
