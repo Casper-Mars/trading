@@ -436,6 +436,83 @@ GET /api/v1/backtest/results/{result_id}
 
 # 获取策略列表
 GET /api/v1/backtest/strategies
+Response: {
+    "code": 200,
+    "data": {
+        "strategies": [
+            {
+                "name": "ma_strategy",
+                "display_name": "双均线策略",
+                "category": "technical",
+                "description": "基于短期和长期移动平均线交叉的趋势跟踪策略",
+                "parameters": {
+                    "short_window": {"type": "int", "range": [3, 10], "default": 5},
+                    "long_window": {"type": "int", "range": [15, 30], "default": 20}
+                }
+            },
+            {
+                "name": "macd_strategy",
+                "display_name": "MACD策略",
+                "category": "technical",
+                "description": "基于MACD指标的动量策略",
+                "parameters": {
+                    "fast_period": {"type": "int", "range": [8, 16], "default": 12},
+                    "slow_period": {"type": "int", "range": [20, 32], "default": 26},
+                    "signal_period": {"type": "int", "range": [6, 12], "default": 9}
+                }
+            },
+            {
+                "name": "rsi_strategy",
+                "display_name": "RSI策略",
+                "category": "technical",
+                "description": "基于RSI指标的超买超卖策略",
+                "parameters": {
+                    "rsi_period": {"type": "int", "range": [10, 20], "default": 14},
+                    "oversold": {"type": "int", "range": [20, 35], "default": 30},
+                    "overbought": {"type": "int", "range": [65, 80], "default": 70}
+                }
+            },
+            {
+                "name": "news_sentiment_strategy",
+                "display_name": "新闻情绪策略",
+                "category": "news_based",
+                "description": "基于新闻情绪分析的交易策略",
+                "parameters": {
+                    "sentiment_threshold": {"type": "float", "range": [0.4, 0.8], "default": 0.6},
+                    "volume_threshold": {"type": "float", "range": [1.2, 2.0], "default": 1.5},
+                    "price_change_threshold": {"type": "float", "range": [0.01, 0.05], "default": 0.03},
+                    "volume_period": {"type": "int", "range": [10, 30], "default": 20}
+                }
+            },
+            {
+                "name": "policy_driven_strategy",
+                "display_name": "政策导向策略",
+                "category": "news_based",
+                "description": "基于政策事件和行业影响的交易策略",
+                "parameters": {
+                    "policy_impact_threshold": {"type": "float", "range": [0.5, 0.9], "default": 0.7},
+                    "sector_correlation": {"type": "float", "range": [0.6, 0.9], "default": 0.8},
+                    "confirmation_period": {"type": "int", "range": [1, 5], "default": 3}
+                }
+            },
+            {
+                "name": "event_driven_strategy",
+                "display_name": "事件驱动策略",
+                "category": "news_based",
+                "description": "基于重大事件和市场反应的交易策略",
+                "parameters": {
+                    "event_severity_threshold": {"type": "float", "range": [0.4, 0.8], "default": 0.6},
+                    "market_reaction_threshold": {"type": "float", "range": [0.02, 0.08], "default": 0.05},
+                    "volatility_period": {"type": "int", "range": [10, 20], "default": 14}
+                }
+            }
+        ],
+        "categories": [
+            {"name": "technical", "display_name": "技术分析策略"},
+            {"name": "news_based", "display_name": "消息面策略"}
+        ]
+    }
+}
 ```
 
 #### 3.2.4 系统状态接口
@@ -883,6 +960,89 @@ class DataService:
         
     async def get_cached_data(self, symbol: str, date: date) -> Optional[DataFrame]:
         """获取缓存数据"""
+        
+    # 移除新闻数据同步功能
+    # 量化系统不需要主动同步新闻数据
+    # 需要时直接调用数据采集系统API获取即可
+        
+    async def get_sentiment_score(self, symbol: str, date: date) -> Optional[float]:
+        """从数据采集系统获取指定股票在指定日期的新闻情绪评分
+        
+        Args:
+            symbol: 股票代码
+            date: 日期
+            
+        Returns:
+            float: 情绪评分，范围 -1.0 到 1.0，None表示无数据
+        """
+        try:
+            # 先尝试从缓存获取
+            sentiment_data = await self._get_cached_sentiment(symbol, date)
+            
+            if sentiment_data:
+                return sentiment_data.get('weighted_sentiment_score')
+            
+            # 从数据采集系统API获取已分析的情绪评分
+            # GET /api/v1/sentiment/{symbol}?date={date}
+            sentiment_score = await self._fetch_sentiment_from_data_system(symbol, date)
+            
+            # 缓存结果
+            if sentiment_score is not None:
+                await self._cache_sentiment_score(symbol, date, sentiment_score)
+                
+            return sentiment_score
+            
+        except Exception as e:
+            logger.error(f"获取情绪评分失败: {e}")
+            return None
+            
+    async def _get_cached_sentiment(self, symbol: str, date: date) -> Optional[Dict]:
+        """从缓存获取情绪数据"""
+        cache_key = f"sentiment:{symbol}:{date.strftime('%Y-%m-%d')}"
+        cached_data = await self.redis_client.get(cache_key)
+        return json.loads(cached_data) if cached_data else None
+        
+    async def _fetch_sentiment_from_data_system(self, symbol: str, date: date) -> Optional[float]:
+        """从数据采集系统获取情绪评分"""
+        # 调用数据采集系统API获取已分析的情绪评分
+        # 实际实现中需要调用HTTP API
+        return None  # 占位符实现
+        
+    async def _cache_sentiment_score(self, symbol: str, date: date, score: float) -> None:
+        """缓存情绪评分"""
+        cache_key = f"sentiment:{symbol}:{date.strftime('%Y-%m-%d')}"
+        cache_data = {'weighted_sentiment_score': score, 'cached_at': datetime.now().isoformat()}
+        await self.redis_client.setex(cache_key, 3600, json.dumps(cache_data))  # 缓存1小时
+        
+    async def get_policy_impact_score(self, symbol: str, date: date) -> Optional[float]:
+        """从数据采集系统获取政策影响评分"""
+        try:
+            # 调用数据采集系统API获取政策影响评分
+            # GET /api/v1/policy-impact/{symbol}?date={date}
+            return await self._fetch_policy_impact_from_data_system(symbol, date)
+        except Exception as e:
+            logger.error(f"获取政策影响评分失败: {e}")
+            return None
+            
+    async def _fetch_policy_impact_from_data_system(self, symbol: str, date: date) -> Optional[float]:
+        """从数据采集系统获取政策影响评分"""
+        # 调用数据采集系统API
+        return None  # 占位符实现
+        
+    async def get_event_severity_score(self, symbol: str, date: date) -> Optional[float]:
+        """从数据采集系统获取事件严重性评分"""
+        try:
+            # 调用数据采集系统API获取事件严重性评分
+            # GET /api/v1/event-severity/{symbol}?date={date}
+            return await self._fetch_event_severity_from_data_system(symbol, date)
+        except Exception as e:
+            logger.error(f"获取事件严重性评分失败: {e}")
+            return None
+            
+    async def _fetch_event_severity_from_data_system(self, symbol: str, date: date) -> Optional[float]:
+        """从数据采集系统获取事件严重性评分"""
+        # 调用数据采集系统API
+        return None  # 占位符实现
 ```
 
 ## 6. 交易策略设计
@@ -1093,7 +1253,7 @@ class MACDStrategy(BaseStrategy):
         }
 ```
 
-#### 5.2.3 RSI策略
+#### 6.2.3 RSI策略
 
 ```python
 import backtrader as bt
@@ -1149,6 +1309,273 @@ class RSIStrategy(BaseStrategy):
         }
 ```
 
+#### 6.2.4 消息面策略
+
+```python
+import backtrader as bt
+from typing import Dict, Any, Optional
+
+class NewsSentimentStrategy(BaseStrategy):
+    """新闻情绪策略 - 基于外部新闻情绪指标的交易策略"""
+    
+    # 策略参数
+    params = (
+        ('sentiment_threshold', 0.6),      # 情绪阈值
+        ('volume_threshold', 1.5),         # 成交量阈值（相对于均值）
+        ('price_change_threshold', 0.03),  # 价格变化阈值
+        ('volume_period', 20),             # 成交量均值计算周期
+        ('printlog', True),                # 是否打印日志
+    )
+    
+    def setup_indicators(self):
+        """设置技术指标"""
+        # 成交量移动平均
+        self.volume_sma = bt.indicators.SimpleMovingAverage(
+            self.data.volume, period=self.params.volume_period
+        )
+        
+    def next(self):
+        """策略主逻辑"""
+        # 获取外部消息面数据（需要通过数据服务获取）
+        news_sentiment = self.get_news_sentiment_score()
+        
+        # 计算成交量比率
+        volume_ratio = self.data.volume[0] / self.volume_sma[0] if self.volume_sma[0] > 0 else 1.0
+        
+        # 计算价格变化率
+        price_change = (self.data.close[0] - self.data.close[-1]) / self.data.close[-1] if len(self.data.close) > 1 else 0.0
+        
+        # 如果没有持仓
+        if not self.position:
+            # 正面消息 + 成交量放大 + 价格上涨
+            if (news_sentiment is not None and 
+                news_sentiment > self.params.sentiment_threshold and 
+                volume_ratio > self.params.volume_threshold and
+                price_change > self.params.price_change_threshold):
+                
+                self.log(f'消息面买入信号: 情绪={news_sentiment:.2f}, 量比={volume_ratio:.2f}, 涨幅={price_change:.2%}')
+                # 计算买入数量（使用80%的可用资金，消息面策略风险较高）
+                size = int(self.broker.getcash() * 0.8 / self.data.close[0])
+                self.buy(size=size)
+                
+        # 如果有持仓
+        else:
+            # 负面消息或情绪转弱时卖出
+            if (news_sentiment is not None and 
+                news_sentiment < -self.params.sentiment_threshold):
+                
+                self.log(f'消息面卖出信号: 情绪={news_sentiment:.2f} (负面)')
+                self.sell(size=self.position.size)
+                
+    def get_news_sentiment_score(self) -> Optional[float]:
+        """获取新闻情绪评分
+        
+        Returns:
+            float: 情绪评分，范围 -1.0 到 1.0，None表示无数据
+                  正值表示正面情绪，负值表示负面情绪
+        
+        Note:
+            这里需要集成外部新闻情绪分析服务
+            实际实现中应该调用数据服务获取当前股票的新闻情绪数据
+        """
+        # 占位符实现 - 实际应该从外部数据源获取
+        # 可以通过以下方式获取：
+        # 1. 调用新闻情绪分析API
+        # 2. 从Redis缓存中读取预处理的情绪数据
+        # 3. 从数据库中查询最新的情绪指标
+        
+        # 示例：从数据服务获取情绪数据
+        # symbol = self.data._name  # 获取股票代码
+        # return self.data_service.get_sentiment_score(symbol, self.data.datetime.date(0))
+        
+        return 0.0  # 占位符返回值
+        
+    def log(self, txt, dt=None):
+        """日志记录"""
+        if self.params.printlog:
+            super().log(txt, dt)
+            
+    @classmethod
+    def get_parameter_ranges(cls) -> Dict[str, tuple]:
+        """获取参数范围"""
+        return {
+            'sentiment_threshold': (0.4, 0.8),
+            'volume_threshold': (1.2, 2.0),
+            'price_change_threshold': (0.01, 0.05),
+            'volume_period': (10, 30)
+        }
+```
+
+```python
+class PolicyDrivenStrategy(BaseStrategy):
+    """政策导向策略 - 基于政策事件和行业影响的交易策略"""
+    
+    # 策略参数
+    params = (
+        ('policy_impact_threshold', 0.7),  # 政策影响阈值
+        ('sector_correlation', 0.8),       # 行业相关性阈值
+        ('confirmation_period', 3),        # 确认周期（交易日）
+        ('printlog', True),                # 是否打印日志
+    )
+    
+    def setup_indicators(self):
+        """设置技术指标"""
+        # 价格移动平均（用于趋势确认）
+        self.price_sma = bt.indicators.SimpleMovingAverage(
+            self.data.close, period=10
+        )
+        
+    def next(self):
+        """策略主逻辑"""
+        # 获取政策相关数据（需要通过数据服务获取）
+        policy_impact = self.get_policy_impact_score()
+        sector_benefit = self.get_sector_benefit_score()
+        
+        # 如果没有持仓
+        if not self.position:
+            # 利好政策 + 行业受益 + 价格趋势向上
+            if (policy_impact is not None and sector_benefit is not None and
+                policy_impact > self.params.policy_impact_threshold and 
+                sector_benefit > self.params.sector_correlation and
+                self.data.close[0] > self.price_sma[0]):
+                
+                self.log(f'政策买入信号: 政策影响={policy_impact:.2f}, 行业受益={sector_benefit:.2f}')
+                # 计算买入数量（使用85%的可用资金）
+                size = int(self.broker.getcash() * 0.85 / self.data.close[0])
+                self.buy(size=size)
+                
+        # 如果有持仓
+        else:
+            # 政策利空或影响减弱
+            if (policy_impact is not None and 
+                policy_impact < -self.params.policy_impact_threshold):
+                
+                self.log(f'政策卖出信号: 政策影响={policy_impact:.2f} (利空)')
+                self.sell(size=self.position.size)
+                
+    def get_policy_impact_score(self) -> Optional[float]:
+        """获取政策影响评分
+        
+        Returns:
+            float: 政策影响评分，范围 -1.0 到 1.0，None表示无数据
+                  正值表示利好政策，负值表示利空政策
+        """
+        # 占位符实现 - 实际应该从外部数据源获取
+        return 0.0
+        
+    def get_sector_benefit_score(self) -> Optional[float]:
+        """获取行业受益程度评分
+        
+        Returns:
+            float: 行业受益评分，范围 0.0 到 1.0，None表示无数据
+                  数值越高表示行业受益程度越大
+        """
+        # 占位符实现 - 实际应该从外部数据源获取
+        return 0.0
+        
+    def log(self, txt, dt=None):
+        """日志记录"""
+        if self.params.printlog:
+            super().log(txt, dt)
+            
+    @classmethod
+    def get_parameter_ranges(cls) -> Dict[str, tuple]:
+        """获取参数范围"""
+        return {
+            'policy_impact_threshold': (0.5, 0.9),
+            'sector_correlation': (0.6, 0.9),
+            'confirmation_period': (1, 5)
+        }
+```
+
+```python
+class EventDrivenStrategy(BaseStrategy):
+    """事件驱动策略 - 基于重大事件和市场反应的交易策略"""
+    
+    # 策略参数
+    params = (
+        ('event_severity_threshold', 0.6),   # 事件严重性阈值
+        ('market_reaction_threshold', 0.05), # 市场反应阈值
+        ('volatility_period', 14),           # 波动率计算周期
+        ('printlog', True),                  # 是否打印日志
+    )
+    
+    def setup_indicators(self):
+        """设置技术指标"""
+        # ATR指标（平均真实波动范围）
+        self.atr = bt.indicators.AverageTrueRange(
+            self.data, period=self.params.volatility_period
+        )
+        
+    def next(self):
+        """策略主逻辑"""
+        # 获取事件数据（需要通过数据服务获取）
+        event_severity = self.get_event_severity_score()
+        
+        # 计算市场反应强度
+        if len(self.data.close) > 1:
+            market_reaction = abs(self.data.close[0] - self.data.close[-1]) / self.data.close[-1]
+        else:
+            market_reaction = 0.0
+            
+        # 如果没有持仓
+        if not self.position:
+            # 重大事件 + 市场反应强烈 + 正面事件
+            if (event_severity is not None and 
+                event_severity > self.params.event_severity_threshold and 
+                market_reaction > self.params.market_reaction_threshold and
+                self.is_positive_event()):
+                
+                self.log(f'事件驱动买入信号: 事件严重性={event_severity:.2f}, 市场反应={market_reaction:.2%}')
+                # 计算买入数量（使用75%的可用资金，事件驱动风险较高）
+                size = int(self.broker.getcash() * 0.75 / self.data.close[0])
+                self.buy(size=size)
+                
+        # 如果有持仓
+        else:
+            # 事件影响消退或转为负面
+            if (event_severity is not None and 
+                (event_severity < -self.params.event_severity_threshold or
+                 not self.is_positive_event())):
+                
+                self.log(f'事件驱动卖出信号: 事件严重性={event_severity:.2f}')
+                self.sell(size=self.position.size)
+                
+    def get_event_severity_score(self) -> Optional[float]:
+        """获取事件严重性评分
+        
+        Returns:
+            float: 事件严重性评分，范围 -1.0 到 1.0，None表示无数据
+                  正值表示正面事件，负值表示负面事件
+                  绝对值表示事件的重要程度
+        """
+        # 占位符实现 - 实际应该从外部数据源获取
+        return 0.0
+        
+    def is_positive_event(self) -> bool:
+        """判断是否为正面事件
+        
+        Returns:
+            bool: True表示正面事件，False表示负面事件
+        """
+        # 占位符实现 - 实际应该基于事件分析结果
+        return True
+        
+    def log(self, txt, dt=None):
+        """日志记录"""
+        if self.params.printlog:
+            super().log(txt, dt)
+            
+    @classmethod
+    def get_parameter_ranges(cls) -> Dict[str, tuple]:
+        """获取参数范围"""
+        return {
+            'event_severity_threshold': (0.4, 0.8),
+            'market_reaction_threshold': (0.02, 0.08),
+            'volatility_period': (10, 20)
+        }
+```
+
 ### 6.3 策略管理器
 
 ```python
@@ -1164,9 +1591,15 @@ class StrategyManager:
         
     def register_default_strategies(self):
         """注册默认策略"""
+        # 技术分析策略
         self.register_strategy('ma_strategy', MovingAverageStrategy)
         self.register_strategy('macd_strategy', MACDStrategy)
         self.register_strategy('rsi_strategy', RSIStrategy)
+        
+        # 消息面策略
+        self.register_strategy('news_sentiment_strategy', NewsSentimentStrategy)
+        self.register_strategy('policy_driven_strategy', PolicyDrivenStrategy)
+        self.register_strategy('event_driven_strategy', EventDrivenStrategy)
         
     def register_strategy(self, name: str, strategy_class: Type[BaseStrategy]):
         """注册策略"""
@@ -1282,12 +1715,8 @@ class DataCollectionJobs:
             5
         )
         
-        # 新闻数据采集 (每30分钟)
-        self.scheduler.add_interval_job(
-            'news_data', 
-            self.collect_news_data, 
-            30
-        )
+        # 移除新闻数据采集任务
+        # 量化系统不需要主动采集新闻数据
         
     async def collect_daily_stock_data(self):
         """采集每日股票数据"""
@@ -1311,14 +1740,8 @@ class DataCollectionJobs:
         except Exception as e:
             logger.error(f"实时数据采集失败: {e}")
             
-    async def collect_news_data(self):
-        """采集新闻数据"""
-        try:
-            # 采集财经新闻
-            await self.data_service.collect_financial_news()
-            
-        except Exception as e:
-            logger.error(f"新闻数据采集失败: {e}")
+    # 移除新闻数据采集方法
+    # 量化系统不需要主动采集新闻数据，需要时直接调用数据采集系统API
 ```
 
 ## 8. 配置管理
