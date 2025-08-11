@@ -106,7 +106,7 @@
 
   * _Requirements: 1.1-1.7, 5.1, 5.6, 5.7_
 
-* [ ] 3.2 DataService
+* [x] 3.2 DataService
 
   * 获取/清洗/预处理/缓存市场数据；技术指标计算接口
 

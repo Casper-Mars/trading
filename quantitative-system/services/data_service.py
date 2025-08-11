@@ -586,6 +586,431 @@ class DataService:
 
         return result_data
 
+    async def get_news_sentiment_data(
+        self,
+        symbols: list[str] | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        sentiment_threshold: float = 0.5,
+        use_cache: bool = True,
+    ) -> dict[str, Any]:
+        """获取新闻情感数据
+
+        Args:
+            symbols: 股票代码列表，None表示获取全市场新闻
+            start_date: 开始日期 (YYYY-MM-DD)
+            end_date: 结束日期 (YYYY-MM-DD)
+            sentiment_threshold: 情感阈值，用于过滤新闻
+            use_cache: 是否使用缓存
+
+        Returns:
+            包含新闻情感分析结果的字典
+        """
+        try:
+            # 构建缓存键
+            cache_key = self._build_cache_key(
+                "news_sentiment", symbols or [], start_date, end_date
+            )
+
+            # 尝试从缓存获取
+            if use_cache:
+                cached_data = self.cache_repo.get(
+                    CacheType.MARKET_DATA, cache_key, serialize_method="json"
+                )
+                if cached_data is not None:
+                    logger.info(f"从缓存获取新闻情感数据: {symbols}")
+                    return cached_data
+
+            # 从数据采集系统获取新闻数据
+            params = {}
+            if symbols:
+                params["symbols"] = ",".join(symbols)
+            if start_date:
+                params["start_date"] = start_date
+            if end_date:
+                params["end_date"] = end_date
+
+            response = await asyncio.to_thread(
+                self.data_client.get_news, **params
+            )
+
+            if not response.get("success") or not response.get("data"):
+                logger.warning("未获取到新闻数据")
+                return {"sentiment_score": 0.0, "confidence": 0.0, "news_count": 0}
+
+            news_data = response["data"]
+            if not isinstance(news_data, list):
+                news_data = [news_data]
+
+            # 分析新闻情感
+            sentiment_result = self._analyze_news_sentiment(
+                news_data, sentiment_threshold
+            )
+
+            # 缓存结果
+            if use_cache:
+                self.cache_repo.set(
+                    CacheType.MARKET_DATA,
+                    cache_key,
+                    sentiment_result,
+                    ttl=self._cache_ttl,
+                    serialize_method="json",
+                )
+
+            logger.info(
+                f"成功获取新闻情感数据: {symbols}, 新闻数量: {sentiment_result.get('news_count', 0)}"
+            )
+            return sentiment_result
+
+        except Exception as e:
+            logger.error(f"获取新闻情感数据失败: {symbols}, 错误: {e}")
+            return {"sentiment_score": 0.0, "confidence": 0.0, "news_count": 0}
+
+    async def get_policy_impact_data(
+        self,
+        symbols: list[str] | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        impact_threshold: float = 0.5,
+        use_cache: bool = True,
+    ) -> dict[str, Any]:
+        """获取政策影响数据
+
+        Args:
+            symbols: 股票代码列表
+            start_date: 开始日期 (YYYY-MM-DD)
+            end_date: 结束日期 (YYYY-MM-DD)
+            impact_threshold: 影响阈值
+            use_cache: 是否使用缓存
+
+        Returns:
+            包含政策影响分析结果的字典
+        """
+        try:
+            # 构建缓存键
+            cache_key = self._build_cache_key(
+                "policy_impact", symbols or [], start_date, end_date
+            )
+
+            # 尝试从缓存获取
+            if use_cache:
+                cached_data = self.cache_repo.get(
+                    CacheType.MARKET_DATA, cache_key, serialize_method="json"
+                )
+                if cached_data is not None:
+                    logger.info(f"从缓存获取政策影响数据: {symbols}")
+                    return cached_data
+
+            # 获取政策相关新闻（通过关键词过滤）
+            params = {
+                "keywords": "政策,监管,法规,政府,央行,证监会,银保监会",
+                "limit": 100,
+            }
+            if symbols:
+                params["symbols"] = ",".join(symbols)
+            if start_date:
+                params["start_date"] = start_date
+            if end_date:
+                params["end_date"] = end_date
+
+            response = await asyncio.to_thread(
+                self.data_client.get_news, **params
+            )
+
+            if not response.get("success") or not response.get("data"):
+                logger.warning("未获取到政策相关新闻数据")
+                return {"impact_score": 0.0, "confidence": 0.0, "policy_count": 0}
+
+            news_data = response["data"]
+            if not isinstance(news_data, list):
+                news_data = [news_data]
+
+            # 分析政策影响
+            policy_result = self._analyze_policy_impact(
+                news_data, impact_threshold
+            )
+
+            # 缓存结果
+            if use_cache:
+                self.cache_repo.set(
+                    CacheType.MARKET_DATA,
+                    cache_key,
+                    policy_result,
+                    ttl=self._cache_ttl,
+                    serialize_method="json",
+                )
+
+            logger.info(
+                f"成功获取政策影响数据: {symbols}, 政策新闻数量: {policy_result.get('policy_count', 0)}"
+            )
+            return policy_result
+
+        except Exception as e:
+            logger.error(f"获取政策影响数据失败: {symbols}, 错误: {e}")
+            return {"impact_score": 0.0, "confidence": 0.0, "policy_count": 0}
+
+    async def get_event_severity_data(
+        self,
+        symbols: list[str] | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        severity_threshold: float = 0.5,
+        use_cache: bool = True,
+    ) -> dict[str, Any]:
+        """获取事件严重性数据
+
+        Args:
+            symbols: 股票代码列表
+            start_date: 开始日期 (YYYY-MM-DD)
+            end_date: 结束日期 (YYYY-MM-DD)
+            severity_threshold: 严重性阈值
+            use_cache: 是否使用缓存
+
+        Returns:
+            包含事件严重性分析结果的字典
+        """
+        try:
+            # 构建缓存键
+            cache_key = self._build_cache_key(
+                "event_severity", symbols or [], start_date, end_date
+            )
+
+            # 尝试从缓存获取
+            if use_cache:
+                cached_data = self.cache_repo.get(
+                    CacheType.MARKET_DATA, cache_key, serialize_method="json"
+                )
+                if cached_data is not None:
+                    logger.info(f"从缓存获取事件严重性数据: {symbols}")
+                    return cached_data
+
+            # 获取重大事件相关新闻
+            params = {
+                "keywords": "重大,突发,紧急,危机,风险,事故,违规,处罚,停牌,退市",
+                "limit": 100,
+            }
+            if symbols:
+                params["symbols"] = ",".join(symbols)
+            if start_date:
+                params["start_date"] = start_date
+            if end_date:
+                params["end_date"] = end_date
+
+            response = await asyncio.to_thread(
+                self.data_client.get_news, **params
+            )
+
+            if not response.get("success") or not response.get("data"):
+                logger.warning("未获取到事件相关新闻数据")
+                return {"severity_score": 0.0, "confidence": 0.0, "event_count": 0}
+
+            news_data = response["data"]
+            if not isinstance(news_data, list):
+                news_data = [news_data]
+
+            # 分析事件严重性
+            event_result = self._analyze_event_severity(
+                news_data, severity_threshold
+            )
+
+            # 缓存结果
+            if use_cache:
+                self.cache_repo.set(
+                    CacheType.MARKET_DATA,
+                    cache_key,
+                    event_result,
+                    ttl=self._cache_ttl,
+                    serialize_method="json",
+                )
+
+            logger.info(
+                f"成功获取事件严重性数据: {symbols}, 事件新闻数量: {event_result.get('event_count', 0)}"
+            )
+            return event_result
+
+        except Exception as e:
+            logger.error(f"获取事件严重性数据失败: {symbols}, 错误: {e}")
+            return {"severity_score": 0.0, "confidence": 0.0, "event_count": 0}
+
+    def _analyze_news_sentiment(
+        self, news_data: list[dict[str, Any]], threshold: float
+    ) -> dict[str, Any]:
+        """分析新闻情感"""
+        try:
+            if not news_data:
+                return {"sentiment_score": 0.0, "confidence": 0.0, "news_count": 0}
+
+            total_sentiment = 0.0
+            total_confidence = 0.0
+            valid_count = 0
+
+            for news in news_data:
+                # 从新闻数据中提取情感分数
+                sentiment = news.get("sentiment_score", 0.0)
+                confidence = news.get("confidence", 0.0)
+
+                # 如果没有预分析的情感数据，使用简单的关键词分析
+                if sentiment == 0.0 and "title" in news:
+                    sentiment = self._simple_sentiment_analysis(news["title"])
+                    confidence = 0.5  # 简单分析的置信度较低
+
+                if confidence >= threshold:
+                    total_sentiment += sentiment * confidence
+                    total_confidence += confidence
+                    valid_count += 1
+
+            if valid_count == 0:
+                return {"sentiment_score": 0.0, "confidence": 0.0, "news_count": len(news_data)}
+
+            avg_sentiment = total_sentiment / total_confidence if total_confidence > 0 else 0.0
+            avg_confidence = total_confidence / valid_count
+
+            return {
+                "sentiment_score": round(avg_sentiment, 3),
+                "confidence": round(avg_confidence, 3),
+                "news_count": len(news_data),
+                "valid_count": valid_count,
+            }
+
+        except Exception as e:
+            logger.error(f"分析新闻情感失败: {e}")
+            return {"sentiment_score": 0.0, "confidence": 0.0, "news_count": 0}
+
+    def _analyze_policy_impact(
+        self, news_data: list[dict[str, Any]], threshold: float
+    ) -> dict[str, Any]:
+        """分析政策影响"""
+        try:
+            if not news_data:
+                return {"impact_score": 0.0, "confidence": 0.0, "policy_count": 0}
+
+            total_impact = 0.0
+            total_confidence = 0.0
+            valid_count = 0
+
+            # 政策关键词权重
+            policy_keywords = {
+                "央行": 0.9, "证监会": 0.9, "银保监会": 0.8, "政府": 0.7,
+                "政策": 0.6, "监管": 0.7, "法规": 0.6, "规定": 0.5,
+                "利率": 0.8, "准备金": 0.8, "IPO": 0.7, "退市": 0.9
+            }
+
+            for news in news_data:
+                # 从新闻数据中提取政策影响分数
+                impact = news.get("policy_impact_score", 0.0)
+                confidence = news.get("confidence", 0.0)
+
+                # 如果没有预分析的政策影响数据，使用关键词分析
+                if impact == 0.0 and "title" in news:
+                    impact = self._calculate_policy_impact(news["title"], policy_keywords)
+                    confidence = 0.6  # 关键词分析的置信度
+
+                if confidence >= threshold:
+                    total_impact += impact * confidence
+                    total_confidence += confidence
+                    valid_count += 1
+
+            if valid_count == 0:
+                return {"impact_score": 0.0, "confidence": 0.0, "policy_count": len(news_data)}
+
+            avg_impact = total_impact / total_confidence if total_confidence > 0 else 0.0
+            avg_confidence = total_confidence / valid_count
+
+            return {
+                "impact_score": round(avg_impact, 3),
+                "confidence": round(avg_confidence, 3),
+                "policy_count": len(news_data),
+                "valid_count": valid_count,
+            }
+
+        except Exception as e:
+            logger.error(f"分析政策影响失败: {e}")
+            return {"impact_score": 0.0, "confidence": 0.0, "policy_count": 0}
+
+    def _analyze_event_severity(
+        self, news_data: list[dict[str, Any]], threshold: float
+    ) -> dict[str, Any]:
+        """分析事件严重性"""
+        try:
+            if not news_data:
+                return {"severity_score": 0.0, "confidence": 0.0, "event_count": 0}
+
+            total_severity = 0.0
+            total_confidence = 0.0
+            valid_count = 0
+
+            # 事件严重性关键词权重
+            severity_keywords = {
+                "重大": 0.9, "突发": 0.8, "紧急": 0.8, "危机": 0.9,
+                "风险": 0.7, "事故": 0.8, "违规": 0.7, "处罚": 0.6,
+                "停牌": 0.8, "退市": 0.9, "破产": 1.0, "倒闭": 1.0
+            }
+
+            for news in news_data:
+                # 从新闻数据中提取事件严重性分数
+                severity = news.get("event_severity_score", 0.0)
+                confidence = news.get("confidence", 0.0)
+
+                # 如果没有预分析的事件严重性数据，使用关键词分析
+                if severity == 0.0 and "title" in news:
+                    severity = self._calculate_event_severity(news["title"], severity_keywords)
+                    confidence = 0.6  # 关键词分析的置信度
+
+                if confidence >= threshold:
+                    total_severity += severity * confidence
+                    total_confidence += confidence
+                    valid_count += 1
+
+            if valid_count == 0:
+                return {"severity_score": 0.0, "confidence": 0.0, "event_count": len(news_data)}
+
+            avg_severity = total_severity / total_confidence if total_confidence > 0 else 0.0
+            avg_confidence = total_confidence / valid_count
+
+            return {
+                "severity_score": round(avg_severity, 3),
+                "confidence": round(avg_confidence, 3),
+                "event_count": len(news_data),
+                "valid_count": valid_count,
+            }
+
+        except Exception as e:
+            logger.error(f"分析事件严重性失败: {e}")
+            return {"severity_score": 0.0, "confidence": 0.0, "event_count": 0}
+
+    def _simple_sentiment_analysis(self, text: str) -> float:
+        """简单的情感分析"""
+        positive_words = ["上涨", "利好", "增长", "盈利", "收益", "成功", "突破", "创新"]
+        negative_words = ["下跌", "利空", "下降", "亏损", "风险", "失败", "危机", "问题"]
+
+        positive_count = sum(1 for word in positive_words if word in text)
+        negative_count = sum(1 for word in negative_words if word in text)
+
+        total_count = positive_count + negative_count
+        if total_count == 0:
+            return 0.0
+
+        return (positive_count - negative_count) / total_count
+
+    def _calculate_policy_impact(self, text: str, keywords: dict[str, float]) -> float:
+        """计算政策影响分数"""
+        total_weight = 0.0
+        for keyword, weight in keywords.items():
+            if keyword in text:
+                total_weight += weight
+
+        # 归一化到0-1范围
+        return min(total_weight / 2.0, 1.0)
+
+    def _calculate_event_severity(self, text: str, keywords: dict[str, float]) -> float:
+        """计算事件严重性分数"""
+        max_weight = 0.0
+        for keyword, weight in keywords.items():
+            if keyword in text:
+                max_weight = max(max_weight, weight)
+
+        return max_weight
+
     def _build_cache_key(self, prefix: str, symbols: list[str], start_date: str | None, end_date: str | None) -> str:
         """构建缓存键"""
         symbols_str = "-".join(sorted(symbols))
