@@ -136,87 +136,39 @@
 
   * 实现策略基类（BaseStrategy）
 
-  * 实现策略注册器，支持策略动态注册和管理
+  * 实现策略注册器（StrategyManager），支持策略动态注册和管理
+
+  * 注册策略类型：
+    * 多因子策略：MultiFactorStrategy（唯一核心策略）
 
   * _Requirements: 2.6, 2.7_
 
-* [x] 3.3.3 技术分析策略实现
+* [ ] 3.3.3 多因子选股策略实现（MultiFactorStrategy）
 
-  * 双均线策略：params={short\_window, long\_window, stop\_loss\_pct?}
+  * 实现MultiFactorStrategy策略类，继承自BaseStrategy
 
-    * 验收：金叉/死叉信号按窗口交叉正确触发；交易次数、持仓区间与手工样本一致；能产出 Sharpe/Drawdown/Returns/Trades 指标
+  * 核心参数配置：
+    * 四维度因子权重：technical_weight, fundamental_weight, news_weight, market_weight
+    * 交易阈值：buy_threshold, sell_threshold, hold_threshold
+    * 风险控制：max_position_size, stop_loss_pct, max_drawdown_pct
+    * 置信度：min_confidence_score
+    * 回测参数：rebalance_frequency, lookback_period
 
-  * 三重均线策略：params={short\_window, mid\_window, long\_window}
+  * 策略主逻辑实现：
+    * 集成FactorService进行四维度因子评分计算
+    * 基于综合评分和阈值进行买卖决策
+    * 实现风险管理和仓位控制
+    * 记录评分历史和交易信号
 
-    * 验收：多头/空头排列识别正确；回测可重复；指标产出完整
-
-  * MACD金叉策略：params={fast\_period, slow\_period, signal\_period}
-
-    * 验收：金叉/死叉触发点与计算结果一致；直方图由负转正/正转负与信号匹配
-
-  * 布林带突破策略：params={period, k, squeeze\_threshold?, take\_profit\_atr\_multiplier?}
-
-    * 验收：挤压识别与上下轨突破信号正确；失败突破能触发止损
-
-  * RSI反转策略：params={period, overbought, oversold}
-
-    * 验收：超买/超卖与阈值符合；反转确认后入场/出场逻辑正确
-
-  * _Requirements: 2.8, 2.9_
-
-* [ ] 3.3.4 动量策略实现
-
-  * 价格突破策略：params={breakout\_lookback, confirm\_volume\_ratio?, stop\_loss\_pct?}
-
-    * 验收：近N日高/低突破识别准确；量能确认可选；假突破能止损
-
-  * 向上缺口策略：params={gap\_pct\_threshold, min\_volume?, hold\_days?}
-
-    * 验收：跳空幅度判断正确；缺口回补与持有期规则正确执行
-
-  * _Requirements: 2.10_
-
-* [ ] 3.3.5 基本面策略实现
-
-  * PE-PB双低策略（价值投资）
-
-  * 成长加速策略（成长投资）
-
-  * _Requirements: 2.11_
-
-* [ ] 3.3.6 量化策略实现
-
-  * 多因子选股策略：params={factors\[], weights\[], rebalance\_period}
-
-    * 验收：打分/加权与排序选股正确；再平衡在周期边界正确执行
-
-  * 股票配对交易策略：params={lookback, coint\_pvalue, entry\_z, exit\_z, stop\_z?}
-
-    * 验收：协整检验与Z-score进出场阈值正确；价差回归到均值时平仓
-
-  * 价差回归策略：params={mean\_window, entry\_std, exit\_std}
-
-    * 验收：偏离均值Nσ进场、回归<阈值出场逻辑正确
+  * 验收标准：
+    * 因子评分计算正确，权重应用准确
+    * 交易信号生成符合阈值设定
+    * 风险控制机制有效执行
+    * 再平衡在周期边界正确执行
 
   * _Requirements: 2.12_
 
-* [ ] 3.3.7 新闻基础策略实现
-
-  * 新闻情感策略：params={sentiment\_threshold, confidence\_threshold, hold\_days?}
-
-    * 验收：情感评分阈值判断正确；置信度过滤有效；持有期规则正确执行
-
-  * 政策驱动策略：params={policy\_impact\_threshold, sector\_filter?, reaction\_delay?}
-
-    * 验收：政策影响评分识别准确；行业过滤可选；政策反应延迟处理正确
-
-  * 事件驱动策略：params={event\_severity\_threshold, event\_type\_filter?, max\_exposure?}
-
-    * 验收：事件严重性评分判断正确；事件类型过滤可选；最大敞口控制有效
-
-  * _Requirements: 2.13_
-
-* [ ] 3.3.8 风险管理策略实现
+* [ ] 3.3.4 风险管理策略实现
 
   * 等权重仓位策略：params={weight\_per\_position}
 
@@ -232,15 +184,45 @@
 
   * _Requirements: 2.14_
 
-* [ ] 3.3.9 策略测试用例
+* [ ] 3.3.5 多因子回测权重配置支持
 
-  * 为上述每个策略新增UT（信号/边界/异常）与回测BT用例（固定样本数据，结果可复现）
+  * 升级BacktestService的run_multi_factor_backtest方法，支持可选的factor_weights参数
 
-  * 集成到CI流程
+  * 实现权重配置的动态应用：传入权重时创建临时FactorService实例，否则使用默认权重
 
-  * _Requirements: 5.3_
+  * 更新_calculate_factor_scores方法，支持使用指定的FactorService实例进行因子计算
 
-* [ ] 3.4 AIService（阿里百炼）
+  * 确保回测结果中记录使用的权重配置，便于结果分析和复现
+
+  * 实现权重隔离：不同回测任务的权重配置互不影响
+
+  * _Requirements: 2.12, 5.3_
+
+* [ ] 3.5 FactorService（多因子评分服务）
+
+  * 实现多因子评分核心服务，支持技术面、基本面、消息面、市场面四个维度的因子计算
+
+  * 权重配置机制：
+    * 提供默认四维度权重配置（技术面0.35、基本面0.25、消息面0.25、市场面0.15）
+    * 支持初始化时传入自定义权重，实现权重验证和标准化
+    * 实现动态权重管理：更新、获取、重置权重功能
+    * 支持自定义权重的综合评分计算
+
+  * 四维度因子评分实现：
+    * 技术面因子：动量、反转、波动率、技术指标（MA、MACD、RSI、布林带等）
+    * 基本面因子：盈利能力、估值水平、财务质量、成长性
+    * 消息面因子：新闻情感、政策影响、事件驱动、市场关注度
+    * 市场面因子：市场表现、资金流向、市场情绪、行业轮动
+
+  * 核心功能：
+    * 综合评分计算，支持批量股票评分
+    * 缓存优化和分数标准化
+    * 集成DataService获取技术面和基本面数据
+    * 按需从数据采集系统API获取消息面数据
+
+  * _Requirements: 2.12, 2.13, 5.3_
+
+* [ ] 3.6 AIService（阿里百炼）
 
   * 实现 dashscope 客户端封装（或HTTP调用）：鉴权、超时、重试
 
@@ -250,7 +232,7 @@
 
   * _Requirements: 3.1-3.16_
 
-* [ ] 3.5 PlanService
+* [ ] 3.7 PlanService
 
   * 将结构化建议格式化为 Markdown（表格/章节），保存与查询
 
@@ -300,6 +282,8 @@
 
   * _Requirements: 1.1-1.7, 5.1, 5.7_
 
+
+
 ## 阶段5：API接口层（FastAPI）（M1）
 
 * [ ] 5.1 持仓管理接口
@@ -314,9 +298,31 @@
 
   * POST /api/v1/backtest/run，GET /api/v1/backtest/results/{id}，GET /api/v1/backtest/strategies
 
+  * 升级多因子回测接口，支持可选的factor_weights参数传入自定义权重配置
+
   * 参数校验/异步执行/结果查询
 
   * _Requirements: 2.8-2.14, 5.3, 5.6_
+
+* [ ] 5.2.1 因子评分接口
+
+  * POST /api/v1/factors/calculate - 批量计算因子评分
+    * 支持可选的factor_weights参数传入自定义权重配置
+    * 返回四维度因子评分和综合评分
+    * 支持单个股票和批量股票评分
+
+  * 权重管理接口：
+    * GET /api/v1/factors/weights/default - 获取默认因子权重配置
+    * PUT /api/v1/factors/weights - 更新因子权重配置
+    * POST /api/v1/factors/weights/reset - 重置为默认权重
+    * POST /api/v1/factors/weights/validate - 验证权重配置
+
+  * 功能特性：
+    * 参数校验、错误处理、结果缓存
+    * 权重配置验证和标准化
+    * 支持权重配置的临时应用和持久化
+
+  * _Requirements: 2.12, 2.13, 5.3_
 
 * [ ] 5.3 方案接口
 
@@ -336,13 +342,24 @@
 
 * [ ] 6.1 定时任务编排（按交易日）
 
-  * 15:30 市场数据更新 → 16:00 回测 → 18:00 AI分析 → 19:00 方案生成
+  * 任务流程：
+    * 15:30 市场数据更新（技术面、基本面数据）
+    * 15:45 多因子评分计算（四维度因子评分和综合评分）
+    * 16:00 多因子策略回测（使用最新因子评分）
+    * 18:00 AI分析（基于回测结果和因子评分）
+    * 19:00 方案生成（整合所有分析结果）
 
-  * 新闻相关数据按需从数据采集系统API获取，不进行主动同步
+  * 数据获取策略：
+    * 技术面和基本面数据：主动从数据采集系统获取
+    * 消息面数据：按需从数据采集系统API获取，不进行主动同步
+    * 市场面数据：实时计算和缓存
 
-  * 可配置时区/节假日跳过/失败告警占位
+  * 任务配置：
+    * 可配置时区/节假日跳过/失败告警
+    * 支持任务依赖和串行执行
+    * 因子权重配置的定时更新和验证
 
-  * _Requirements: 4.1-4.8_
+  * _Requirements: 4.1-4.8, 2.12, 2.13_
 
 * [ ] 6.2 失败恢复与幂等
 
@@ -358,15 +375,45 @@
 
   * 回测模块使用固定样本数据确保可重复
 
+  * FactorService测试：
+    * 权重配置：验证、标准化、更新、重置功能
+    * 四维度因子计算：技术面、基本面、消息面、市场面
+    * 综合评分计算：权重应用、分数标准化
+    * 缓存机制和批量处理
+
+  * MultiFactorStrategy测试：
+    * 策略参数配置和验证
+    * 因子评分集成和交易信号生成
+    * 风险管理和仓位控制
+    * 回测结果的准确性和一致性
+
+  * 策略注册器测试：
+    * 策略注册和获取功能
+    * MultiFactorStrategy的正确注册
+    * 参数范围和验证机制
+
   * _Requirements: 2.9-2.13, 3.3, 3.7, 5.6_
 
 * [ ] 7.2 集成与端到端测试
 
-  * 从“持仓+数据→回测→AI→Markdown方案”的完整链路
+  * 完整业务链路测试：
+    * "持仓+数据→多因子评分→多因子回测→AI分析→Markdown方案"的端到端流程
+    * 验证数据流转的完整性和准确性
+    * 测试各服务间的协调和依赖关系
 
-  * 异常/边界/超时与降级路径
+  * 多因子回测端到端测试：
+    * 自定义权重配置→四维度因子计算→MultiFactorStrategy回测→结果分析
+    * 权重配置的隔离性和一致性验证
+    * 回测结果的可重现性和准确性
+    * 因子评分缓存和批量处理的性能
 
-  * _Requirements: 3.3, 3.16, 4.6_
+  * 异常处理和降级测试：
+    * 数据缺失/异常值的处理
+    * 外部服务超时和失败的降级
+    * 权重配置错误的容错机制
+    * AI服务失败的兜底策略
+
+  * _Requirements: 3.3, 3.16, 4.6, 2.12, 2.13_
 
 * [ ] 7.3 性能与稳定性基线
 

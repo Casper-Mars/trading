@@ -1498,8 +1498,534 @@ class FactorService:
             if not isinstance(weight, (int, float)) or weight < 0:
                 raise ValueError(f"因子 {factor} 的权重必须是非负数")
                 
-        # 标准化权重（确保总和为1）
-        total_weight = sum(weights[factor] for factor in required_factors)
+        # 标准化权重（确保总和为1.0）
+        total_weight = sum(weights.values())
+        if total_weight == 0:
+            raise ValueError("权重总和不能为0")
+            
+        normalized_weights = {factor: weight / total_weight for factor, weight in weights.items()}
+        return normalized_weights
+        
+    def update_factor_weights(self, new_weights: Dict[str, float]):
+        """更新因子权重配置
+        
+        Args:
+            new_weights: 新的权重配置字典
+            
+        Raises:
+            ValueError: 权重配置无效时抛出异常
+        """
+        validated_weights = self._validate_and_normalize_weights(new_weights)
+        self.factor_weights = validated_weights
+        
+    def get_factor_weights(self) -> Dict[str, float]:
+        """获取当前因子权重配置
+        
+        Returns:
+            Dict[str, float]: 当前的因子权重配置
+        """
+        return self.factor_weights.copy()
+        
+    def get_default_weights(self) -> Dict[str, float]:
+        """获取默认因子权重配置
+        
+        Returns:
+            Dict[str, float]: 默认的因子权重配置
+        """
+        return self.DEFAULT_FACTOR_WEIGHTS.copy()
+        
+    def reset_to_default_weights(self):
+        """重置为默认权重配置"""
+        self.factor_weights = self.DEFAULT_FACTOR_WEIGHTS.copy()
+        
+    async def calculate_comprehensive_score(self, symbol: str, 
+                                          custom_weights: Optional[Dict[str, float]] = None) -> Dict[str, float]:
+        """计算综合因子评分
+        
+        Args:
+            symbol: 股票代码
+            custom_weights: 自定义权重配置，如果为None则使用当前配置
+            
+        Returns:
+            Dict[str, float]: 包含各维度评分和综合评分的字典
+        """
+        # 使用自定义权重或当前权重
+        weights = custom_weights if custom_weights else self.factor_weights
+        if custom_weights:
+            weights = self._validate_and_normalize_weights(custom_weights)
+            
+        # 计算各维度因子评分
+        technical_score = await self.calculate_technical_score(symbol)
+        fundamental_score = await self.calculate_fundamental_score(symbol)
+        news_score = await self.calculate_news_score(symbol)
+        market_score = await self.calculate_market_score(symbol)
+        
+        # 计算综合评分
+        comprehensive_score = (
+            technical_score * weights['technical'] +
+            fundamental_score * weights['fundamental'] +
+            news_score * weights['news'] +
+            market_score * weights['market']
+        )
+        
+        return {
+            'technical_score': technical_score,
+            'fundamental_score': fundamental_score,
+            'news_score': news_score,
+            'market_score': market_score,
+            'comprehensive_score': comprehensive_score,
+            'weights_used': weights
+        }
+        
+    async def calculate_technical_score(self, symbol: str) -> float:
+        """计算技术面因子评分
+        
+        技术面因子包括：
+        - 动量因子：价格趋势、成交量趋势、相对强弱
+        - 反转因子：超买超卖指标、背离信号
+        - 波动率因子：价格波动率、成交量波动率
+        - 技术指标：MA、MACD、RSI、BOLL、KDJ等
+        
+        Returns:
+            float: 技术面评分，范围[0, 1]
+        """
+        try:
+            # 获取技术指标数据
+            market_data = await self.data_service.get_market_data(symbol)
+            technical_indicators = await self.data_service.calculate_technical_indicators(symbol)
+            
+            # 动量因子评分 (权重40%)
+            momentum_score = self._calculate_momentum_factors(market_data, technical_indicators)
+            
+            # 反转因子评分 (权重30%)
+            reversal_score = self._calculate_reversal_factors(market_data, technical_indicators)
+            
+            # 波动率因子评分 (权重20%)
+            volatility_score = self._calculate_volatility_factors(market_data)
+            
+            # 技术指标综合评分 (权重10%)
+            indicator_score = self._calculate_technical_indicator_factors(technical_indicators)
+            
+            # 加权综合评分
+            technical_score = (
+                momentum_score * 0.4 +
+                reversal_score * 0.3 +
+                volatility_score * 0.2 +
+                indicator_score * 0.1
+            )
+            
+            return max(0.0, min(1.0, technical_score))
+            
+        except Exception as e:
+            # 记录错误日志
+            print(f"计算技术面评分时发生错误: {e}")
+            return 0.5  # 返回中性评分
+            
+    async def calculate_fundamental_score(self, symbol: str) -> float:
+        """计算基本面因子评分
+        
+        基本面因子包括：
+        - 盈利能力：ROE、ROA、净利润增长率、毛利率
+        - 估值水平：PE、PB、PS、PEG、EV/EBITDA
+        - 财务质量：资产负债率、流动比率、现金流、资产周转率
+        - 成长性：营收增长率、利润增长率、EPS增长率
+        
+        Returns:
+            float: 基本面评分，范围[0, 1]
+        """
+        try:
+            # 获取基本面数据
+            fundamental_data = await self.data_service.get_fundamental_data(symbol)
+            
+            if not fundamental_data:
+                return 0.5  # 无数据时返回中性评分
+                
+            # 盈利能力评分 (权重35%)
+            profitability_score = self._calculate_profitability_factors(fundamental_data)
+            
+            # 估值水平评分 (权重30%)
+            valuation_score = self._calculate_valuation_factors(fundamental_data)
+            
+            # 财务质量评分 (权重25%)
+            quality_score = self._calculate_quality_factors(fundamental_data)
+            
+            # 成长性评分 (权重10%)
+            growth_score = self._calculate_growth_factors(fundamental_data)
+            
+            # 加权综合评分
+            fundamental_score = (
+                profitability_score * 0.35 +
+                valuation_score * 0.30 +
+                quality_score * 0.25 +
+                growth_score * 0.10
+            )
+            
+            return max(0.0, min(1.0, fundamental_score))
+            
+        except Exception as e:
+            print(f"计算基本面评分时发生错误: {e}")
+            return 0.5
+            
+    async def calculate_news_score(self, symbol: str, days: int = 7) -> float:
+        """计算消息面因子评分
+        
+        消息面因子包括：
+        - 新闻情感：正面/负面新闻比例、情感强度
+        - 政策影响：政策利好/利空程度、政策重要性
+        - 事件驱动：重大事件影响、事件类型
+        - 市场关注度：新闻数量、媒体关注度、社交媒体热度
+        
+        Args:
+            symbol: 股票代码
+            days: 分析的天数，默认7天
+            
+        Returns:
+            float: 消息面评分，范围[0, 1]
+        """
+        try:
+            # 获取近期新闻数据
+            news_data = await self.news_service.get_stock_news(symbol, days=days)
+            
+            if not news_data:
+                return 0.5  # 无新闻数据时返回中性评分
+                
+            # 新闻情感评分 (权重40%)
+            sentiment_score = await self._calculate_news_sentiment_factors(news_data)
+            
+            # 政策影响评分 (权重30%)
+            policy_score = await self._calculate_policy_factors(news_data)
+            
+            # 事件驱动评分 (权重20%)
+            event_score = await self._calculate_event_factors(news_data)
+            
+            # 市场关注度评分 (权重10%)
+            attention_score = self._calculate_attention_factors(news_data)
+            
+            # 加权综合评分
+            news_score = (
+                sentiment_score * 0.4 +
+                policy_score * 0.3 +
+                event_score * 0.2 +
+                attention_score * 0.1
+            )
+            
+            return max(0.0, min(1.0, news_score))
+            
+        except Exception as e:
+            print(f"计算消息面评分时发生错误: {e}")
+            return 0.5
+            
+    async def calculate_market_score(self, symbol: str) -> float:
+        """计算市场面因子评分
+        
+        市场面因子包括：
+        - 市场表现：相对大盘表现、行业表现、Beta系数
+        - 资金流向：主力资金净流入、机构持仓变化
+        - 市场情绪：恐慌贪婪指数、VIX指数、投资者情绪
+        - 行业轮动：行业相对强弱、板块轮动趋势
+        
+        Returns:
+            float: 市场面评分，范围[0, 1]
+        """
+        try:
+            # 获取市场数据
+            market_data = await self.data_service.get_market_environment_indicators(symbol)
+            sentiment_data = await self.data_service.get_market_sentiment_score()
+            
+            # 市场表现评分 (权重40%)
+            performance_score = self._calculate_market_performance_factors(market_data)
+            
+            # 资金流向评分 (权重30%)
+            flow_score = self._calculate_money_flow_factors(market_data)
+            
+            # 市场情绪评分 (权重20%)
+            sentiment_score = self._calculate_market_sentiment_factors(sentiment_data)
+            
+            # 行业轮动评分 (权重10%)
+            sector_score = self._calculate_sector_rotation_factors(market_data)
+            
+            # 加权综合评分
+            market_score = (
+                performance_score * 0.4 +
+                flow_score * 0.3 +
+                sentiment_score * 0.2 +
+                sector_score * 0.1
+            )
+            
+            return max(0.0, min(1.0, market_score))
+            
+        except Exception as e:
+            print(f"计算市场面评分时发生错误: {e}")
+            return 0.5
+             
+    # ========== 技术面因子计算辅助方法 ==========
+    
+    def _calculate_momentum_factors(self, market_data: Dict, technical_indicators: Dict) -> float:
+        """计算动量因子评分"""
+        scores = []
+        
+        # 价格动量：近期涨跌幅
+        if 'price_change_5d' in market_data:
+            price_momentum = market_data['price_change_5d']
+            scores.append(self._normalize_score(price_momentum, -0.1, 0.1))
+            
+        # 成交量动量：成交量变化
+        if 'volume_change_5d' in market_data:
+            volume_momentum = market_data['volume_change_5d']
+            scores.append(self._normalize_score(volume_momentum, -0.5, 0.5))
+            
+        # 相对强弱：相对大盘表现
+        if 'relative_strength' in market_data:
+            relative_strength = market_data['relative_strength']
+            scores.append(self._normalize_score(relative_strength, -0.2, 0.2))
+            
+        return sum(scores) / len(scores) if scores else 0.5
+        
+    def _calculate_reversal_factors(self, market_data: Dict, technical_indicators: Dict) -> float:
+        """计算反转因子评分"""
+        scores = []
+        
+        # RSI超买超卖
+        if 'rsi' in technical_indicators:
+            rsi = technical_indicators['rsi']
+            if rsi > 70:
+                scores.append(0.2)  # 超买，看跌
+            elif rsi < 30:
+                scores.append(0.8)  # 超卖，看涨
+            else:
+                scores.append(0.5)  # 中性
+                
+        # MACD背离信号
+        if 'macd_signal' in technical_indicators:
+            macd_signal = technical_indicators['macd_signal']
+            scores.append(0.7 if macd_signal == 'bullish' else 0.3 if macd_signal == 'bearish' else 0.5)
+            
+        return sum(scores) / len(scores) if scores else 0.5
+        
+    def _calculate_volatility_factors(self, market_data: Dict) -> float:
+        """计算波动率因子评分"""
+        scores = []
+        
+        # 价格波动率
+        if 'price_volatility' in market_data:
+            volatility = market_data['price_volatility']
+            # 适中波动率得分较高
+            if 0.01 <= volatility <= 0.03:
+                scores.append(0.8)
+            elif volatility > 0.05:
+                scores.append(0.3)  # 高波动风险
+            else:
+                scores.append(0.6)
+                
+        return sum(scores) / len(scores) if scores else 0.5
+        
+    def _calculate_technical_indicator_factors(self, technical_indicators: Dict) -> float:
+        """计算技术指标综合评分"""
+        scores = []
+        
+        # 均线多头排列
+        if 'ma_alignment' in technical_indicators:
+            ma_alignment = technical_indicators['ma_alignment']
+            scores.append(0.8 if ma_alignment == 'bullish' else 0.2 if ma_alignment == 'bearish' else 0.5)
+            
+        # 布林带位置
+        if 'bollinger_position' in technical_indicators:
+            boll_pos = technical_indicators['bollinger_position']
+            scores.append(0.7 if boll_pos == 'upper' else 0.3 if boll_pos == 'lower' else 0.5)
+            
+        return sum(scores) / len(scores) if scores else 0.5
+        
+    # ========== 基本面因子计算辅助方法 ==========
+    
+    def _calculate_profitability_factors(self, fundamental_data: Dict) -> float:
+        """计算盈利能力因子评分"""
+        scores = []
+        
+        # ROE评分
+        if 'roe' in fundamental_data:
+            roe = fundamental_data['roe']
+            scores.append(self._normalize_score(roe, 0, 0.25))
+            
+        # ROA评分
+        if 'roa' in fundamental_data:
+            roa = fundamental_data['roa']
+            scores.append(self._normalize_score(roa, 0, 0.15))
+            
+        # 净利润增长率
+        if 'net_profit_growth' in fundamental_data:
+            growth = fundamental_data['net_profit_growth']
+            scores.append(self._normalize_score(growth, -0.2, 0.5))
+            
+        return sum(scores) / len(scores) if scores else 0.5
+        
+    def _calculate_valuation_factors(self, fundamental_data: Dict) -> float:
+        """计算估值水平因子评分"""
+        scores = []
+        
+        # PE评分（越低越好）
+        if 'pe_ratio' in fundamental_data:
+            pe = fundamental_data['pe_ratio']
+            if pe > 0:
+                scores.append(1.0 - self._normalize_score(pe, 5, 50))
+                
+        # PB评分（越低越好）
+        if 'pb_ratio' in fundamental_data:
+            pb = fundamental_data['pb_ratio']
+            if pb > 0:
+                scores.append(1.0 - self._normalize_score(pb, 0.5, 5))
+                
+        return sum(scores) / len(scores) if scores else 0.5
+        
+    def _calculate_quality_factors(self, fundamental_data: Dict) -> float:
+        """计算财务质量因子评分"""
+        scores = []
+        
+        # 资产负债率（越低越好）
+        if 'debt_ratio' in fundamental_data:
+            debt_ratio = fundamental_data['debt_ratio']
+            scores.append(1.0 - self._normalize_score(debt_ratio, 0, 0.8))
+            
+        # 流动比率
+        if 'current_ratio' in fundamental_data:
+            current_ratio = fundamental_data['current_ratio']
+            scores.append(self._normalize_score(current_ratio, 1, 3))
+            
+        return sum(scores) / len(scores) if scores else 0.5
+        
+    def _calculate_growth_factors(self, fundamental_data: Dict) -> float:
+        """计算成长性因子评分"""
+        scores = []
+        
+        # 营收增长率
+        if 'revenue_growth' in fundamental_data:
+            revenue_growth = fundamental_data['revenue_growth']
+            scores.append(self._normalize_score(revenue_growth, -0.1, 0.3))
+            
+        return sum(scores) / len(scores) if scores else 0.5
+        
+    # ========== 消息面因子计算辅助方法 ==========
+    
+    async def _calculate_news_sentiment_factors(self, news_data: List[Dict]) -> float:
+        """计算新闻情感因子评分"""
+        if not news_data:
+            return 0.5
+            
+        sentiment_scores = []
+        for news in news_data:
+            if 'sentiment_score' in news:
+                sentiment_scores.append(news['sentiment_score'])
+                
+        if sentiment_scores:
+            avg_sentiment = sum(sentiment_scores) / len(sentiment_scores)
+            return self._normalize_score(avg_sentiment, -1, 1)
+        return 0.5
+        
+    async def _calculate_policy_factors(self, news_data: List[Dict]) -> float:
+        """计算政策影响因子评分"""
+        policy_score = 0.5
+        policy_count = 0
+        
+        for news in news_data:
+            if news.get('category') == 'policy':
+                policy_count += 1
+                impact = news.get('policy_impact', 0)
+                policy_score += self._normalize_score(impact, -1, 1)
+                
+        return policy_score / (policy_count + 1) if policy_count > 0 else 0.5
+        
+    async def _calculate_event_factors(self, news_data: List[Dict]) -> float:
+        """计算事件驱动因子评分"""
+        event_score = 0.5
+        event_count = 0
+        
+        for news in news_data:
+            if news.get('is_major_event', False):
+                event_count += 1
+                impact = news.get('event_impact', 0)
+                event_score += self._normalize_score(impact, -1, 1)
+                
+        return event_score / (event_count + 1) if event_count > 0 else 0.5
+        
+    def _calculate_attention_factors(self, news_data: List[Dict]) -> float:
+        """计算市场关注度因子评分"""
+        news_count = len(news_data)
+        # 新闻数量越多，关注度越高
+        attention_score = self._normalize_score(news_count, 0, 20)
+        return attention_score
+        
+    # ========== 市场面因子计算辅助方法 ==========
+    
+    def _calculate_market_performance_factors(self, market_data: Dict) -> float:
+        """计算市场表现因子评分"""
+        scores = []
+        
+        # 相对大盘表现
+        if 'relative_performance' in market_data:
+            rel_perf = market_data['relative_performance']
+            scores.append(self._normalize_score(rel_perf, -0.1, 0.1))
+            
+        # Beta系数
+        if 'beta' in market_data:
+            beta = market_data['beta']
+            # Beta接近1较好
+            scores.append(1.0 - abs(beta - 1.0))
+            
+        return sum(scores) / len(scores) if scores else 0.5
+        
+    def _calculate_money_flow_factors(self, market_data: Dict) -> float:
+        """计算资金流向因子评分"""
+        scores = []
+        
+        # 主力资金净流入
+        if 'main_money_flow' in market_data:
+            money_flow = market_data['main_money_flow']
+            scores.append(self._normalize_score(money_flow, -1000000, 1000000))
+            
+        return sum(scores) / len(scores) if scores else 0.5
+        
+    def _calculate_market_sentiment_factors(self, sentiment_data: Dict) -> float:
+        """计算市场情绪因子评分"""
+        scores = []
+        
+        # 恐慌贪婪指数
+        if 'fear_greed_index' in sentiment_data:
+            fg_index = sentiment_data['fear_greed_index']
+            scores.append(self._normalize_score(fg_index, 0, 100))
+            
+        return sum(scores) / len(scores) if scores else 0.5
+        
+    def _calculate_sector_rotation_factors(self, market_data: Dict) -> float:
+        """计算行业轮动因子评分"""
+        scores = []
+        
+        # 行业相对强弱
+        if 'sector_relative_strength' in market_data:
+            sector_strength = market_data['sector_relative_strength']
+            scores.append(self._normalize_score(sector_strength, -0.1, 0.1))
+            
+        return sum(scores) / len(scores) if scores else 0.5
+        
+    # ========== 工具方法 ==========
+    
+    def _normalize_score(self, value: float, min_val: float, max_val: float) -> float:
+        """将数值标准化到[0, 1]区间
+        
+        Args:
+            value: 待标准化的值
+            min_val: 最小值
+            max_val: 最大值
+            
+        Returns:
+            float: 标准化后的值，范围[0, 1]
+        """
+        if max_val == min_val:
+            return 0.5
+            
+        normalized = (value - min_val) / (max_val - min_val)
+        return max(0.0, min(1.0, normalized))
+                 
+         # 标准化权重（确保总和为1）
+         total_weight = sum(weights[factor] for factor in required_factors)
         if total_weight == 0:
             raise ValueError("所有因子权重不能都为0")
             
@@ -2306,119 +2832,567 @@ class BaseStrategy(bt.Strategy):
         return True
 ```
 
-### 6.2 具体策略实现
+### 6.2 多因子策略 (MultiFactorStrategy)
 
-#### 6.2.1 双均线策略
+**策略概述**
 
-```python
-import backtrader as bt
+多因子策略是系统的核心策略，基于技术面、基本面、消息面、市场面四个维度的综合评分进行交易决策。该策略通过动态权重配置和多维度因子分析，实现更加精准的投资决策。
 
-class MovingAverageStrategy(BaseStrategy):
-    """基于backtrader的双均线策略"""
-    
-    # 策略参数
-    params = (
-        ('short_window', 5),   # 短期均线周期
-        ('long_window', 20),   # 长期均线周期
-        ('printlog', True),    # 是否打印日志
-    )
-    
-    def setup_indicators(self):
-        """设置技术指标"""
-        # 计算移动平均线
-        self.short_ma = bt.indicators.SimpleMovingAverage(
-            self.datas[0], period=self.params.short_window
-        )
-        self.long_ma = bt.indicators.SimpleMovingAverage(
-            self.datas[0], period=self.params.long_window
-        )
-        
-        # 计算均线交叉信号
-        self.crossover = bt.indicators.CrossOver(
-            self.short_ma, self.long_ma
-        )
-        
-    def next(self):
-        """策略主逻辑"""
-        # 如果没有持仓
-        if not self.position:
-            # 金叉买入信号
-            if self.crossover > 0:
-                self.log(f'买入信号: 短均线={self.short_ma[0]:.2f}, 长均线={self.long_ma[0]:.2f}')
-                # 计算买入数量（使用95%的可用资金）
-                size = int(self.broker.getcash() * 0.95 / self.data.close[0])
-                self.buy(size=size)
-                
-        # 如果有持仓
-        else:
-            # 死叉卖出信号
-            if self.crossover < 0:
-                self.log(f'卖出信号: 短均线={self.short_ma[0]:.2f}, 长均线={self.long_ma[0]:.2f}')
-                self.sell(size=self.position.size)
-                
-    def log(self, txt, dt=None):
-        """日志记录"""
-        if self.params.printlog:
-            super().log(txt, dt)
-            
-    @classmethod
-    def get_parameter_ranges(cls) -> Dict[str, tuple]:
-        """获取参数范围"""
-        return {
-            'short_window': (3, 10),
-            'long_window': (15, 30)
-        }
-```
-
-#### 6.2.2 MACD策略
+**策略特点**
+- 四维度因子综合评分
+- 动态权重配置
+- 多时间尺度分析
+- 风险控制机制
+- 置信度评估
 
 ```python
 import backtrader as bt
+import pandas as pd
+import numpy as np
+from typing import Dict, List, Optional, Tuple
+from datetime import datetime, date
 
-class MACDStrategy(BaseStrategy):
-    """基于backtrader的MACD策略"""
+class MultiFactorStrategy(BaseStrategy):
+    """多因子量化策略
     
-    # 策略参数
+    基于技术面、基本面、消息面、市场面四个维度的综合评分进行交易决策
+    """
+    
     params = (
-        ('fast_period', 12),   # 快线周期
-        ('slow_period', 26),   # 慢线周期
-        ('signal_period', 9),  # 信号线周期
-        ('printlog', True),    # 是否打印日志
+        # 因子权重配置
+        ('technical_weight', 0.3),      # 技术面权重
+        ('fundamental_weight', 0.25),   # 基本面权重
+        ('news_weight', 0.25),          # 消息面权重
+        ('market_weight', 0.2),         # 市场面权重
+        
+        # 交易阈值
+        ('buy_threshold', 0.7),         # 买入阈值
+        ('sell_threshold', 0.3),        # 卖出阈值
+        ('strong_buy_threshold', 0.85), # 强买入阈值
+        ('strong_sell_threshold', 0.15), # 强卖出阈值
+        
+        # 风险控制
+        ('max_position_size', 0.8),     # 最大仓位比例
+        ('stop_loss_pct', 0.1),         # 止损比例
+        ('take_profit_pct', 0.2),       # 止盈比例
+        
+        # 置信度控制
+        ('min_confidence', 0.6),        # 最小置信度
+        
+        # 回测参数
+        ('lookback_period', 20),        # 回看周期
+        ('rebalance_frequency', 5),     # 再平衡频率（天）
+        
+        # 调试参数
+        ('printlog', True),             # 是否打印日志
     )
     
-    def setup_indicators(self):
-        """设置技术指标"""
-        # 计算MACD指标
-        self.macd = bt.indicators.MACD(
-            self.datas[0],
-            period_me1=self.params.fast_period,
-            period_me2=self.params.slow_period,
-            period_signal=self.params.signal_period
-        )
+    def __init__(self):
+        super().__init__()
         
-        # MACD交叉信号
-        self.crossover = bt.indicators.CrossOver(
-            self.macd.macd, self.macd.signal
-        )
+        # 因子服务依赖注入（在实际使用中通过依赖注入设置）
+        self.factor_service = None
+        self.news_service = None
+        self.data_service = None
+        
+        # 策略状态
+        self.last_rebalance_date = None
+        self.current_scores = {}
+        self.confidence_score = 0.0
+        self.entry_price = None
+        
+        # 历史数据缓存
+        self.score_history = []
+        self.performance_metrics = {}
+        
+    def set_services(self, factor_service, news_service, data_service):
+        """设置服务依赖（依赖注入）"""
+        self.factor_service = factor_service
+        self.news_service = news_service
+        self.data_service = data_service
         
     def next(self):
         """策略主逻辑"""
-        # 如果没有持仓
-        if not self.position:
-            # MACD金叉买入信号
-            if self.crossover > 0:
-                self.log(f'买入信号: MACD={self.macd.macd[0]:.4f}, Signal={self.macd.signal[0]:.4f} (金叉)')
-                # 计算买入数量（使用95%的可用资金）
-                size = int(self.broker.getcash() * 0.95 / self.data.close[0])
-                self.buy(size=size)
+        current_date = self.data.datetime.date(0)
+        
+        # 检查是否需要重新计算因子评分
+        if self._should_rebalance(current_date):
+            # 计算四维度因子评分
+            factor_scores = self._calculate_factor_scores()
+            
+            # 计算综合评分
+            composite_score, confidence = self._calculate_composite_score(factor_scores)
+            
+            # 更新策略状态
+            self.current_scores = factor_scores
+            self.confidence_score = confidence
+            self.last_rebalance_date = current_date
+            
+            # 记录评分历史
+            self._record_score_history(current_date, factor_scores, composite_score, confidence)
+            
+            # 执行交易决策
+            self._execute_trading_decision(composite_score, confidence)
+            
+        # 检查止损止盈
+        self._check_risk_management()
+        
+    def _should_rebalance(self, current_date: date) -> bool:
+        """判断是否需要重新平衡"""
+        if self.last_rebalance_date is None:
+            return True
+            
+        days_since_rebalance = (current_date - self.last_rebalance_date).days
+        return days_since_rebalance >= self.params.rebalance_frequency
+        
+    def _calculate_factor_scores(self) -> Dict[str, float]:
+        """计算四维度因子评分"""
+        symbol = self._get_current_symbol()
+        current_date = self.data.datetime.date(0)
+        
+        scores = {}
+        
+        try:
+            # 1. 技术面因子评分
+            scores['technical'] = self._calculate_technical_score(symbol, current_date)
+            
+            # 2. 基本面因子评分
+            scores['fundamental'] = self._calculate_fundamental_score(symbol, current_date)
+            
+            # 3. 消息面因子评分
+            scores['news'] = self._calculate_news_score(symbol, current_date)
+            
+            # 4. 市场面因子评分
+            scores['market'] = self._calculate_market_score(symbol, current_date)
+            
+        except Exception as e:
+            self.log(f'计算因子评分时发生错误: {e}')
+            # 返回中性评分
+            scores = {
+                'technical': 0.5,
+                'fundamental': 0.5,
+                'news': 0.5,
+                'market': 0.5
+            }
+            
+        return scores
+        
+    def _calculate_technical_score(self, symbol: str, current_date: date) -> float:
+        """计算技术面因子评分
+        
+        技术面因子包括：
+        - 动量因子：价格趋势、成交量趋势
+        - 反转因子：超买超卖指标
+        - 波动率因子：价格波动率
+        - 技术指标：MA、MACD、RSI、BOLL等
+        """
+        if not self.factor_service:
+            return 0.5  # 默认中性评分
+            
+        try:
+            # 获取技术指标数据
+            technical_data = self._get_technical_indicators()
+            
+            # 动量因子评分 (权重40%)
+            momentum_score = self._calculate_momentum_factor(technical_data)
+            
+            # 反转因子评分 (权重30%)
+            reversal_score = self._calculate_reversal_factor(technical_data)
+            
+            # 波动率因子评分 (权重20%)
+            volatility_score = self._calculate_volatility_factor(technical_data)
+            
+            # 技术指标综合评分 (权重10%)
+            indicator_score = self._calculate_technical_indicators_score(technical_data)
+            
+            # 加权综合评分
+            technical_score = (
+                momentum_score * 0.4 +
+                reversal_score * 0.3 +
+                volatility_score * 0.2 +
+                indicator_score * 0.1
+            )
+            
+            # 确保评分在[0, 1]范围内
+            return max(0.0, min(1.0, technical_score))
+            
+        except Exception as e:
+            self.log(f'计算技术面评分时发生错误: {e}')
+            return 0.5
+            
+    def _calculate_fundamental_score(self, symbol: str, current_date: date) -> float:
+        """计算基本面因子评分
+        
+        基本面因子包括：
+        - 盈利能力：ROE、ROA、净利润增长率
+        - 估值水平：PE、PB、PS、PEG
+        - 财务质量：资产负债率、流动比率、现金流
+        - 成长性：营收增长率、利润增长率
+        """
+        if not self.factor_service:
+            return 0.5
+            
+        try:
+            # 获取基本面数据
+            fundamental_data = self._get_fundamental_data(symbol)
+            
+            # 盈利能力评分 (权重35%)
+            profitability_score = self._calculate_profitability_factor(fundamental_data)
+            
+            # 估值水平评分 (权重30%)
+            valuation_score = self._calculate_valuation_factor(fundamental_data)
+            
+            # 财务质量评分 (权重25%)
+            quality_score = self._calculate_quality_factor(fundamental_data)
+            
+            # 成长性评分 (权重10%)
+            growth_score = self._calculate_growth_factor(fundamental_data)
+            
+            # 加权综合评分
+            fundamental_score = (
+                profitability_score * 0.35 +
+                valuation_score * 0.30 +
+                quality_score * 0.25 +
+                growth_score * 0.10
+            )
+            
+            return max(0.0, min(1.0, fundamental_score))
+            
+        except Exception as e:
+            self.log(f'计算基本面评分时发生错误: {e}')
+            return 0.5
+            
+    def _calculate_news_score(self, symbol: str, current_date: date) -> float:
+        """计算消息面因子评分
+        
+        消息面因子包括：
+        - 新闻情感：正面/负面新闻比例
+        - 政策影响：政策利好/利空程度
+        - 事件驱动：重大事件影响
+        - 市场关注度：新闻数量和热度
+        """
+        if not self.news_service:
+            return 0.5
+            
+        try:
+            # 获取近期新闻数据
+            news_data = self._get_recent_news(symbol, days=7)
+            
+            if not news_data:
+                return 0.5  # 无新闻数据时返回中性评分
                 
-        # 如果有持仓
+            # 新闻情感评分 (权重40%)
+            sentiment_score = self._calculate_news_sentiment_factor(news_data)
+            
+            # 政策影响评分 (权重30%)
+            policy_score = self._calculate_policy_factor(news_data)
+            
+            # 事件驱动评分 (权重20%)
+            event_score = self._calculate_event_factor(news_data)
+            
+            # 市场关注度评分 (权重10%)
+            attention_score = self._calculate_attention_factor(news_data)
+            
+            # 加权综合评分
+            news_score = (
+                sentiment_score * 0.4 +
+                policy_score * 0.3 +
+                event_score * 0.2 +
+                attention_score * 0.1
+            )
+            
+            return max(0.0, min(1.0, news_score))
+            
+        except Exception as e:
+            self.log(f'计算消息面评分时发生错误: {e}')
+            return 0.5
+            
+    def _calculate_market_score(self, symbol: str, current_date: date) -> float:
+        """计算市场面因子评分
+        
+        市场面因子包括：
+        - 市场表现：相对大盘表现
+        - 资金流向：主力资金净流入
+        - 市场情绪：恐慌贪婪指数
+        - 行业轮动：行业相对强弱
+        """
+        if not self.data_service:
+            return 0.5
+            
+        try:
+            # 获取市场数据
+            market_data = self._get_market_data(symbol)
+            
+            # 市场表现评分 (权重40%)
+            performance_score = self._calculate_market_performance_factor(market_data)
+            
+            # 资金流向评分 (权重30%)
+            flow_score = self._calculate_money_flow_factor(market_data)
+            
+            # 市场情绪评分 (权重20%)
+            sentiment_score = self._calculate_market_sentiment_factor(market_data)
+            
+            # 行业轮动评分 (权重10%)
+            sector_score = self._calculate_sector_rotation_factor(market_data)
+            
+            # 加权综合评分
+            market_score = (
+                performance_score * 0.4 +
+                flow_score * 0.3 +
+                sentiment_score * 0.2 +
+                sector_score * 0.1
+            )
+            
+            return max(0.0, min(1.0, market_score))
+            
+        except Exception as e:
+            self.log(f'计算市场面评分时发生错误: {e}')
+            return 0.5
+            
+    def _calculate_composite_score(self, factor_scores: Dict[str, float]) -> Tuple[float, float]:
+        """计算综合评分和置信度
+        
+        Args:
+            factor_scores: 四维度因子评分字典
+            
+        Returns:
+            Tuple[float, float]: (综合评分, 置信度)
+        """
+        # 计算加权综合评分
+        composite_score = (
+            factor_scores['technical'] * self.params.technical_weight +
+            factor_scores['fundamental'] * self.params.fundamental_weight +
+            factor_scores['news'] * self.params.news_weight +
+            factor_scores['market'] * self.params.market_weight
+        )
+        
+        # 计算置信度（基于因子评分的一致性）
+        confidence = self._calculate_confidence(factor_scores, composite_score)
+        
+        return composite_score, confidence
+        
+    def _calculate_confidence(self, factor_scores: Dict[str, float], composite_score: float) -> float:
+        """计算置信度
+        
+        置信度基于以下因素：
+        1. 因子评分的一致性（方差越小置信度越高）
+        2. 极端评分的存在（接近0或1的评分增加置信度）
+        3. 历史预测准确性
+        """
+        scores = list(factor_scores.values())
+        
+        # 1. 一致性评分（基于标准差）
+        score_std = np.std(scores)
+        consistency_score = max(0, 1 - score_std * 2)  # 标准差越小一致性越高
+        
+        # 2. 极端性评分（接近0或1的评分更有信心）
+        extremity_score = abs(composite_score - 0.5) * 2  # 距离中性点越远越极端
+        
+        # 3. 数据完整性评分（所有因子都有有效数据）
+        completeness_score = 1.0 if all(0 <= score <= 1 for score in scores) else 0.5
+        
+        # 综合置信度计算
+        confidence = (
+            consistency_score * 0.4 +
+            extremity_score * 0.4 +
+            completeness_score * 0.2
+        )
+        
+        return max(0.0, min(1.0, confidence))
+        
+    def _execute_trading_decision(self, composite_score: float, confidence: float):
+        """执行交易决策"""
+        # 检查置信度是否满足最小要求
+        if confidence < self.params.min_confidence:
+            self.log(f'置信度不足 ({confidence:.3f} < {self.params.min_confidence})，跳过交易')
+            return
+            
+        current_position = self.position.size
+        
+        # 强买入信号
+        if composite_score >= self.params.strong_buy_threshold and current_position <= 0:
+            size = self._calculate_position_size(composite_score, confidence, 'strong_buy')
+            self.buy(size=size)
+            self.entry_price = self.data.close[0]
+            self.log(f'强买入信号: 综合评分={composite_score:.3f}, 置信度={confidence:.3f}, 数量={size}')
+            
+        # 买入信号
+        elif composite_score >= self.params.buy_threshold and current_position <= 0:
+            size = self._calculate_position_size(composite_score, confidence, 'buy')
+            self.buy(size=size)
+            self.entry_price = self.data.close[0]
+            self.log(f'买入信号: 综合评分={composite_score:.3f}, 置信度={confidence:.3f}, 数量={size}')
+            
+        # 强卖出信号
+        elif composite_score <= self.params.strong_sell_threshold and current_position > 0:
+            self.sell(size=current_position)
+            self.entry_price = None
+            self.log(f'强卖出信号: 综合评分={composite_score:.3f}, 置信度={confidence:.3f}')
+            
+        # 卖出信号
+        elif composite_score <= self.params.sell_threshold and current_position > 0:
+            # 部分卖出或全部卖出
+            sell_ratio = max(0.5, 1 - composite_score)  # 评分越低卖出比例越高
+            size = int(current_position * sell_ratio)
+            self.sell(size=size)
+            if size == current_position:
+                self.entry_price = None
+            self.log(f'卖出信号: 综合评分={composite_score:.3f}, 置信度={confidence:.3f}, 卖出比例={sell_ratio:.2f}')
+            
+    def _calculate_position_size(self, score: float, confidence: float, signal_type: str) -> int:
+        """计算仓位大小"""
+        available_cash = self.broker.getcash()
+        current_price = self.data.close[0]
+        
+        # 基础仓位比例
+        if signal_type == 'strong_buy':
+            base_ratio = self.params.max_position_size
         else:
-            # MACD死叉卖出信号
-            if self.crossover < 0:
-                self.log(f'卖出信号: MACD={self.macd.macd[0]:.4f}, Signal={self.macd.signal[0]:.4f} (死叉)')
-                self.sell(size=self.position.size)
-                
+            base_ratio = self.params.max_position_size * 0.7
+            
+        # 根据评分和置信度调整仓位
+        score_adjustment = (score - 0.5) * 2  # 将[0.5, 1]映射到[0, 1]
+        confidence_adjustment = confidence
+        
+        final_ratio = base_ratio * score_adjustment * confidence_adjustment
+        final_ratio = max(0.1, min(self.params.max_position_size, final_ratio))
+        
+        # 计算股票数量
+        position_value = available_cash * final_ratio
+        size = int(position_value / current_price)
+        
+        return max(1, size)  # 至少买入1股
+        
+    def _check_risk_management(self):
+        """风险管理检查"""
+        if not self.position or self.entry_price is None:
+            return
+            
+        current_price = self.data.close[0]
+        position_pnl_pct = (current_price - self.entry_price) / self.entry_price
+        
+        # 止损检查
+        if position_pnl_pct <= -self.params.stop_loss_pct:
+            self.sell(size=self.position.size)
+            self.entry_price = None
+            self.log(f'止损卖出: 亏损={position_pnl_pct:.2%}')
+            
+        # 止盈检查
+        elif position_pnl_pct >= self.params.take_profit_pct:
+            self.sell(size=self.position.size)
+            self.entry_price = None
+            self.log(f'止盈卖出: 盈利={position_pnl_pct:.2%}')
+            
+    def _record_score_history(self, date: date, factor_scores: Dict[str, float], 
+                             composite_score: float, confidence: float):
+        """记录评分历史"""
+        record = {
+            'date': date,
+            'technical_score': factor_scores['technical'],
+            'fundamental_score': factor_scores['fundamental'],
+            'news_score': factor_scores['news'],
+            'market_score': factor_scores['market'],
+            'composite_score': composite_score,
+            'confidence': confidence,
+            'price': self.data.close[0]
+        }
+        
+        self.score_history.append(record)
+        
+        # 保持历史记录在合理范围内
+        if len(self.score_history) > 100:
+            self.score_history = self.score_history[-100:]
+            
+    # 辅助方法（占位符实现）
+    def _get_current_symbol(self) -> str:
+        """获取当前交易标的代码"""
+        return getattr(self.data, '_name', 'UNKNOWN')
+        
+    def _get_technical_indicators(self) -> Dict:
+        """获取技术指标数据"""
+        # 占位符实现 - 实际应该从数据服务获取
+        return {}
+        
+    def _get_fundamental_data(self, symbol: str) -> Dict:
+        """获取基本面数据"""
+        # 占位符实现 - 实际应该从数据服务获取
+        return {}
+        
+    def _get_recent_news(self, symbol: str, days: int) -> List[Dict]:
+        """获取近期新闻数据"""
+        # 占位符实现 - 实际应该从新闻服务获取
+        return []
+        
+    def _get_market_data(self, symbol: str) -> Dict:
+        """获取市场数据"""
+        # 占位符实现 - 实际应该从数据服务获取
+        return {}
+        
+    # 因子计算方法（占位符实现）
+    def _calculate_momentum_factor(self, data: Dict) -> float:
+        """计算动量因子"""
+        return 0.5
+        
+    def _calculate_reversal_factor(self, data: Dict) -> float:
+        """计算反转因子"""
+        return 0.5
+        
+    def _calculate_volatility_factor(self, data: Dict) -> float:
+        """计算波动率因子"""
+        return 0.5
+        
+    def _calculate_technical_indicators_score(self, data: Dict) -> float:
+        """计算技术指标综合评分"""
+        return 0.5
+        
+    def _calculate_profitability_factor(self, data: Dict) -> float:
+        """计算盈利能力因子"""
+        return 0.5
+        
+    def _calculate_valuation_factor(self, data: Dict) -> float:
+        """计算估值因子"""
+        return 0.5
+        
+    def _calculate_quality_factor(self, data: Dict) -> float:
+        """计算财务质量因子"""
+        return 0.5
+        
+    def _calculate_growth_factor(self, data: Dict) -> float:
+        """计算成长性因子"""
+        return 0.5
+        
+    def _calculate_news_sentiment_factor(self, news_data: List[Dict]) -> float:
+        """计算新闻情感因子"""
+        return 0.5
+        
+    def _calculate_policy_factor(self, news_data: List[Dict]) -> float:
+        """计算政策因子"""
+        return 0.5
+        
+    def _calculate_event_factor(self, news_data: List[Dict]) -> float:
+        """计算事件因子"""
+        return 0.5
+        
+    def _calculate_attention_factor(self, news_data: List[Dict]) -> float:
+        """计算关注度因子"""
+        return 0.5
+        
+    def _calculate_market_performance_factor(self, data: Dict) -> float:
+        """计算市场表现因子"""
+        return 0.5
+        
+    def _calculate_money_flow_factor(self, data: Dict) -> float:
+        """计算资金流向因子"""
+        return 0.5
+        
+    def _calculate_market_sentiment_factor(self, data: Dict) -> float:
+        """计算市场情绪因子"""
+        return 0.5
+        
+    def _calculate_sector_rotation_factor(self, data: Dict) -> float:
+        """计算行业轮动因子"""
+        return 0.5
+        
     def log(self, txt, dt=None):
         """日志记录"""
         if self.params.printlog:
@@ -2428,336 +3402,24 @@ class MACDStrategy(BaseStrategy):
     def get_parameter_ranges(cls) -> Dict[str, tuple]:
         """获取参数范围"""
         return {
-            'fast_period': (8, 16),
-            'slow_period': (20, 32),
-            'signal_period': (6, 12)
+            'technical_weight': (0.2, 0.4),
+            'fundamental_weight': (0.15, 0.35),
+            'news_weight': (0.15, 0.35),
+            'market_weight': (0.1, 0.3),
+            'buy_threshold': (0.6, 0.8),
+            'sell_threshold': (0.2, 0.4),
+            'strong_buy_threshold': (0.8, 0.95),
+            'strong_sell_threshold': (0.05, 0.2),
+            'max_position_size': (0.5, 1.0),
+            'stop_loss_pct': (0.05, 0.15),
+            'take_profit_pct': (0.15, 0.3),
+            'min_confidence': (0.5, 0.8),
+            'lookback_period': (10, 30),
+            'rebalance_frequency': (1, 10)
         }
 ```
 
-#### 6.2.3 RSI策略
-
-```python
-import backtrader as bt
-
-class RSIStrategy(BaseStrategy):
-    """基于backtrader的RSI策略"""
-    
-    # 策略参数
-    params = (
-        ('rsi_period', 14),    # RSI计算周期
-        ('oversold', 30),      # 超卖阈值
-        ('overbought', 70),    # 超买阈值
-        ('printlog', True),    # 是否打印日志
-    )
-    
-    def setup_indicators(self):
-        """设置技术指标"""
-        # 计算RSI指标
-        self.rsi = bt.indicators.RelativeStrengthIndex(
-            self.datas[0], period=self.params.rsi_period
-        )
-        
-    def next(self):
-        """策略主逻辑"""
-        # 如果没有持仓
-        if not self.position:
-            # RSI超卖买入信号
-            if self.rsi < self.params.oversold:
-                self.log(f'买入信号: RSI={self.rsi[0]:.2f} < {self.params.oversold} (超卖)')
-                # 计算买入数量（使用95%的可用资金）
-                size = int(self.broker.getcash() * 0.95 / self.data.close[0])
-                self.buy(size=size)
-                
-        # 如果有持仓
-        else:
-            # RSI超买卖出信号
-            if self.rsi > self.params.overbought:
-                self.log(f'卖出信号: RSI={self.rsi[0]:.2f} > {self.params.overbought} (超买)')
-                self.sell(size=self.position.size)
-                
-    def log(self, txt, dt=None):
-        """日志记录"""
-        if self.params.printlog:
-            super().log(txt, dt)
-            
-    @classmethod
-    def get_parameter_ranges(cls) -> Dict[str, tuple]:
-        """获取参数范围"""
-        return {
-            'rsi_period': (10, 20),
-            'oversold': (20, 35),
-            'overbought': (65, 80)
-        }
-```
-
-#### 6.2.4 消息面策略
-
-```python
-import backtrader as bt
-from typing import Dict, Any, Optional
-
-class NewsSentimentStrategy(BaseStrategy):
-    """新闻情绪策略 - 基于外部新闻情绪指标的交易策略"""
-    
-    # 策略参数
-    params = (
-        ('sentiment_threshold', 0.6),      # 情绪阈值
-        ('volume_threshold', 1.5),         # 成交量阈值（相对于均值）
-        ('price_change_threshold', 0.03),  # 价格变化阈值
-        ('volume_period', 20),             # 成交量均值计算周期
-        ('printlog', True),                # 是否打印日志
-    )
-    
-    def setup_indicators(self):
-        """设置技术指标"""
-        # 成交量移动平均
-        self.volume_sma = bt.indicators.SimpleMovingAverage(
-            self.data.volume, period=self.params.volume_period
-        )
-        
-    def next(self):
-        """策略主逻辑"""
-        # 获取外部消息面数据（需要通过数据服务获取）
-        news_sentiment = self.get_news_sentiment_score()
-        
-        # 计算成交量比率
-        volume_ratio = self.data.volume[0] / self.volume_sma[0] if self.volume_sma[0] > 0 else 1.0
-        
-        # 计算价格变化率
-        price_change = (self.data.close[0] - self.data.close[-1]) / self.data.close[-1] if len(self.data.close) > 1 else 0.0
-        
-        # 如果没有持仓
-        if not self.position:
-            # 正面消息 + 成交量放大 + 价格上涨
-            if (news_sentiment is not None and 
-                news_sentiment > self.params.sentiment_threshold and 
-                volume_ratio > self.params.volume_threshold and
-                price_change > self.params.price_change_threshold):
-                
-                self.log(f'消息面买入信号: 情绪={news_sentiment:.2f}, 量比={volume_ratio:.2f}, 涨幅={price_change:.2%}')
-                # 计算买入数量（使用80%的可用资金，消息面策略风险较高）
-                size = int(self.broker.getcash() * 0.8 / self.data.close[0])
-                self.buy(size=size)
-                
-        # 如果有持仓
-        else:
-            # 负面消息或情绪转弱时卖出
-            if (news_sentiment is not None and 
-                news_sentiment < -self.params.sentiment_threshold):
-                
-                self.log(f'消息面卖出信号: 情绪={news_sentiment:.2f} (负面)')
-                self.sell(size=self.position.size)
-                
-    def get_news_sentiment_score(self) -> Optional[float]:
-        """获取新闻情绪评分
-        
-        Returns:
-            float: 情绪评分，范围 -1.0 到 1.0，None表示无数据
-                  正值表示正面情绪，负值表示负面情绪
-        
-        Note:
-            这里需要集成外部新闻情绪分析服务
-            实际实现中应该调用数据服务获取当前股票的新闻情绪数据
-        """
-        # 占位符实现 - 实际应该从外部数据源获取
-        # 可以通过以下方式获取：
-        # 1. 调用新闻情绪分析API
-        # 2. 从Redis缓存中读取预处理的情绪数据
-        # 3. 从数据库中查询最新的情绪指标
-        
-        # 示例：从数据服务获取情绪数据
-        # symbol = self.data._name  # 获取股票代码
-        # return self.data_service.get_sentiment_score(symbol, self.data.datetime.date(0))
-        
-        return 0.0  # 占位符返回值
-        
-    def log(self, txt, dt=None):
-        """日志记录"""
-        if self.params.printlog:
-            super().log(txt, dt)
-            
-    @classmethod
-    def get_parameter_ranges(cls) -> Dict[str, tuple]:
-        """获取参数范围"""
-        return {
-            'sentiment_threshold': (0.4, 0.8),
-            'volume_threshold': (1.2, 2.0),
-            'price_change_threshold': (0.01, 0.05),
-            'volume_period': (10, 30)
-        }
-```
-
-```python
-class PolicyDrivenStrategy(BaseStrategy):
-    """政策导向策略 - 基于政策事件和行业影响的交易策略"""
-    
-    # 策略参数
-    params = (
-        ('policy_impact_threshold', 0.7),  # 政策影响阈值
-        ('sector_correlation', 0.8),       # 行业相关性阈值
-        ('confirmation_period', 3),        # 确认周期（交易日）
-        ('printlog', True),                # 是否打印日志
-    )
-    
-    def setup_indicators(self):
-        """设置技术指标"""
-        # 价格移动平均（用于趋势确认）
-        self.price_sma = bt.indicators.SimpleMovingAverage(
-            self.data.close, period=10
-        )
-        
-    def next(self):
-        """策略主逻辑"""
-        # 获取政策相关数据（需要通过数据服务获取）
-        policy_impact = self.get_policy_impact_score()
-        sector_benefit = self.get_sector_benefit_score()
-        
-        # 如果没有持仓
-        if not self.position:
-            # 利好政策 + 行业受益 + 价格趋势向上
-            if (policy_impact is not None and sector_benefit is not None and
-                policy_impact > self.params.policy_impact_threshold and 
-                sector_benefit > self.params.sector_correlation and
-                self.data.close[0] > self.price_sma[0]):
-                
-                self.log(f'政策买入信号: 政策影响={policy_impact:.2f}, 行业受益={sector_benefit:.2f}')
-                # 计算买入数量（使用85%的可用资金）
-                size = int(self.broker.getcash() * 0.85 / self.data.close[0])
-                self.buy(size=size)
-                
-        # 如果有持仓
-        else:
-            # 政策利空或影响减弱
-            if (policy_impact is not None and 
-                policy_impact < -self.params.policy_impact_threshold):
-                
-                self.log(f'政策卖出信号: 政策影响={policy_impact:.2f} (利空)')
-                self.sell(size=self.position.size)
-                
-    def get_policy_impact_score(self) -> Optional[float]:
-        """获取政策影响评分
-        
-        Returns:
-            float: 政策影响评分，范围 -1.0 到 1.0，None表示无数据
-                  正值表示利好政策，负值表示利空政策
-        """
-        # 占位符实现 - 实际应该从外部数据源获取
-        return 0.0
-        
-    def get_sector_benefit_score(self) -> Optional[float]:
-        """获取行业受益程度评分
-        
-        Returns:
-            float: 行业受益评分，范围 0.0 到 1.0，None表示无数据
-                  数值越高表示行业受益程度越大
-        """
-        # 占位符实现 - 实际应该从外部数据源获取
-        return 0.0
-        
-    def log(self, txt, dt=None):
-        """日志记录"""
-        if self.params.printlog:
-            super().log(txt, dt)
-            
-    @classmethod
-    def get_parameter_ranges(cls) -> Dict[str, tuple]:
-        """获取参数范围"""
-        return {
-            'policy_impact_threshold': (0.5, 0.9),
-            'sector_correlation': (0.6, 0.9),
-            'confirmation_period': (1, 5)
-        }
-```
-
-```python
-class EventDrivenStrategy(BaseStrategy):
-    """事件驱动策略 - 基于重大事件和市场反应的交易策略"""
-    
-    # 策略参数
-    params = (
-        ('event_severity_threshold', 0.6),   # 事件严重性阈值
-        ('market_reaction_threshold', 0.05), # 市场反应阈值
-        ('volatility_period', 14),           # 波动率计算周期
-        ('printlog', True),                  # 是否打印日志
-    )
-    
-    def setup_indicators(self):
-        """设置技术指标"""
-        # ATR指标（平均真实波动范围）
-        self.atr = bt.indicators.AverageTrueRange(
-            self.data, period=self.params.volatility_period
-        )
-        
-    def next(self):
-        """策略主逻辑"""
-        # 获取事件数据（需要通过数据服务获取）
-        event_severity = self.get_event_severity_score()
-        
-        # 计算市场反应强度
-        if len(self.data.close) > 1:
-            market_reaction = abs(self.data.close[0] - self.data.close[-1]) / self.data.close[-1]
-        else:
-            market_reaction = 0.0
-            
-        # 如果没有持仓
-        if not self.position:
-            # 重大事件 + 市场反应强烈 + 正面事件
-            if (event_severity is not None and 
-                event_severity > self.params.event_severity_threshold and 
-                market_reaction > self.params.market_reaction_threshold and
-                self.is_positive_event()):
-                
-                self.log(f'事件驱动买入信号: 事件严重性={event_severity:.2f}, 市场反应={market_reaction:.2%}')
-                # 计算买入数量（使用75%的可用资金，事件驱动风险较高）
-                size = int(self.broker.getcash() * 0.75 / self.data.close[0])
-                self.buy(size=size)
-                
-        # 如果有持仓
-        else:
-            # 事件影响消退或转为负面
-            if (event_severity is not None and 
-                (event_severity < -self.params.event_severity_threshold or
-                 not self.is_positive_event())):
-                
-                self.log(f'事件驱动卖出信号: 事件严重性={event_severity:.2f}')
-                self.sell(size=self.position.size)
-                
-    def get_event_severity_score(self) -> Optional[float]:
-        """获取事件严重性评分
-        
-        Returns:
-            float: 事件严重性评分，范围 -1.0 到 1.0，None表示无数据
-                  正值表示正面事件，负值表示负面事件
-                  绝对值表示事件的重要程度
-        """
-        # 占位符实现 - 实际应该从外部数据源获取
-        return 0.0
-        
-    def is_positive_event(self) -> bool:
-        """判断是否为正面事件
-        
-        Returns:
-            bool: True表示正面事件，False表示负面事件
-        """
-        # 占位符实现 - 实际应该基于事件分析结果
-        return True
-        
-    def log(self, txt, dt=None):
-        """日志记录"""
-        if self.params.printlog:
-            super().log(txt, dt)
-            
-    @classmethod
-    def get_parameter_ranges(cls) -> Dict[str, tuple]:
-        """获取参数范围"""
-        return {
-            'event_severity_threshold': (0.4, 0.8),
-            'market_reaction_threshold': (0.02, 0.08),
-            'volatility_period': (10, 20)
-        }
-```
-
-### 6.3 策略管理器
+### 6.4 策略管理器
 
 ```python
 import backtrader as bt
@@ -2772,15 +3434,8 @@ class StrategyManager:
         
     def register_default_strategies(self):
         """注册默认策略"""
-        # 技术分析策略
-        self.register_strategy('ma_strategy', MovingAverageStrategy)
-        self.register_strategy('macd_strategy', MACDStrategy)
-        self.register_strategy('rsi_strategy', RSIStrategy)
-        
-        # 消息面策略
-        self.register_strategy('news_sentiment_strategy', NewsSentimentStrategy)
-        self.register_strategy('policy_driven_strategy', PolicyDrivenStrategy)
-        self.register_strategy('event_driven_strategy', EventDrivenStrategy)
+        # 多因子策略（唯一核心策略）
+        self.register_strategy('multi_factor_strategy', MultiFactorStrategy)
         
     def register_strategy(self, name: str, strategy_class: Type[BaseStrategy]):
         """注册策略"""
