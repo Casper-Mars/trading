@@ -5,13 +5,14 @@
 | 项目    | 内容         |
 | ----- | ---------- |
 | 子系统名称 | 量化交易系统后端   |
-| 文档版本  | v1.0       |
+| 文档版本  | v1.2       |
 | 创建日期  | 2025-01-10 |
 | 最后更新  | 2025-01-10 |
 | 架构师   | [架构师姓名]   |
 | 开发团队  | [开发团队]    |
 | 文档状态  | 待评审        |
 | 所属平台  | 量化交易平台     |
+| 更新说明  | 重构为多因子量化综合评分模型，适配A股市场特性 |
 
 ## 1. 系统架构设计
 
@@ -46,10 +47,12 @@ graph TB
     
     subgraph "业务服务层 (Business Service Layer)"
         C1[持仓管理服务]
-        C2[策略回测服务]
+        C2[多因子回测服务]
         C3[AI分析服务]
         C4[方案生成服务]
         C5[数据整合服务]
+        C6[消息面分析服务]
+        C7[因子评分服务]
     end
     
     subgraph "数据层 (Data Layer)"
@@ -72,8 +75,11 @@ graph TB
     B1 --> C2
     B1 --> C3
     B1 --> C4
+    B1 --> C6
+    B1 --> C7
     B2 --> C2
     B2 --> C5
+    B2 --> C7
     B3 --> C1
     
     C1 --> D1
@@ -81,8 +87,13 @@ graph TB
     C3 --> D1
     C4 --> D1
     C5 --> D2
+    C6 --> D1
+    C6 --> D2
+    C7 --> D1
+    C7 --> D2
     
     C5 --> E1
+    C6 --> E1
     C3 --> E2
 ```
 
@@ -139,10 +150,12 @@ quantitative-system/
 ├── services/                  # 业务服务层
 │   ├── __init__.py
 │   ├── position_service.py   # 持仓管理服务
-│   ├── backtest_service.py   # 回测服务
+│   ├── backtest_service.py   # 多因子回测服务
 │   ├── ai_service.py         # AI分析服务
 │   ├── plan_service.py       # 方案生成服务
-│   └── data_service.py       # 数据整合服务
+│   ├── data_service.py       # 数据整合服务
+│   ├── news_service.py       # 消息面分析服务
+│   └── factor_service.py     # 因子评分服务
 ├── models/                    # 数据模型
 │   ├── __init__.py
 │   ├── database.py           # 数据库模型
@@ -154,12 +167,21 @@ quantitative-system/
 │   ├── backtest_repo.py      # 回测数据访问
 │   ├── plan_repo.py          # 方案数据访问
 │   └── cache_repo.py         # 缓存数据访问
-├── strategies/                # 交易策略
+├── strategies/                # 多因子量化策略
 │   ├── __init__.py
 │   ├── base_strategy.py      # 策略基类
-│   ├── ma_strategy.py        # 均线策略
-│   ├── macd_strategy.py      # MACD策略
-│   └── rsi_strategy.py       # RSI策略
+│   ├── multi_factor_strategy.py # 多因子综合策略
+│   ├── factors/              # 因子模块
+│   │   ├── __init__.py
+│   │   ├── technical_factors.py  # 技术面因子
+│   │   ├── fundamental_factors.py # 基本面因子
+│   │   ├── news_factors.py       # 消息面因子
+│   │   └── market_factors.py     # 市场面因子
+│   └── legacy/               # 传统单一策略（保留用于对比）
+│       ├── __init__.py
+│       ├── ma_strategy.py    # 均线策略
+│       ├── macd_strategy.py  # MACD策略
+│       └── rsi_strategy.py   # RSI策略
 ├── utils/                     # 工具模块
 │   ├── __init__.py
 │   ├── logger.py             # 日志工具
@@ -208,10 +230,10 @@ CREATE TABLE positions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='持仓数据表';
 ```
 
-#### 2.2.2 策略回测结果表 (backtest_results)
+#### 2.2.2 多因子回测结果表 (multi_factor_backtest_results)
 
 ```sql
-CREATE TABLE backtest_results (
+CREATE TABLE multi_factor_backtest_results (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     strategy_name VARCHAR(100) NOT NULL COMMENT '策略名称',
     symbol VARCHAR(20) NOT NULL COMMENT '股票代码',
@@ -225,11 +247,18 @@ CREATE TABLE backtest_results (
     profit_loss_ratio DECIMAL(8,4) COMMENT '盈亏比',
     volatility DECIMAL(8,4) COMMENT '波动率',
     trade_count INT COMMENT '交易次数',
+    technical_score DECIMAL(5,2) COMMENT '技术面评分',
+    fundamental_score DECIMAL(5,2) COMMENT '基本面评分',
+    news_score DECIMAL(5,2) COMMENT '消息面评分',
+    market_score DECIMAL(5,2) COMMENT '市场面评分',
+    composite_score DECIMAL(5,2) COMMENT '综合评分',
+    factor_weights JSON COMMENT '因子权重配置',
     result_data JSON COMMENT '详细回测数据',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_strategy_symbol (strategy_name, symbol),
+    INDEX idx_composite_score (composite_score),
     INDEX idx_created_at (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='策略回测结果表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='多因子回测结果表';
 ```
 
 #### 2.2.3 操作方案表 (trading_plans)
@@ -274,7 +303,52 @@ CREATE TABLE market_data_cache (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='市场数据缓存表';
 ```
 
-#### 2.2.5 系统日志表 (system_logs)
+#### 2.2.5 消息面数据表 (news_data)
+
+```sql
+CREATE TABLE news_data (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    symbol VARCHAR(20) NOT NULL COMMENT '股票代码',
+    title VARCHAR(500) NOT NULL COMMENT '新闻标题',
+    content TEXT COMMENT '新闻内容',
+    source VARCHAR(100) COMMENT '新闻来源',
+    publish_time TIMESTAMP NOT NULL COMMENT '发布时间',
+    sentiment_score DECIMAL(5,2) COMMENT '情感分析评分(-100到100)',
+    importance_level TINYINT COMMENT '重要性等级(1-5)',
+    keywords JSON COMMENT '关键词提取',
+    impact_analysis TEXT COMMENT '影响分析',
+    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_symbol_time (symbol, publish_time),
+    INDEX idx_sentiment_score (sentiment_score),
+    INDEX idx_importance_level (importance_level)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消息面数据表';
+```
+
+#### 2.2.6 因子评分表 (factor_scores)
+
+```sql
+CREATE TABLE factor_scores (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    symbol VARCHAR(20) NOT NULL COMMENT '股票代码',
+    score_date DATE NOT NULL COMMENT '评分日期',
+    technical_score DECIMAL(5,2) NOT NULL COMMENT '技术面评分(0-100)',
+    fundamental_score DECIMAL(5,2) NOT NULL COMMENT '基本面评分(0-100)',
+    news_score DECIMAL(5,2) NOT NULL COMMENT '消息面评分(0-100)',
+    market_score DECIMAL(5,2) NOT NULL COMMENT '市场面评分(0-100)',
+    composite_score DECIMAL(5,2) NOT NULL COMMENT '综合评分(0-100)',
+    technical_details JSON COMMENT '技术面详细指标',
+    fundamental_details JSON COMMENT '基本面详细指标',
+    news_details JSON COMMENT '消息面详细分析',
+    market_details JSON COMMENT '市场面详细指标',
+    weight_config JSON COMMENT '权重配置',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_symbol_date (symbol, score_date),
+    INDEX idx_composite_score (composite_score),
+    INDEX idx_score_date (score_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='因子评分表';
+```
+
+#### 2.2.7 系统日志表 (system_logs)
 
 ```sql
 CREATE TABLE system_logs (
@@ -297,7 +371,10 @@ CREATE TABLE system_logs (
 | --- | --- | --- | --- |
 | 市场数据 | `market:{symbol}:{date}` | 24小时 | 缓存日K线数据 |
 | 技术指标 | `indicators:{symbol}:{date}` | 24小时 | 缓存技术指标 |
-| 回测结果 | `backtest:{strategy}:{symbol}` | 7天 | 缓存回测结果 |
+| 多因子回测结果 | `multi_factor_backtest:{strategy}:{symbol}` | 7天 | 缓存多因子回测结果 |
+| 因子评分 | `factor_scores:{symbol}:{date}` | 6小时 | 缓存因子评分数据 |
+| 消息面数据 | `news:{symbol}:{date}` | 12小时 | 缓存消息面分析数据 |
+| 综合评分排名 | `ranking:composite:{date}` | 2小时 | 缓存股票综合评分排名 |
 | 持仓信息 | `positions:current` | 1小时 | 缓存当前持仓 |
 | 系统状态 | `system:status` | 5分钟 | 缓存系统状态 |
 
@@ -415,24 +492,56 @@ GET /api/v1/plans/history?days=7
 POST /api/v1/plans/generate
 ```
 
-#### 3.2.3 回测接口
+#### 3.2.3 多因子回测接口
 
 ```python
-# 执行策略回测
-POST /api/v1/backtest/run
+# 执行多因子策略回测
+POST /api/v1/backtest/multi-factor/run
 Request: {
-    "strategy_name": "ma_strategy",
+    "strategy_name": "multi_factor_strategy",
     "symbols": ["000001", "000002"],
     "start_date": "2024-01-01",
     "end_date": "2024-12-31",
+    "factor_weights": {
+        "technical": 0.35,
+        "fundamental": 0.25,
+        "news": 0.25,
+        "market": 0.15
+    },
     "parameters": {
-        "short_window": 5,
-        "long_window": 20
+        "rebalance_frequency": "weekly",
+        "min_score_threshold": 60.0,
+        "max_positions": 10
     }
 }
 
-# 获取回测结果
-GET /api/v1/backtest/results/{result_id}
+# 获取多因子回测结果
+GET /api/v1/backtest/multi-factor/results/{result_id}
+Response: {
+    "code": 200,
+    "data": {
+        "id": 1,
+        "strategy_name": "multi_factor_strategy",
+        "symbol": "000001",
+        "start_date": "2024-01-01",
+        "end_date": "2024-12-31",
+        "total_return": 0.1250,
+        "annual_return": 0.1250,
+        "max_drawdown": -0.0850,
+        "sharpe_ratio": 1.45,
+        "technical_score": 72.5,
+        "fundamental_score": 68.0,
+        "news_score": 75.5,
+        "market_score": 70.0,
+        "composite_score": 71.2,
+        "factor_weights": {
+            "technical": 0.35,
+            "fundamental": 0.25,
+            "news": 0.25,
+            "market": 0.15
+        }
+    }
+}
 
 # 获取策略列表
 GET /api/v1/backtest/strategies
@@ -539,6 +648,191 @@ Response: {
 GET /api/v1/system/stats
 ```
 
+#### 3.2.5 因子评分接口
+
+```python
+# 获取股票因子评分
+GET /api/v1/factors/scores/{symbol}
+Response: {
+    "code": 200,
+    "data": {
+        "symbol": "000001",
+        "score_date": "2025-01-10",
+        "technical_score": 72.5,
+        "fundamental_score": 68.0,
+        "news_score": 75.5,
+        "market_score": 70.0,
+        "composite_score": 71.2,
+        "technical_details": {
+            "ma_signal": 0.8,
+            "rsi_signal": 0.6,
+            "macd_signal": 0.9,
+            "volume_signal": 0.7
+        },
+        "fundamental_details": {
+            "pe_ratio": 15.2,
+            "pb_ratio": 1.8,
+            "roe": 0.12,
+            "debt_ratio": 0.35
+        },
+        "news_details": {
+            "sentiment_score": 75.5,
+            "news_count": 8,
+            "positive_ratio": 0.75
+        },
+        "market_details": {
+            "market_cap_rank": 0.8,
+            "liquidity_score": 0.9,
+            "volatility_score": 0.6
+        }
+    }
+}
+
+# 获取综合评分排名
+GET /api/v1/factors/ranking?limit=50&date=2025-01-10
+Response: {
+    "code": 200,
+    "data": {
+        "ranking_date": "2025-01-10",
+        "stocks": [
+            {
+                "rank": 1,
+                "symbol": "000001",
+                "name": "平安银行",
+                "composite_score": 85.2,
+                "technical_score": 88.0,
+                "fundamental_score": 82.0,
+                "news_score": 86.0,
+                "market_score": 85.0
+            }
+        ]
+    }
+}
+
+# 批量计算因子评分
+POST /api/v1/factors/calculate
+Request: {
+    "symbols": ["000001", "000002", "000858"],
+    "date": "2025-01-10",
+    "force_refresh": false,
+    "factor_weights": {  // 可选，自定义因子权重
+        "technical": 0.4,
+        "fundamental": 0.3,
+        "news": 0.2,
+        "market": 0.1
+    }
+}
+
+# 获取默认因子权重配置
+GET /api/v1/factors/weights/default
+Response: {
+    "code": 200,
+    "data": {
+        "technical": 0.3,
+        "fundamental": 0.25,
+        "news": 0.25,
+        "market": 0.2
+    }
+}
+
+# 验证因子权重配置
+POST /api/v1/factors/weights/validate
+Request: {
+    "weights": {
+        "technical": 0.4,
+        "fundamental": 0.3,
+        "news": 0.2,
+        "market": 0.1
+    }
+}
+Response: {
+    "code": 200,
+    "data": {
+        "valid": true,
+        "normalized_weights": {
+            "technical": 0.4,
+            "fundamental": 0.3,
+            "news": 0.2,
+            "market": 0.1
+        },
+        "total_weight": 1.0
+    }
+}
+```
+
+#### 3.2.6 消息面分析接口
+
+```python
+# 获取股票消息面数据
+GET /api/v1/news/analysis/{symbol}?days=7
+Response: {
+    "code": 200,
+    "data": {
+        "symbol": "000001",
+        "analysis_period": {
+            "start_date": "2025-01-04",
+            "end_date": "2025-01-10"
+        },
+        "overall_sentiment": 75.5,
+        "news_count": 15,
+        "sentiment_distribution": {
+            "positive": 9,
+            "neutral": 4,
+            "negative": 2
+        },
+        "key_topics": [
+            {
+                "topic": "业绩预告",
+                "sentiment": 85.0,
+                "importance": 5,
+                "news_count": 3
+            },
+            {
+                "topic": "行业政策",
+                "sentiment": 70.0,
+                "importance": 4,
+                "news_count": 5
+            }
+        ],
+        "recent_news": [
+            {
+                "id": 1,
+                "title": "平安银行发布业绩预告",
+                "sentiment_score": 85.0,
+                "importance_level": 5,
+                "publish_time": "2025-01-10T09:00:00Z",
+                "source": "财经网"
+            }
+        ]
+    }
+}
+
+# 获取市场热点消息
+GET /api/v1/news/hotspots?limit=20
+Response: {
+    "code": 200,
+    "data": {
+        "hotspots": [
+            {
+                "topic": "人工智能",
+                "sentiment": 82.0,
+                "related_stocks": ["000001", "000002"],
+                "news_count": 25,
+                "trend": "rising"
+            }
+        ]
+    }
+}
+
+# 消息面情感分析
+POST /api/v1/news/sentiment/analyze
+Request: {
+    "title": "平安银行发布2024年业绩预告，净利润同比增长15%",
+    "content": "详细新闻内容...",
+    "symbol": "000001"
+}
+```
+
 ## 4. 业务编排层设计
 
 ### 4.1 设计原则
@@ -642,18 +936,22 @@ class PlanOrchestrator(BaseOrchestrator):
                     symbols, plan_date - timedelta(days=30), plan_date
                 )
                 
-                # 2. 执行策略回测
+                # 2. 执行多因子策略回测
                 backtest_results = []
-                strategies = ['ma_strategy', 'macd_strategy', 'rsi_strategy']
                 
-                for strategy in strategies:
-                    for symbol in symbols:
-                        result = await self.backtest_service.run_backtest(
-                            strategy, [symbol], 
-                            plan_date - timedelta(days=30), plan_date,
-                            self._get_default_parameters(strategy)
-                        )
-                        backtest_results.append(result)
+                # 使用多因子综合策略
+                for symbol in symbols:
+                    result = await self.backtest_service.run_multi_factor_backtest(
+                        symbol, 
+                        plan_date - timedelta(days=30), plan_date,
+                        factor_weights={
+                            'technical': 0.35,
+                            'fundamental': 0.25,
+                            'news': 0.25,
+                            'market': 0.15
+                        }
+                    )
+                    backtest_results.append(result)
                 
                 # 3. AI分析
                 analysis_result = await self.ai_service.analyze_market_data(
@@ -815,28 +1113,158 @@ class PositionService:
         """更新持仓市值"""
 ```
 
-### 5.2 回测服务 (BacktestService)
+### 5.2 多因子回测服务 (BacktestService)
 
 **主要功能**
-- 基于backtrader框架的策略回测执行
-- 回测结果计算和分析
-- 性能指标统计
-- 回测数据管理
+- 多因子策略回测执行
+- 因子评分计算和整合
+- 回测结果分析
+- 策略性能评估
+- 回测报告生成
 
 **核心方法**
 
 ```python
 import backtrader as bt
 from typing import Dict, List, Optional
+import pandas as pd
 
 class BacktestService:
-    def __init__(self):
-        self.cerebro = None
+    def __init__(self, factor_service: 'FactorService', news_service: 'NewsService'):
+        self.factor_service = factor_service
+        self.news_service = news_service
         
-    async def run_backtest(self, strategy_name: str, symbols: List[str], 
-                          start_date: date, end_date: date, 
-                          parameters: Dict) -> BacktestResult:
-        """执行策略回测"""
+    async def run_multi_factor_backtest(self, symbol: str, 
+                                       start_date: date, end_date: date,
+                                       factor_weights: Optional[Dict[str, float]] = None) -> MultiFactorBacktestResult:
+        """执行多因子策略回测"""
+        # 0. 设置权重配置（使用传入权重或FactorService默认权重）
+        if factor_weights is not None:
+            # 创建临时FactorService实例使用自定义权重
+            temp_factor_service = FactorService(
+                self.factor_service.data_service,
+                self.factor_service.news_service,
+                factor_weights
+            )
+            weights = temp_factor_service.get_factor_weights()
+        else:
+            # 使用当前FactorService的权重配置
+            temp_factor_service = self.factor_service
+            weights = self.factor_service.get_factor_weights()
+        
+        # 1. 获取历史数据
+        market_data = await self._get_market_data(symbol, start_date, end_date)
+        
+        # 2. 计算各因子评分
+        factor_scores = await self._calculate_factor_scores(
+            symbol, market_data, start_date, end_date, temp_factor_service
+        )
+        
+        # 3. 计算综合评分
+        composite_scores = await self._calculate_composite_scores(
+            factor_scores, weights
+        )
+        
+        # 4. 执行回测
+        backtest_result = await self._execute_multi_factor_backtest(
+            symbol, market_data, composite_scores, weights
+        )
+        
+        # 5. 保存结果
+        result_id = await self._save_backtest_result(backtest_result)
+        backtest_result.id = result_id
+        
+        return backtest_result
+        
+    async def _calculate_factor_scores(self, symbol: str, market_data: pd.DataFrame,
+                                      start_date: date, end_date: date, 
+                                      factor_service: 'FactorService') -> Dict[str, List[float]]:
+        """计算各因子评分"""
+        factor_scores = {
+            'technical': [],
+            'fundamental': [],
+            'news': [],
+            'market': []
+        }
+        
+        # 按日期计算因子评分
+        for date in pd.date_range(start_date, end_date):
+            # 技术面因子
+            technical_score = await factor_service.calculate_technical_score(
+                symbol, date, market_data
+            )
+            factor_scores['technical'].append(technical_score)
+            
+            # 基本面因子
+            fundamental_score = await factor_service.calculate_fundamental_score(
+                symbol, date
+            )
+            factor_scores['fundamental'].append(fundamental_score)
+            
+            # 消息面因子
+            news_score = await factor_service.calculate_news_score(
+                symbol, date
+            )
+            factor_scores['news'].append(news_score)
+            
+            # 市场面因子
+            market_score = await factor_service.calculate_market_score(
+                symbol, date, market_data
+            )
+            factor_scores['market'].append(market_score)
+            
+        return factor_scores
+        
+    async def _calculate_composite_scores(self, factor_scores: Dict[str, List[float]],
+                                        factor_weights: Dict[str, float]) -> List[float]:
+        """计算综合评分"""
+        composite_scores = []
+        
+        for i in range(len(factor_scores['technical'])):
+            composite_score = (
+                factor_scores['technical'][i] * factor_weights['technical'] +
+                factor_scores['fundamental'][i] * factor_weights['fundamental'] +
+                factor_scores['news'][i] * factor_weights['news'] +
+                factor_scores['market'][i] * factor_weights['market']
+            )
+            composite_scores.append(composite_score)
+            
+        return composite_scores
+        
+    async def _execute_multi_factor_backtest(self, symbol: str, market_data: pd.DataFrame,
+                                           composite_scores: List[float],
+                                           factor_weights: Dict[str, float]) -> 'MultiFactorBacktestResult':
+        """执行多因子回测"""
+        # 初始化backtrader引擎
+        cerebro = bt.Cerebro()
+        
+        # 添加多因子策略
+        cerebro.addstrategy(MultiFactorStrategy, composite_scores=composite_scores)
+        
+        # 添加数据源
+        data = self._convert_to_backtrader_data(market_data)
+        cerebro.adddata(data)
+        
+        # 设置初始资金和手续费
+        cerebro.broker.setcash(100000.0)
+        cerebro.broker.setcommission(commission=0.001)
+        
+        # 添加分析器
+        cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
+        cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
+        cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
+        cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
+        
+        # 运行回测
+        results = cerebro.run()
+        
+        # 解析结果
+        return await self._parse_multi_factor_results(results[0], composite_scores, factor_weights)
+        
+    async def run_legacy_backtest(self, strategy_name: str, symbols: List[str], 
+                                 start_date: date, end_date: date, 
+                                 parameters: Dict) -> 'BacktestResult':
+        """执行传统单一策略回测（保留用于对比）"""
         # 初始化backtrader引擎
         cerebro = bt.Cerebro()
         
@@ -883,87 +1311,788 @@ class BacktestService:
         """获取策略排名"""
 ```
 
-### 5.3 AI分析服务 (AIService)
+### 5.3 多因子AI分析服务 (AIService)
 
 **主要功能**
-- 数据整合和预处理
-- AI模型调用
-- 结果解析和处理
+- 多因子数据整合和预处理
+- 基于大模型的多因子分析
+- 消息面情感分析
+- 因子权重优化建议
+- 投资建议生成
 - 置信度评估
 
 **核心方法**
 
 ```python
+from openai import AsyncOpenAI
+from typing import Dict, List, Optional
+import pandas as pd
+
 class AIService:
-    async def analyze_market_data(self, backtest_results: List[BacktestResult], 
-                                 positions: List[Position]) -> AIAnalysisResult:
-        """AI市场分析"""
+    def __init__(self, api_key: str):
+        self.client = AsyncOpenAI(api_key=api_key)
         
-    async def generate_trading_recommendations(self, analysis_result: AIAnalysisResult) -> TradingRecommendations:
-        """生成交易建议"""
+    async def analyze_multi_factor_data(self, symbol: str, 
+                                       factor_scores: Dict[str, float],
+                                       market_data: Dict,
+                                       news_data: List[Dict]) -> 'MultiFactorAnalysisResult':
+        """多因子数据AI分析"""
+        prompt = self._build_multi_factor_analysis_prompt(
+            symbol, factor_scores, market_data, news_data
+        )
+        
+        response = await self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "你是一个专业的量化投资分析师，精通多因子模型"},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3
+        )
+        
+        return await self._parse_multi_factor_analysis(response.choices[0].message.content)
+        
+    async def analyze_news_sentiment(self, news_content: str, symbol: str) -> Dict:
+        """分析新闻情感"""
+        prompt = f"""
+        请分析以下关于股票{symbol}的新闻内容的情感倾向：
+        
+        新闻内容：{news_content}
+        
+        请从以下维度进行分析：
+        1. 情感极性（正面/负面/中性）
+        2. 情感强度（1-10分）
+        3. 对股价的潜在影响（利好/利空/中性）
+        4. 重要性等级（高/中/低）
+        5. 关键信息提取
+        
+        请以JSON格式返回结果。
+        """
+        
+        response = await self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "你是一个专业的金融新闻分析师"},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3
+        )
+        
+        return self._parse_sentiment_response(response.choices[0].message.content)
+        
+    async def generate_factor_weight_suggestions(self, 
+                                               historical_performance: Dict,
+                                               market_regime: str) -> Dict[str, float]:
+        """生成因子权重建议"""
+        prompt = f"""
+        基于历史表现数据和当前市场环境，请建议最优的因子权重配置：
+        
+        历史表现：{historical_performance}
+        市场环境：{market_regime}
+        
+        请为以下因子建议权重（总和为1.0）：
+        - 技术面因子
+        - 基本面因子
+        - 消息面因子
+        - 市场面因子
+        
+        请说明权重分配的理由。
+        """
+        
+        response = await self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "你是一个专业的量化策略优化专家"},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.5
+        )
+        
+        return self._parse_weight_suggestions(response.choices[0].message.content)
+        
+    async def generate_trading_recommendations(self, 
+                                             multi_factor_result: 'MultiFactorAnalysisResult',
+                                             positions: List['Position']) -> 'TradingRecommendations':
+        """基于多因子分析生成交易建议"""
+        prompt = self._build_trading_recommendation_prompt(multi_factor_result, positions)
+        
+        response = await self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "你是一个专业的投资顾问，精通多因子量化策略"},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7
+        )
+        
+        return await self._parse_trading_recommendations(response.choices[0].message.content)
         
     async def call_ai_platform(self, prompt: str) -> str:
-        """调用阿里百炼平台"""
+        """调用AI平台（兼容性方法）"""
+        response = await self.client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.5
+        )
         
-    async def parse_ai_response(self, response: str) -> ParsedRecommendations:
+        return response.choices[0].message.content
+        
+    async def parse_ai_response(self, response: str) -> 'ParsedRecommendations':
         """解析AI响应"""
+        # 实现AI响应解析逻辑
+        pass
 ```
 
-### 5.4 方案生成服务 (PlanService)
+### 5.4 因子评分服务 (FactorService)
 
 **主要功能**
-- Markdown方案生成
+- 技术面因子计算
+- 基本面因子计算
+- 消息面因子计算
+- 市场面因子计算
+- 综合评分计算
+- 因子权重管理
+
+**核心方法**
+
+```python
+import pandas as pd
+import numpy as np
+from typing import Dict, List, Optional
+from datetime import date
+
+class FactorService:
+    # 默认因子权重配置
+    DEFAULT_FACTOR_WEIGHTS = {
+        'technical': 0.3,    # 技术面权重30%
+        'fundamental': 0.25, # 基本面权重25%
+        'news': 0.25,        # 消息面权重25%
+        'market': 0.2        # 市场面权重20%
+    }
+    
+    def __init__(self, data_service: 'DataService', news_service: 'NewsService', 
+                 factor_weights: Optional[Dict[str, float]] = None):
+        self.data_service = data_service
+        self.news_service = news_service
+        
+        # 设置因子权重配置
+        if factor_weights is None:
+            self.factor_weights = self.DEFAULT_FACTOR_WEIGHTS.copy()
+        else:
+            # 验证权重配置
+            self.factor_weights = self._validate_and_normalize_weights(factor_weights)
+            
+    def _validate_and_normalize_weights(self, weights: Dict[str, float]) -> Dict[str, float]:
+        """验证并标准化权重配置"""
+        required_factors = {'technical', 'fundamental', 'news', 'market'}
+        
+        # 检查必需的因子是否存在
+        if not required_factors.issubset(weights.keys()):
+            missing_factors = required_factors - weights.keys()
+            raise ValueError(f"缺少必需的因子权重: {missing_factors}")
+            
+        # 检查权重值是否有效
+        for factor, weight in weights.items():
+            if not isinstance(weight, (int, float)) or weight < 0:
+                raise ValueError(f"因子 {factor} 的权重必须是非负数")
+                
+        # 标准化权重（确保总和为1）
+        total_weight = sum(weights[factor] for factor in required_factors)
+        if total_weight == 0:
+            raise ValueError("所有因子权重不能都为0")
+            
+        normalized_weights = {}
+        for factor in required_factors:
+            normalized_weights[factor] = weights[factor] / total_weight
+            
+        return normalized_weights
+        
+    def update_factor_weights(self, new_weights: Dict[str, float]) -> None:
+        """更新因子权重配置"""
+        self.factor_weights = self._validate_and_normalize_weights(new_weights)
+        
+    def get_factor_weights(self) -> Dict[str, float]:
+        """获取当前因子权重配置"""
+        return self.factor_weights.copy()
+        
+    @classmethod
+    def get_default_weights(cls) -> Dict[str, float]:
+        """获取默认权重配置"""
+        return cls.DEFAULT_FACTOR_WEIGHTS.copy()
+        
+    async def calculate_technical_score(self, symbol: str, date: date, 
+                                       market_data: pd.DataFrame) -> float:
+        """计算技术面因子评分"""
+        # 获取技术指标
+        indicators = await self._calculate_technical_indicators(symbol, date, market_data)
+        
+        # 计算各技术指标评分
+        ma_score = self._calculate_ma_score(indicators)
+        rsi_score = self._calculate_rsi_score(indicators)
+        macd_score = self._calculate_macd_score(indicators)
+        volume_score = self._calculate_volume_score(indicators)
+        
+        # 加权平均
+        technical_score = (
+            ma_score * 0.3 +
+            rsi_score * 0.25 +
+            macd_score * 0.25 +
+            volume_score * 0.2
+        )
+        
+        return min(max(technical_score, 0.0), 10.0)  # 限制在0-10范围
+        
+    async def calculate_fundamental_score(self, symbol: str, date: date) -> float:
+        """计算基本面因子评分"""
+        # 获取基本面数据
+        fundamental_data = await self.data_service.get_fundamental_data(symbol, date)
+        
+        if not fundamental_data:
+            return 5.0  # 默认中性评分
+            
+        # 计算各基本面指标评分
+        pe_score = self._calculate_pe_score(fundamental_data.get('pe_ratio'))
+        pb_score = self._calculate_pb_score(fundamental_data.get('pb_ratio'))
+        roe_score = self._calculate_roe_score(fundamental_data.get('roe'))
+        growth_score = self._calculate_growth_score(fundamental_data.get('revenue_growth'))
+        
+        # 加权平均
+        fundamental_score = (
+            pe_score * 0.25 +
+            pb_score * 0.25 +
+            roe_score * 0.25 +
+            growth_score * 0.25
+        )
+        
+        return min(max(fundamental_score, 0.0), 10.0)
+        
+    async def calculate_news_score(self, symbol: str, date: date) -> float:
+        """计算消息面因子评分"""
+        # 获取近期新闻数据
+        news_data = await self.news_service.get_recent_news(symbol, date, days=7)
+        
+        if not news_data:
+            return 5.0  # 默认中性评分
+            
+        # 计算新闻情感综合评分
+        total_score = 0.0
+        total_weight = 0.0
+        
+        for news in news_data:
+            sentiment_score = news.get('sentiment_score', 0.0)
+            importance = news.get('importance_level', 1.0)
+            
+            # 将情感评分从[-1,1]转换为[0,10]
+            normalized_score = (sentiment_score + 1) * 5
+            
+            total_score += normalized_score * importance
+            total_weight += importance
+            
+        if total_weight > 0:
+            news_score = total_score / total_weight
+        else:
+            news_score = 5.0
+            
+        return min(max(news_score, 0.0), 10.0)
+        
+    async def calculate_market_score(self, symbol: str, date: date, 
+                                   market_data: pd.DataFrame) -> float:
+        """计算市场面因子评分"""
+        # 获取市场环境数据
+        market_indicators = await self._calculate_market_indicators(symbol, date, market_data)
+        
+        # 计算各市场指标评分
+        trend_score = self._calculate_trend_score(market_indicators)
+        volatility_score = self._calculate_volatility_score(market_indicators)
+        correlation_score = self._calculate_correlation_score(market_indicators)
+        
+        # 加权平均
+        market_score = (
+            trend_score * 0.4 +
+            volatility_score * 0.3 +
+            correlation_score * 0.3
+        )
+        
+        return min(max(market_score, 0.0), 10.0)
+        
+    async def calculate_composite_score(self, symbol: str, date: date,
+                                      factor_weights: Optional[Dict[str, float]] = None) -> Dict[str, float]:
+        """计算综合评分"""
+        # 使用传入的权重或实例配置的权重
+        weights = factor_weights if factor_weights is not None else self.factor_weights
+        
+        # 获取市场数据
+        market_data = await self.data_service.fetch_market_data([symbol], date, date)
+        
+        # 计算各因子评分
+        technical_score = await self.calculate_technical_score(symbol, date, market_data)
+        fundamental_score = await self.calculate_fundamental_score(symbol, date)
+        news_score = await self.calculate_news_score(symbol, date)
+        market_score = await self.calculate_market_score(symbol, date, market_data)
+        
+        # 计算综合评分（使用配置的权重）
+        composite_score = (
+            technical_score * weights['technical'] +
+            fundamental_score * weights['fundamental'] +
+            news_score * weights['news'] +
+            market_score * weights['market']
+        )
+        
+        return {
+            'technical_score': technical_score,
+            'fundamental_score': fundamental_score,
+            'news_score': news_score,
+            'market_score': market_score,
+            'composite_score': composite_score,
+            'weights_used': weights.copy()  # 返回使用的权重配置
+        }
+```
+
+### 5.5 消息面分析服务 (NewsService)
+
+**主要功能**
+- 新闻数据获取
+- 新闻情感分析
+- 热点事件识别
+- 消息面评分计算
+- 新闻数据缓存
+
+**核心方法**
+
+```python
+from typing import Dict, List, Optional
+from datetime import date, timedelta
+import pandas as pd
+
+class NewsService:
+    def __init__(self, ai_service: 'AIService', data_service: 'DataService'):
+        self.ai_service = ai_service
+        self.data_service = data_service
+        
+    async def get_recent_news(self, symbol: str, date: date, days: int = 7) -> List[Dict]:
+        """获取指定股票的近期新闻"""
+        end_date = date
+        start_date = date - timedelta(days=days)
+        
+        # 先从缓存获取
+        cached_news = await self._get_cached_news(symbol, start_date, end_date)
+        if cached_news:
+            return cached_news
+            
+        # 从外部数据源获取
+        news_data = await self._fetch_news_from_external(symbol, start_date, end_date)
+        
+        # 进行情感分析
+        analyzed_news = []
+        for news in news_data:
+            sentiment_result = await self.ai_service.analyze_news_sentiment(
+                news['content'], symbol
+            )
+            
+            news.update({
+                'sentiment_score': sentiment_result.get('sentiment_score', 0.0),
+                'sentiment_polarity': sentiment_result.get('polarity', 'neutral'),
+                'importance_level': sentiment_result.get('importance', 1.0),
+                'impact_type': sentiment_result.get('impact_type', 'neutral')
+            })
+            
+            analyzed_news.append(news)
+            
+        # 缓存结果
+        await self._cache_news(symbol, analyzed_news)
+        
+        return analyzed_news
+        
+    async def get_market_hotspots(self, date: date, limit: int = 10) -> List[Dict]:
+        """获取市场热点新闻"""
+        # 获取全市场热点新闻
+        hotspot_news = await self._fetch_market_hotspots(date)
+        
+        # 按重要性和影响力排序
+        sorted_news = sorted(
+            hotspot_news,
+            key=lambda x: (x.get('importance_level', 0), x.get('view_count', 0)),
+            reverse=True
+        )
+        
+        return sorted_news[:limit]
+        
+    async def analyze_news_impact(self, symbol: str, news_content: str) -> Dict:
+        """分析新闻对股票的影响"""
+        # 使用AI分析新闻影响
+        impact_analysis = await self.ai_service.analyze_news_sentiment(news_content, symbol)
+        
+        # 计算影响评分
+        impact_score = self._calculate_impact_score(impact_analysis)
+        
+        return {
+            'impact_score': impact_score,
+            'impact_direction': impact_analysis.get('impact_type', 'neutral'),
+            'confidence': impact_analysis.get('confidence', 0.5),
+            'key_factors': impact_analysis.get('key_factors', []),
+            'analysis_summary': impact_analysis.get('summary', '')
+        }
+        
+    async def get_sentiment_trend(self, symbol: str, days: int = 30) -> Dict:
+        """获取情感趋势"""
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days)
+        
+        # 按日期聚合情感评分
+        daily_sentiment = {}
+        
+        for single_date in pd.date_range(start_date, end_date):
+            daily_news = await self.get_recent_news(symbol, single_date.date(), days=1)
+            
+            if daily_news:
+                avg_sentiment = sum(news.get('sentiment_score', 0) for news in daily_news) / len(daily_news)
+                daily_sentiment[single_date.strftime('%Y-%m-%d')] = avg_sentiment
+            else:
+                daily_sentiment[single_date.strftime('%Y-%m-%d')] = 0.0
+                
+        return {
+            'daily_sentiment': daily_sentiment,
+            'trend_direction': self._calculate_trend_direction(daily_sentiment),
+            'volatility': self._calculate_sentiment_volatility(daily_sentiment)
+        }
+```
+
+### 5.6 方案生成服务 (PlanService)
+
+**主要功能**
+- 基于多因子分析的方案生成
+- Markdown方案格式化
 - 方案模板管理
 - 方案历史管理
 - 方案质量评估
+- 因子权重优化建议
 
 **核心方法**
 
 ```python
+from typing import Dict, List, Optional
+from datetime import date
+import pandas as pd
+
 class PlanService:
-    async def generate_daily_plan(self, analysis_result: AIAnalysisResult) -> TradingPlan:
-        """生成每日操作方案"""
+    def __init__(self, factor_service: 'FactorService', ai_service: 'AIService'):
+        self.factor_service = factor_service
+        self.ai_service = ai_service
         
-    async def format_to_markdown(self, recommendations: TradingRecommendations) -> str:
-        """格式化为Markdown"""
+    async def generate_multi_factor_plan(self, symbols: List[str], 
+                                        factor_weights: Dict[str, float],
+                                        plan_date: date) -> 'MultiFactorTradingPlan':
+        """生成基于多因子分析的操作方案"""
+        plan_data = {
+            'plan_date': plan_date,
+            'factor_weights': factor_weights,
+            'stock_analysis': [],
+            'market_overview': {},
+            'recommendations': []
+        }
         
-    async def save_plan(self, plan: TradingPlan) -> int:
+        # 1. 计算各股票的多因子评分
+        for symbol in symbols:
+            factor_scores = await self.factor_service.calculate_composite_score(
+                symbol, plan_date, factor_weights
+            )
+            
+            # 2. 生成AI分析
+            ai_analysis = await self.ai_service.analyze_multi_factor_data(
+                symbol, factor_scores, {}, []
+            )
+            
+            stock_analysis = {
+                'symbol': symbol,
+                'factor_scores': factor_scores,
+                'ai_analysis': ai_analysis,
+                'recommendation': self._generate_stock_recommendation(factor_scores)
+            }
+            
+            plan_data['stock_analysis'].append(stock_analysis)
+            
+        # 3. 生成市场概览
+        plan_data['market_overview'] = await self._generate_market_overview(plan_date)
+        
+        # 4. 生成综合建议
+        plan_data['recommendations'] = await self._generate_comprehensive_recommendations(
+            plan_data['stock_analysis'], factor_weights
+        )
+        
+        # 5. 格式化为Markdown
+        markdown_content = await self.format_multi_factor_to_markdown(plan_data)
+        
+        # 6. 创建方案对象
+        trading_plan = MultiFactorTradingPlan(
+            plan_date=plan_date,
+            factor_weights=factor_weights,
+            content=markdown_content,
+            stock_analysis=plan_data['stock_analysis'],
+            recommendations=plan_data['recommendations']
+        )
+        
+        return trading_plan
+        
+    async def format_multi_factor_to_markdown(self, plan_data: Dict) -> str:
+        """将多因子分析结果格式化为Markdown"""
+        markdown_content = f"""
+# 多因子量化交易方案
+
+**生成日期**: {plan_data['plan_date']}
+**因子权重配置**: 
+- 技术面: {plan_data['factor_weights'].get('technical', 0.25):.2%}
+- 基本面: {plan_data['factor_weights'].get('fundamental', 0.25):.2%}
+- 消息面: {plan_data['factor_weights'].get('news', 0.25):.2%}
+- 市场面: {plan_data['factor_weights'].get('market', 0.25):.2%}
+
+## 市场概览
+
+{plan_data['market_overview'].get('summary', '暂无市场概览')}
+
+## 个股分析
+
+"""
+        
+        # 按综合评分排序
+        sorted_stocks = sorted(
+            plan_data['stock_analysis'],
+            key=lambda x: x['factor_scores']['composite_score'],
+            reverse=True
+        )
+        
+        for stock in sorted_stocks:
+            symbol = stock['symbol']
+            scores = stock['factor_scores']
+            
+            markdown_content += f"""
+### {symbol}
+
+**综合评分**: {scores['composite_score']:.2f}/10
+
+**因子评分明细**:
+- 技术面: {scores['technical_score']:.2f}/10
+- 基本面: {scores['fundamental_score']:.2f}/10
+- 消息面: {scores['news_score']:.2f}/10
+- 市场面: {scores['market_score']:.2f}/10
+
+**投资建议**: {stock['recommendation']['action']}
+**建议仓位**: {stock['recommendation']['position_size']:.1%}
+**风险等级**: {stock['recommendation']['risk_level']}
+
+**AI分析摘要**: {stock.get('ai_analysis', {}).get('summary', '暂无AI分析')}
+
+---
+
+"""
+        
+        # 添加综合建议
+        markdown_content += """
+## 综合建议
+
+"""
+        
+        for rec in plan_data['recommendations']:
+            markdown_content += f"- {rec}\n"
+            
+        return markdown_content
+        
+    async def generate_daily_plan(self, analysis_result: 'AIAnalysisResult') -> 'TradingPlan':
+        """生成每日操作方案（传统方法，保留兼容性）"""
+        # 保留原有逻辑
+        pass
+        
+    async def format_to_markdown(self, recommendations: 'TradingRecommendations') -> str:
+        """格式化为Markdown（传统方法）"""
+        # 保留原有逻辑
+        pass
+        
+    async def save_plan(self, plan: 'TradingPlan') -> int:
         """保存方案"""
+        # 保存到数据库
+        pass
         
-    async def get_plan_by_date(self, plan_date: date) -> TradingPlan:
+    async def get_plan_by_date(self, plan_date: date) -> 'TradingPlan':
         """根据日期获取方案"""
+        # 从数据库获取
+        pass
         
-    async def get_plan_history(self, days: int) -> List[TradingPlan]:
+    async def get_plan_history(self, days: int) -> List['TradingPlan']:
         """获取历史方案"""
+        # 从数据库获取历史方案
+        pass
+        
+    def _generate_stock_recommendation(self, factor_scores: Dict[str, float]) -> Dict:
+        """根据因子评分生成股票建议"""
+        composite_score = factor_scores['composite_score']
+        
+        if composite_score >= 8.0:
+            return {
+                'action': '强烈买入',
+                'position_size': 0.15,  # 15%仓位
+                'risk_level': '中等'
+            }
+        elif composite_score >= 6.5:
+            return {
+                'action': '买入',
+                'position_size': 0.10,  # 10%仓位
+                'risk_level': '中等'
+            }
+        elif composite_score >= 5.0:
+            return {
+                'action': '观望',
+                'position_size': 0.05,  # 5%仓位
+                'risk_level': '低'
+            }
+        elif composite_score >= 3.5:
+            return {
+                'action': '减仓',
+                'position_size': 0.02,  # 2%仓位
+                'risk_level': '高'
+            }
+        else:
+            return {
+                'action': '卖出',
+                'position_size': 0.0,   # 0%仓位
+                'risk_level': '高'
+            }
 ```
 
-### 5.5 数据整合服务 (DataService)
+### 5.7 数据整合服务 (DataService)
 
 **主要功能**
 - 外部数据获取
+- 多因子数据整合
 - 数据清洗和预处理
 - 数据缓存管理
 - 数据质量监控
+- 基本面数据获取
 
 **核心方法**
 
 ```python
+import pandas as pd
+import numpy as np
+from typing import Dict, List, Optional
+from datetime import date, timedelta
+
 class DataService:
-    async def fetch_market_data(self, symbols: List[str], start_date: date, end_date: date) -> DataFrame:
+    def __init__(self):
+        self.cache = {}  # 简单内存缓存
+        
+    async def fetch_market_data(self, symbols: List[str], start_date: date, end_date: date) -> pd.DataFrame:
         """获取市场数据"""
+        # 从外部数据源获取OHLCV数据
+        market_data = pd.DataFrame()
         
-    async def calculate_technical_indicators(self, data: DataFrame) -> DataFrame:
+        for symbol in symbols:
+            # 先检查缓存
+            cached_data = await self.get_cached_data(symbol, start_date, end_date)
+            if cached_data is not None:
+                market_data = pd.concat([market_data, cached_data])
+                continue
+                
+            # 从外部API获取数据
+            symbol_data = await self._fetch_external_market_data(symbol, start_date, end_date)
+            
+            # 缓存数据
+            await self.cache_market_data(symbol, symbol_data)
+            
+            market_data = pd.concat([market_data, symbol_data])
+            
+        return market_data
+        
+    async def get_fundamental_data(self, symbol: str, date: date) -> Optional[Dict]:
+        """获取基本面数据"""
+        cache_key = f"fundamental_{symbol}_{date}"
+        
+        # 先从缓存获取
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+            
+        # 从外部数据源获取
+        fundamental_data = await self._fetch_external_fundamental_data(symbol, date)
+        
+        if fundamental_data:
+            # 缓存数据
+            self.cache[cache_key] = fundamental_data
+            
+        return fundamental_data
+        
+    async def calculate_technical_indicators(self, data: pd.DataFrame) -> pd.DataFrame:
         """计算技术指标"""
+        if data.empty:
+            return data
+            
+        # 计算移动平均线
+        data['MA5'] = data['close'].rolling(window=5).mean()
+        data['MA10'] = data['close'].rolling(window=10).mean()
+        data['MA20'] = data['close'].rolling(window=20).mean()
         
-    async def cache_market_data(self, symbol: str, data: DataFrame) -> None:
+        # 计算RSI
+        data['RSI'] = self._calculate_rsi(data['close'])
+        
+        # 计算MACD
+        macd_data = self._calculate_macd(data['close'])
+        data['MACD'] = macd_data['MACD']
+        data['MACD_signal'] = macd_data['signal']
+        data['MACD_histogram'] = macd_data['histogram']
+        
+        # 计算布林带
+        bollinger_data = self._calculate_bollinger_bands(data['close'])
+        data['BB_upper'] = bollinger_data['upper']
+        data['BB_middle'] = bollinger_data['middle']
+        data['BB_lower'] = bollinger_data['lower']
+        
+        # 计算成交量指标
+        data['volume_ma'] = data['volume'].rolling(window=20).mean()
+        data['volume_ratio'] = data['volume'] / data['volume_ma']
+        
+        return data
+        
+    async def cache_market_data(self, symbol: str, data: pd.DataFrame) -> None:
         """缓存市场数据"""
+        cache_key = f"market_{symbol}"
+        self.cache[cache_key] = data
         
-    async def get_cached_data(self, symbol: str, date: date) -> Optional[DataFrame]:
+    async def get_cached_data(self, symbol: str, start_date: date, end_date: date = None) -> Optional[pd.DataFrame]:
         """获取缓存数据"""
+        cache_key = f"market_{symbol}"
         
-    # 移除新闻数据同步功能
-    # 量化系统不需要主动同步新闻数据
-    # 需要时直接调用数据采集系统API获取即可
+        if cache_key in self.cache:
+            cached_data = self.cache[cache_key]
+            
+            # 过滤日期范围
+            if end_date is None:
+                end_date = start_date
+                
+            filtered_data = cached_data[
+                (cached_data.index >= pd.Timestamp(start_date)) &
+                (cached_data.index <= pd.Timestamp(end_date))
+            ]
+            
+            return filtered_data if not filtered_data.empty else None
+            
+        return None
+        
+    async def get_market_indicators(self, symbol: str, date: date) -> Dict:
+        """获取市场环境指标"""
+        # 获取大盘指数数据
+        market_data = await self.fetch_market_data(['000001.SH'], date - timedelta(days=30), date)
+        
+        if market_data.empty:
+            return {}
+            
+        # 计算市场指标
+        latest_data = market_data.iloc[-1]
+        
+        return {
+            'market_trend': self._calculate_market_trend(market_data),
+            'market_volatility': self._calculate_market_volatility(market_data),
+            'market_volume': latest_data.get('volume', 0),
+            'market_turnover': self._calculate_market_turnover(market_data)
+        }
         
     async def get_sentiment_score(self, symbol: str, date: date) -> Optional[float]:
         """从数据采集系统获取指定股票在指定日期的新闻情绪评分
@@ -977,6 +2106,58 @@ class DataService:
         """
         try:
             # 先尝试从缓存获取
+            cache_key = f"sentiment_{symbol}_{date}"
+            if cache_key in self.cache:
+                return self.cache[cache_key]
+                
+            # 从外部数据采集系统获取
+            sentiment_score = await self._fetch_external_sentiment_data(symbol, date)
+            
+            if sentiment_score is not None:
+                # 缓存结果
+                self.cache[cache_key] = sentiment_score
+                
+            return sentiment_score
+            
+        except Exception as e:
+            print(f"获取情绪评分失败: {e}")
+            return None
+            
+    def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
+        """计算RSI指标"""
+        delta = prices.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
+        
+    def _calculate_macd(self, prices: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> Dict:
+        """计算MACD指标"""
+        ema_fast = prices.ewm(span=fast).mean()
+        ema_slow = prices.ewm(span=slow).mean()
+        macd = ema_fast - ema_slow
+        signal_line = macd.ewm(span=signal).mean()
+        histogram = macd - signal_line
+        
+        return {
+            'MACD': macd,
+            'signal': signal_line,
+            'histogram': histogram
+        }
+        
+    def _calculate_bollinger_bands(self, prices: pd.Series, period: int = 20, std_dev: int = 2) -> Dict:
+        """计算布林带"""
+        middle = prices.rolling(window=period).mean()
+        std = prices.rolling(window=period).std()
+        upper = middle + (std * std_dev)
+        lower = middle - (std * std_dev)
+        
+        return {
+            'upper': upper,
+            'middle': middle,
+            'lower': lower
+        }
             sentiment_data = await self._get_cached_sentiment(symbol, date)
             
             if sentiment_data:
@@ -3226,23 +4407,300 @@ async def test_get_positions_api():
 - 准备回滚方案
 - 维护故障处理文档
 
-## 15. 总结
+## 15. 时序图设计
 
-本技术设计文档详细描述了量化交易系统的技术架构、数据库设计、API接口、核心服务、交易策略等关键技术实现方案。系统采用现代化的技术栈，具备良好的可扩展性和可维护性，能够满足MVP阶段的功能需求。
+### 15.1 多因子回测时序图
+
+```mermaid
+sequenceDiagram
+    participant Client as 客户端
+    participant API as API网关
+    participant BO as BacktestOrchestrator
+    participant BS as BacktestService
+    participant FS as FactorService
+    participant NS as NewsService
+    participant DS as DataService
+    participant AI as AIService
+    participant Cache as Redis缓存
+    participant DB as 数据库
+
+    Client->>API: POST /api/v1/backtest/multi-factor
+    Note over Client,API: 请求参数：股票列表、时间范围、因子权重
+    
+    API->>BO: run_multi_factor_backtest()
+    
+    BO->>FS: calculate_factor_scores(symbols, date_range)
+    Note over FS: 计算多因子评分
+    
+    FS->>DS: fetch_market_data(symbols, dates)
+    DS->>Cache: 检查缓存
+    alt 缓存命中
+        Cache-->>DS: 返回缓存数据
+    else 缓存未命中
+        DS->>DB: 查询市场数据
+        DB-->>DS: 返回数据
+        DS->>Cache: 缓存数据
+    end
+    DS-->>FS: 返回市场数据
+    
+    FS->>DS: get_fundamental_data(symbols, dates)
+    DS->>DB: 查询基本面数据
+    DB-->>DS: 返回基本面数据
+    DS-->>FS: 返回基本面数据
+    
+    FS->>NS: get_news_scores(symbols, dates)
+    NS->>DS: get_sentiment_score(symbol, date)
+    DS->>Cache: 检查情绪评分缓存
+    alt 缓存命中
+        Cache-->>DS: 返回缓存评分
+    else 缓存未命中
+        DS->>外部API: 调用数据采集系统
+        外部API-->>DS: 返回情绪评分
+        DS->>Cache: 缓存评分
+    end
+    DS-->>NS: 返回情绪评分
+    NS-->>FS: 返回消息面评分
+    
+    FS->>DS: get_market_indicators(symbols, dates)
+    DS->>DB: 查询市场环境数据
+    DB-->>DS: 返回市场数据
+    DS-->>FS: 返回市场指标
+    
+    Note over FS: 计算技术面、基本面、消息面、市场面评分
+    FS->>FS: calculate_composite_score(factor_weights)
+    FS-->>BO: 返回综合因子评分
+    
+    BO->>BS: run_multi_factor_backtest(scores, strategy_params)
+    Note over BS: 基于因子评分执行回测
+    
+    BS->>DS: fetch_market_data(selected_symbols, backtest_period)
+    DS-->>BS: 返回回测数据
+    
+    BS->>BS: 初始化backtrader引擎
+    BS->>BS: 添加多因子策略
+    BS->>BS: 运行回测
+    BS->>BS: 计算回测指标
+    
+    BS->>DB: 保存回测结果
+    DB-->>BS: 确认保存
+    
+    BS->>Cache: 缓存回测结果
+    Cache-->>BS: 确认缓存
+    
+    BS-->>BO: 返回回测结果
+    
+    BO->>AI: generate_multi_factor_advice(backtest_result)
+    AI->>AI: 分析回测结果
+    AI-->>BO: 返回AI建议
+    
+    BO-->>API: 返回完整结果
+    API-->>Client: 返回回测结果和建议
+```
+
+### 15.2 因子评分计算时序图
+
+```mermaid
+sequenceDiagram
+    participant Client as 客户端
+    participant API as API网关
+    participant FS as FactorService
+    participant DS as DataService
+    participant NS as NewsService
+    participant Cache as Redis缓存
+    participant DB as 数据库
+
+    Client->>API: GET /api/v1/factors/scores/{symbol}
+    
+    API->>FS: get_factor_scores(symbol, date)
+    
+    FS->>Cache: 检查因子评分缓存
+    alt 缓存命中且未过期
+        Cache-->>FS: 返回缓存评分
+        FS-->>API: 返回因子评分
+        API-->>Client: 返回结果
+    else 缓存未命中或已过期
+        
+        par 并行计算各因子评分
+            FS->>DS: calculate_technical_score(symbol, date)
+            DS->>DS: 获取技术指标数据
+            DS->>DS: 计算技术面评分
+            DS-->>FS: 返回技术面评分
+        and
+            FS->>DS: calculate_fundamental_score(symbol, date)
+            DS->>DB: 查询基本面数据
+            DB-->>DS: 返回基本面数据
+            DS->>DS: 计算基本面评分
+            DS-->>FS: 返回基本面评分
+        and
+            FS->>NS: calculate_news_score(symbol, date)
+            NS->>DS: get_sentiment_score(symbol, date)
+            DS-->>NS: 返回情绪评分
+            NS->>NS: 计算消息面评分
+            NS-->>FS: 返回消息面评分
+        and
+            FS->>DS: calculate_market_score(symbol, date)
+            DS->>DS: 获取市场环境数据
+            DS->>DS: 计算市场面评分
+            DS-->>FS: 返回市场面评分
+        end
+        
+        FS->>FS: calculate_composite_score(各因子评分)
+        
+        FS->>DB: 保存因子评分
+        DB-->>FS: 确认保存
+        
+        FS->>Cache: 缓存因子评分(TTL: 1小时)
+        Cache-->>FS: 确认缓存
+        
+        FS-->>API: 返回因子评分
+        API-->>Client: 返回结果
+    end
+```
+
+### 15.3 消息面分析时序图
+
+```mermaid
+sequenceDiagram
+    participant Client as 客户端
+    participant API as API网关
+    participant NS as NewsService
+    participant DS as DataService
+    participant AI as AIService
+    participant Cache as Redis缓存
+    participant 外部API as 数据采集系统
+
+    Client->>API: GET /api/v1/news/analysis/{symbol}
+    
+    API->>NS: analyze_news_sentiment(symbol, date_range)
+    
+    NS->>Cache: 检查消息面分析缓存
+    alt 缓存命中
+        Cache-->>NS: 返回缓存分析结果
+        NS-->>API: 返回分析结果
+        API-->>Client: 返回结果
+    else 缓存未命中
+        
+        NS->>DS: get_sentiment_score(symbol, date_range)
+        
+        loop 遍历日期范围
+            DS->>Cache: 检查单日情绪评分缓存
+            alt 缓存命中
+                Cache-->>DS: 返回缓存评分
+            else 缓存未命中
+                DS->>外部API: 调用数据采集系统API
+                Note over DS,外部API: GET /api/v1/sentiment/{symbol}?date={date}
+                外部API-->>DS: 返回情绪评分和新闻摘要
+                DS->>Cache: 缓存情绪评分(TTL: 6小时)
+            end
+        end
+        
+        DS-->>NS: 返回情绪评分时间序列
+        
+        NS->>AI: analyze_news_sentiment(sentiment_data)
+        AI->>AI: 分析情绪趋势
+        AI->>AI: 识别关键事件
+        AI->>AI: 生成分析报告
+        AI-->>NS: 返回AI分析结果
+        
+        NS->>NS: calculate_news_impact_score()
+        NS->>NS: identify_sentiment_trends()
+        NS->>NS: generate_news_summary()
+        
+        NS->>Cache: 缓存分析结果(TTL: 2小时)
+        Cache-->>NS: 确认缓存
+        
+        NS-->>API: 返回完整分析结果
+        API-->>Client: 返回结果
+    end
+```
+
+### 15.4 实时因子更新时序图
+
+```mermaid
+sequenceDiagram
+    participant Scheduler as 定时任务
+    participant FS as FactorService
+    participant DS as DataService
+    participant NS as NewsService
+    participant Cache as Redis缓存
+    participant DB as 数据库
+    participant MQ as 消息队列
+
+    Note over Scheduler: 每小时执行一次
+    
+    Scheduler->>FS: update_all_factor_scores()
+    
+    FS->>DB: 获取活跃股票列表
+    DB-->>FS: 返回股票列表
+    
+    loop 遍历每只股票
+        FS->>FS: calculate_factor_scores(symbol, today)
+        
+        par 并行更新各因子
+            FS->>DS: update_technical_score(symbol)
+            DS->>DS: 计算最新技术指标
+            DS-->>FS: 返回技术面评分
+        and
+            FS->>DS: update_fundamental_score(symbol)
+            DS->>DS: 获取最新基本面数据
+            DS-->>FS: 返回基本面评分
+        and
+            FS->>NS: update_news_score(symbol)
+            NS->>NS: 分析最新消息面数据
+            NS-->>FS: 返回消息面评分
+        and
+            FS->>DS: update_market_score(symbol)
+            DS->>DS: 计算市场环境评分
+            DS-->>FS: 返回市场面评分
+        end
+        
+        FS->>FS: calculate_composite_score()
+        
+        alt 评分发生显著变化
+            FS->>DB: 更新因子评分
+            DB-->>FS: 确认更新
+            
+            FS->>Cache: 更新缓存
+            Cache-->>FS: 确认更新
+            
+            FS->>MQ: 发送评分变化通知
+            Note over MQ: 通知订阅者评分更新
+        end
+    end
+    
+    FS->>FS: update_ranking()
+    FS->>Cache: 更新综合评分排名
+    
+    FS-->>Scheduler: 更新完成
+```
+
+## 16. 总结
+
+本技术设计文档详细描述了量化交易系统的技术架构、数据库设计、API接口、核心服务、交易策略、时序图等关键技术实现方案。系统采用现代化的技术栈，具备良好的可扩展性和可维护性，能够满足MVP阶段的功能需求。
 
 **关键技术特点：**
 - 分层架构设计，职责清晰
+- 多因子量化分析，科学决策
+- 消息面情感分析，全面评估
 - 异步编程，提升性能
 - 缓存优化，减少延迟
 - 容器化部署，便于运维
 - 完善的监控和日志
 - 灵活的策略框架
 
-**后续优化方向：**
-- 引入微服务架构
-- 增加更多交易策略
-- 优化AI模型性能
-- 增强安全防护
-- 完善监控告警
+**多因子系统优势：**
+- 技术面、基本面、消息面、市场面四维度评估
+- 动态权重调整，适应市场变化
+- AI辅助分析，提升决策质量
+- 实时因子更新，把握市场脉搏
+- 风险分散，提高策略稳定性
 
-该设计为后续的开发实现提供了详细的技术指导，确保系统能够按照预期目标顺利交付。
+**后续优化方向：**
+- 引入更多因子维度（如宏观经济因子）
+- 优化因子权重算法
+- 增强AI模型性能
+- 完善风险控制机制
+- 增加更多交易策略
+- 优化系统性能和稳定性
+
+该设计为后续的开发实现提供了详细的技术指导，确保系统能够按照预期目标顺利交付，并为多因子量化交易提供强有力的技术支撑。
