@@ -15,6 +15,7 @@ from repositories.cache_repo import CacheRepository, CacheType
 from strategies.base_strategy import BaseStrategy
 from strategies.ma_strategy import MAStrategy
 from strategies.macd_strategy import MACDStrategy
+from strategies.multi_factor_strategy import MultiFactorStrategy
 from strategies.rsi_strategy import RSIStrategy
 from utils.exceptions import BacktestError, DataError
 from utils.logger import logger
@@ -39,6 +40,7 @@ class BacktestService:
         self._strategy_map = {
             StrategyType.MA: MAStrategy,
             StrategyType.MACD: MACDStrategy,
+            StrategyType.MULTI_FACTOR: MultiFactorStrategy,
             StrategyType.RSI: RSIStrategy,
         }
 
@@ -1033,3 +1035,201 @@ class BacktestService:
         from uuid import uuid4
 
         return f"bt_{uuid4().hex[:12]}"
+
+    async def run_multi_factor_backtest(
+        self,
+        symbols: list[str],
+        start_date: str,
+        end_date: str,
+        initial_capital: float = 100000.0,
+        commission_rate: float = 0.001,
+        slippage_rate: float = 0.001,
+        factor_weights: dict[str, float] | None = None,
+        use_cache: bool = True,
+    ) -> dict[str, Any]:
+        """运行多因子回测
+
+        Args:
+            symbols: 股票代码列表
+            start_date: 开始日期 (YYYY-MM-DD)
+            end_date: 结束日期 (YYYY-MM-DD)
+            initial_capital: 初始资金
+            commission_rate: 手续费率
+            slippage_rate: 滑点率
+            factor_weights: 可选的因子权重配置
+            use_cache: 是否使用缓存
+
+        Returns:
+            回测结果字典
+        """
+        try:
+            # 准备多因子策略参数
+            strategy_params = {}
+
+            # 如果提供了自定义权重，添加到策略参数中
+            if factor_weights is not None:
+                # 验证权重配置
+                self._validate_factor_weights(factor_weights)
+                strategy_params["factor_weights"] = factor_weights
+                logger.info(f"使用自定义因子权重: {factor_weights}")
+            else:
+                logger.info("使用默认因子权重配置")
+
+            # 构建缓存键（包含权重信息）
+            cache_key = self._build_multi_factor_cache_key(
+                symbols,
+                start_date,
+                end_date,
+                initial_capital,
+                commission_rate,
+                slippage_rate,
+                factor_weights,
+            )
+
+            # 尝试从缓存获取
+            if use_cache:
+                cached_result = self.cache_repo.get(
+                    CacheType.BACKTEST_RESULT, cache_key, serialize_method="json"
+                )
+                if cached_result is not None:
+                    logger.info("从缓存获取多因子回测结果")
+                    return cached_result
+
+            # 创建多因子策略实例
+            strategy = self._create_strategy(StrategyType.MULTI_FACTOR, strategy_params)
+            if not strategy:
+                raise BacktestError("无法创建多因子策略实例")
+
+            # 获取历史数据
+            market_data = await self._get_market_data(symbols, start_date, end_date)
+            if market_data.empty:
+                raise DataError("无法获取市场数据")
+
+            # 执行回测
+            backtest_result = await self._execute_backtest(
+                strategy, market_data, initial_capital, commission_rate, slippage_rate
+            )
+
+            # 计算性能指标
+            performance_metrics = self._calculate_performance_metrics(
+                backtest_result, initial_capital
+            )
+
+            # 计算风险指标
+            risk_metrics = self._calculate_risk_metrics(backtest_result)
+
+            # 组装完整结果
+            complete_result = {
+                "backtest_id": self._generate_backtest_id(),
+                "strategy_type": StrategyType.MULTI_FACTOR.value,
+                "strategy_params": strategy_params,
+                "factor_weights": factor_weights,  # 记录使用的权重配置
+                "symbols": symbols,
+                "start_date": start_date,
+                "end_date": end_date,
+                "initial_capital": initial_capital,
+                "commission_rate": commission_rate,
+                "slippage_rate": slippage_rate,
+                "status": BacktestStatus.COMPLETED.value,
+                "performance_metrics": performance_metrics,
+                "risk_metrics": risk_metrics,
+                "trades": backtest_result.get("trades", []),
+                "daily_returns": backtest_result.get("daily_returns", []),
+                "portfolio_value": backtest_result.get("portfolio_value", []),
+                "created_at": datetime.now().isoformat(),
+            }
+
+            # 保存回测结果
+            await self.backtest_repo.save_backtest_result(complete_result)
+
+            # 缓存结果
+            if use_cache:
+                self.cache_repo.set(
+                    CacheType.BACKTEST_RESULT,
+                    cache_key,
+                    complete_result,
+                    ttl=self._cache_ttl,
+                    serialize_method="json",
+                )
+
+            logger.info(
+                f"多因子回测完成, 总收益率: {performance_metrics.get('total_return', 0):.2%}"
+            )
+            return complete_result
+
+        except Exception as e:
+            logger.error(f"多因子回测执行失败: {e}")
+            raise BacktestError(f"多因子回测执行失败: {e}") from e
+
+    def _validate_factor_weights(self, factor_weights: dict[str, float]) -> None:
+        """验证因子权重配置
+
+        Args:
+            factor_weights: 因子权重字典
+
+        Raises:
+            BacktestError: 权重配置无效时抛出
+        """
+        try:
+            # 检查必需的因子维度
+            required_factors = ["technical", "fundamental", "news", "market"]
+            for factor in required_factors:
+                if factor not in factor_weights:
+                    raise BacktestError(f"缺少必需的因子权重: {factor}")
+
+            # 检查权重值范围
+            for factor, weight in factor_weights.items():
+                if not isinstance(weight, int | float):
+                    raise BacktestError(f"因子权重必须是数值类型: {factor}={weight}")
+                if weight < 0 or weight > 1:
+                    raise BacktestError(f"因子权重必须在0-1之间: {factor}={weight}")
+
+            # 检查权重总和
+            total_weight = sum(factor_weights.values())
+            if abs(total_weight - 1.0) > 0.001:  # 允许小的浮点误差
+                raise BacktestError(f"因子权重总和必须为1.0, 当前为: {total_weight}")
+
+            logger.info("因子权重配置验证通过")
+
+        except Exception as e:
+            logger.error(f"因子权重验证失败: {e}")
+            raise BacktestError(f"因子权重验证失败: {e}") from e
+
+    def _build_multi_factor_cache_key(
+        self,
+        symbols: list[str],
+        start_date: str,
+        end_date: str,
+        initial_capital: float,
+        commission_rate: float,
+        slippage_rate: float,
+        factor_weights: dict[str, float] | None,
+    ) -> str:
+        """构建多因子回测缓存键
+
+        Args:
+            symbols: 股票代码列表
+            start_date: 开始日期
+            end_date: 结束日期
+            initial_capital: 初始资金
+            commission_rate: 手续费率
+            slippage_rate: 滑点率
+            factor_weights: 因子权重配置
+
+        Returns:
+            缓存键字符串
+        """
+        symbols_str = "-".join(sorted(symbols))
+
+        # 处理权重配置
+        if factor_weights is not None:
+            weights_str = "_".join(
+                f"{k}={v:.3f}" for k, v in sorted(factor_weights.items())
+            )
+        else:
+            weights_str = "default"
+
+        return (
+            f"multi_factor_backtest_{symbols_str}_{start_date}_{end_date}_"
+            f"{initial_capital}_{commission_rate}_{slippage_rate}_{weights_str}"
+        )

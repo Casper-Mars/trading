@@ -347,3 +347,56 @@ def create_strategy(strategy_name: str, **params) -> BaseStrategy | None:
         BaseStrategy: 策略实例
     """
     return strategy_registry.create_strategy(strategy_name, **params)
+
+
+# 注册内置策略
+def _register_builtin_strategies():
+    """注册内置策略"""
+    from .multi_factor_strategy import MultiFactorStrategy
+    from .risk_management import (
+        ATRStopLossStrategy,
+        EqualWeightStrategy,
+        FixedStopLossStrategy,
+    )
+
+    # 注册多因子策略
+    strategy_registry.register(
+        strategy_class=MultiFactorStrategy,
+        category="quantitative",
+        description="基于四维度因子评分的多因子选股策略, 支持技术面、基本面、消息面、市场面综合分析",
+        author="Trading System",
+        version="1.0.0",
+        tags=["multi-factor", "quantitative", "stock-selection", "risk-management"],
+    )
+
+    # 注册风险管理策略
+    strategy_registry.register(
+        strategy_class=EqualWeightStrategy,
+        category="risk_management",
+        description="等权重仓位管理策略, 将资金平均分配给所有持仓",
+        author="Trading System",
+        version="1.0.0",
+        tags=["risk-management", "position-sizing", "equal-weight"],
+    )
+
+    strategy_registry.register(
+        strategy_class=FixedStopLossStrategy,
+        category="risk_management",
+        description="固定止损策略, 当价格回撤达到设定百分比时触发止损",
+        author="Trading System",
+        version="1.0.0",
+        tags=["risk-management", "stop-loss", "fixed"],
+    )
+
+    strategy_registry.register(
+        strategy_class=ATRStopLossStrategy,
+        category="risk_management",
+        description="基于ATR的动态止损策略, 根据市场波动性调整止损距离",
+        author="Trading System",
+        version="1.0.0",
+        tags=["risk-management", "stop-loss", "atr", "dynamic"],
+    )
+
+
+# 自动注册内置策略
+_register_builtin_strategies()

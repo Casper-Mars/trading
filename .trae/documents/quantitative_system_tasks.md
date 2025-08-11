@@ -143,7 +143,7 @@
 
   * _Requirements: 2.6, 2.7_
 
-* [ ] 3.3.3 多因子选股策略实现（MultiFactorStrategy）
+* [x] 3.3.3 多因子选股策略实现（MultiFactorStrategy）
 
   * 实现MultiFactorStrategy策略类，继承自BaseStrategy
 
@@ -168,7 +168,7 @@
 
   * _Requirements: 2.12_
 
-* [ ] 3.3.4 风险管理策略实现
+* [x] 3.3.4 风险管理策略实现
 
   * 等权重仓位策略：params={weight\_per\_position}
 
@@ -184,7 +184,7 @@
 
   * _Requirements: 2.14_
 
-* [ ] 3.3.5 多因子回测权重配置支持
+* [x] 3.3.5 多因子回测权重配置支持
 
   * 升级BacktestService的run_multi_factor_backtest方法，支持可选的factor_weights参数
 
