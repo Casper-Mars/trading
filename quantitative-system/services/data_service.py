@@ -22,7 +22,9 @@ class DataService:
     负责市场数据的获取、清洗、预处理、缓存和技术指标计算
     """
 
-    def __init__(self, data_client: DataCollectionClient, cache_repo: CacheRepo) -> None:
+    def __init__(
+        self, data_client: DataCollectionClient, cache_repo: CacheRepo
+    ) -> None:
         """初始化数据服务
 
         Args:
@@ -58,7 +60,9 @@ class DataService:
         """
         try:
             # 构建缓存键
-            cache_key = self._build_cache_key("market_data", symbols, start_date, end_date)
+            cache_key = self._build_cache_key(
+                "market_data", symbols, start_date, end_date
+            )
 
             # 尝试从缓存获取
             if use_cache:
@@ -88,7 +92,9 @@ class DataService:
                     serialize_method="pickle",
                 )
 
-            logger.info(f"成功获取并处理市场数据: {symbols}, 数据量: {len(processed_data)}")
+            logger.info(
+                f"成功获取并处理市场数据: {symbols}, 数据量: {len(processed_data)}"
+            )
             return processed_data
 
         except Exception as e:
@@ -169,7 +175,9 @@ class DataService:
 
             # 验证必需的列
             required_columns = ["open", "high", "low", "close", "volume"]
-            missing_columns = [col for col in required_columns if col not in data.columns]
+            missing_columns = [
+                col for col in required_columns if col not in data.columns
+            ]
             if missing_columns:
                 raise DataProcessingError(f"缺少必需的列: {missing_columns}")
 
@@ -240,13 +248,11 @@ class DataService:
 
             # MA交叉信号
             if "ma_5" in result_data.columns and "ma_20" in result_data.columns:
-                ma_cross_up = (
-                    (result_data["ma_5"] > result_data["ma_20"]) &
-                    (result_data["ma_5"].shift(1) <= result_data["ma_20"].shift(1))
+                ma_cross_up = (result_data["ma_5"] > result_data["ma_20"]) & (
+                    result_data["ma_5"].shift(1) <= result_data["ma_20"].shift(1)
                 )
-                ma_cross_down = (
-                    (result_data["ma_5"] < result_data["ma_20"]) &
-                    (result_data["ma_5"].shift(1) >= result_data["ma_20"].shift(1))
+                ma_cross_down = (result_data["ma_5"] < result_data["ma_20"]) & (
+                    result_data["ma_5"].shift(1) >= result_data["ma_20"].shift(1)
                 )
                 result_data.loc[ma_cross_up, "buy_signal"] += 0.3
                 result_data.loc[ma_cross_down, "sell_signal"] += 0.3
@@ -260,13 +266,11 @@ class DataService:
 
             # MACD信号
             if "macd" in result_data.columns and "macd_signal" in result_data.columns:
-                macd_bullish = (
-                    (result_data["macd"] > result_data["macd_signal"]) &
-                    (result_data["macd"].shift(1) <= result_data["macd_signal"].shift(1))
+                macd_bullish = (result_data["macd"] > result_data["macd_signal"]) & (
+                    result_data["macd"].shift(1) <= result_data["macd_signal"].shift(1)
                 )
-                macd_bearish = (
-                    (result_data["macd"] < result_data["macd_signal"]) &
-                    (result_data["macd"].shift(1) >= result_data["macd_signal"].shift(1))
+                macd_bearish = (result_data["macd"] < result_data["macd_signal"]) & (
+                    result_data["macd"].shift(1) >= result_data["macd_signal"].shift(1)
                 )
                 result_data.loc[macd_bullish, "buy_signal"] += 0.3
                 result_data.loc[macd_bearish, "sell_signal"] += 0.3
@@ -279,7 +283,9 @@ class DataService:
             # 限制信号强度在0-1范围内
             result_data["buy_signal"] = np.clip(result_data["buy_signal"], 0, 1)
             result_data["sell_signal"] = np.clip(result_data["sell_signal"], 0, 1)
-            result_data["signal_strength"] = np.clip(result_data["signal_strength"], 0, 1)
+            result_data["signal_strength"] = np.clip(
+                result_data["signal_strength"], 0, 1
+            )
 
             logger.info(f"成功生成交易信号, 数据量: {len(result_data)}")
             return result_data
@@ -321,13 +327,17 @@ class DataService:
             except Exception as e:
                 last_error = e
                 if attempt < self._retry_count - 1:
-                    wait_time = 2 ** attempt  # 指数退避
-                    logger.warning(f"数据获取失败, {wait_time}秒后重试 (第{attempt + 1}次): {e}")
+                    wait_time = 2**attempt  # 指数退避
+                    logger.warning(
+                        f"数据获取失败, {wait_time}秒后重试 (第{attempt + 1}次): {e}"
+                    )
                     await asyncio.sleep(wait_time)
                 else:
                     logger.error(f"数据获取最终失败: {e}")
 
-        raise ExternalServiceError(f"数据获取失败, 已重试{self._retry_count}次: {last_error}")
+        raise ExternalServiceError(
+            f"数据获取失败, 已重试{self._retry_count}次: {last_error}"
+        )
 
     def _clean_market_data(self, raw_data: list[dict[str, Any]]) -> pd.DataFrame:
         """清洗市场数据"""
@@ -354,7 +364,15 @@ class DataService:
             df = df.rename(columns=column_mapping)
 
             # 确保必需的列存在
-            required_columns = ["symbol", "date", "open", "high", "low", "close", "volume"]
+            required_columns = [
+                "symbol",
+                "date",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume",
+            ]
             for col in required_columns:
                 if col not in df.columns:
                     if col == "volume":
@@ -377,7 +395,9 @@ class DataService:
             # 处理异常值
             df = self._handle_outliers(df)
 
-            logger.debug(f"数据清洗完成, 原始数据: {len(raw_data)}行, 清洗后: {len(df)}行")
+            logger.debug(
+                f"数据清洗完成, 原始数据: {len(raw_data)}行, 清洗后: {len(df)}行"
+            )
             return df
 
         except Exception as e:
@@ -399,8 +419,12 @@ class DataService:
             result_data = result_data.reset_index(drop=True)
 
             # 计算基础指标
-            result_data["price_change"] = result_data.groupby("symbol")["close"].pct_change()
-            result_data["price_change_abs"] = result_data.groupby("symbol")["close"].diff()
+            result_data["price_change"] = result_data.groupby("symbol")[
+                "close"
+            ].pct_change()
+            result_data["price_change_abs"] = result_data.groupby("symbol")[
+                "close"
+            ].diff()
 
             # 计算成交额（如果没有的话）
             if "amount" not in result_data.columns:
@@ -431,9 +455,8 @@ class DataService:
                     threshold = 3 * std_val
 
                     # 标记异常值
-                    outliers = (
-                        (result_data[col] > mean_val + threshold) |
-                        (result_data[col] < mean_val - threshold)
+                    outliers = (result_data[col] > mean_val + threshold) | (
+                        result_data[col] < mean_val - threshold
                     )
 
                     # 用中位数替换异常值
@@ -570,19 +593,22 @@ class DataService:
         )
 
         # 计算上轨和下轨
-        result_data["bb_upper"] = result_data["bb_middle"] + (std_dev * result_data["bb_std"])
-        result_data["bb_lower"] = result_data["bb_middle"] - (std_dev * result_data["bb_std"])
+        result_data["bb_upper"] = result_data["bb_middle"] + (
+            std_dev * result_data["bb_std"]
+        )
+        result_data["bb_lower"] = result_data["bb_middle"] - (
+            std_dev * result_data["bb_std"]
+        )
 
         # 计算布林带宽度
         result_data["bb_width"] = (
-            (result_data["bb_upper"] - result_data["bb_lower"]) / result_data["bb_middle"]
-        )
+            result_data["bb_upper"] - result_data["bb_lower"]
+        ) / result_data["bb_middle"]
 
         # 计算价格在布林带中的位置
         result_data["bb_position"] = (
-            (result_data["close"] - result_data["bb_lower"]) /
-            (result_data["bb_upper"] - result_data["bb_lower"])
-        )
+            result_data["close"] - result_data["bb_lower"]
+        ) / (result_data["bb_upper"] - result_data["bb_lower"])
 
         return result_data
 
@@ -630,9 +656,7 @@ class DataService:
             if end_date:
                 params["end_date"] = end_date
 
-            response = await asyncio.to_thread(
-                self.data_client.get_news, **params
-            )
+            response = await asyncio.to_thread(self.data_client.get_news, **params)
 
             if not response.get("success") or not response.get("data"):
                 logger.warning("未获取到新闻数据")
@@ -713,9 +737,7 @@ class DataService:
             if end_date:
                 params["end_date"] = end_date
 
-            response = await asyncio.to_thread(
-                self.data_client.get_news, **params
-            )
+            response = await asyncio.to_thread(self.data_client.get_news, **params)
 
             if not response.get("success") or not response.get("data"):
                 logger.warning("未获取到政策相关新闻数据")
@@ -726,9 +748,7 @@ class DataService:
                 news_data = [news_data]
 
             # 分析政策影响
-            policy_result = self._analyze_policy_impact(
-                news_data, impact_threshold
-            )
+            policy_result = self._analyze_policy_impact(news_data, impact_threshold)
 
             # 缓存结果
             if use_cache:
@@ -796,9 +816,7 @@ class DataService:
             if end_date:
                 params["end_date"] = end_date
 
-            response = await asyncio.to_thread(
-                self.data_client.get_news, **params
-            )
+            response = await asyncio.to_thread(self.data_client.get_news, **params)
 
             if not response.get("success") or not response.get("data"):
                 logger.warning("未获取到事件相关新闻数据")
@@ -809,9 +827,7 @@ class DataService:
                 news_data = [news_data]
 
             # 分析事件严重性
-            event_result = self._analyze_event_severity(
-                news_data, severity_threshold
-            )
+            event_result = self._analyze_event_severity(news_data, severity_threshold)
 
             # 缓存结果
             if use_cache:
@@ -860,9 +876,15 @@ class DataService:
                     valid_count += 1
 
             if valid_count == 0:
-                return {"sentiment_score": 0.0, "confidence": 0.0, "news_count": len(news_data)}
+                return {
+                    "sentiment_score": 0.0,
+                    "confidence": 0.0,
+                    "news_count": len(news_data),
+                }
 
-            avg_sentiment = total_sentiment / total_confidence if total_confidence > 0 else 0.0
+            avg_sentiment = (
+                total_sentiment / total_confidence if total_confidence > 0 else 0.0
+            )
             avg_confidence = total_confidence / valid_count
 
             return {
@@ -890,9 +912,18 @@ class DataService:
 
             # 政策关键词权重
             policy_keywords = {
-                "央行": 0.9, "证监会": 0.9, "银保监会": 0.8, "政府": 0.7,
-                "政策": 0.6, "监管": 0.7, "法规": 0.6, "规定": 0.5,
-                "利率": 0.8, "准备金": 0.8, "IPO": 0.7, "退市": 0.9
+                "央行": 0.9,
+                "证监会": 0.9,
+                "银保监会": 0.8,
+                "政府": 0.7,
+                "政策": 0.6,
+                "监管": 0.7,
+                "法规": 0.6,
+                "规定": 0.5,
+                "利率": 0.8,
+                "准备金": 0.8,
+                "IPO": 0.7,
+                "退市": 0.9,
             }
 
             for news in news_data:
@@ -902,7 +933,9 @@ class DataService:
 
                 # 如果没有预分析的政策影响数据，使用关键词分析
                 if impact == 0.0 and "title" in news:
-                    impact = self._calculate_policy_impact(news["title"], policy_keywords)
+                    impact = self._calculate_policy_impact(
+                        news["title"], policy_keywords
+                    )
                     confidence = 0.6  # 关键词分析的置信度
 
                 if confidence >= threshold:
@@ -911,9 +944,15 @@ class DataService:
                     valid_count += 1
 
             if valid_count == 0:
-                return {"impact_score": 0.0, "confidence": 0.0, "policy_count": len(news_data)}
+                return {
+                    "impact_score": 0.0,
+                    "confidence": 0.0,
+                    "policy_count": len(news_data),
+                }
 
-            avg_impact = total_impact / total_confidence if total_confidence > 0 else 0.0
+            avg_impact = (
+                total_impact / total_confidence if total_confidence > 0 else 0.0
+            )
             avg_confidence = total_confidence / valid_count
 
             return {
@@ -941,9 +980,18 @@ class DataService:
 
             # 事件严重性关键词权重
             severity_keywords = {
-                "重大": 0.9, "突发": 0.8, "紧急": 0.8, "危机": 0.9,
-                "风险": 0.7, "事故": 0.8, "违规": 0.7, "处罚": 0.6,
-                "停牌": 0.8, "退市": 0.9, "破产": 1.0, "倒闭": 1.0
+                "重大": 0.9,
+                "突发": 0.8,
+                "紧急": 0.8,
+                "危机": 0.9,
+                "风险": 0.7,
+                "事故": 0.8,
+                "违规": 0.7,
+                "处罚": 0.6,
+                "停牌": 0.8,
+                "退市": 0.9,
+                "破产": 1.0,
+                "倒闭": 1.0,
             }
 
             for news in news_data:
@@ -953,7 +1001,9 @@ class DataService:
 
                 # 如果没有预分析的事件严重性数据，使用关键词分析
                 if severity == 0.0 and "title" in news:
-                    severity = self._calculate_event_severity(news["title"], severity_keywords)
+                    severity = self._calculate_event_severity(
+                        news["title"], severity_keywords
+                    )
                     confidence = 0.6  # 关键词分析的置信度
 
                 if confidence >= threshold:
@@ -962,9 +1012,15 @@ class DataService:
                     valid_count += 1
 
             if valid_count == 0:
-                return {"severity_score": 0.0, "confidence": 0.0, "event_count": len(news_data)}
+                return {
+                    "severity_score": 0.0,
+                    "confidence": 0.0,
+                    "event_count": len(news_data),
+                }
 
-            avg_severity = total_severity / total_confidence if total_confidence > 0 else 0.0
+            avg_severity = (
+                total_severity / total_confidence if total_confidence > 0 else 0.0
+            )
             avg_confidence = total_confidence / valid_count
 
             return {
@@ -980,8 +1036,26 @@ class DataService:
 
     def _simple_sentiment_analysis(self, text: str) -> float:
         """简单的情感分析"""
-        positive_words = ["上涨", "利好", "增长", "盈利", "收益", "成功", "突破", "创新"]
-        negative_words = ["下跌", "利空", "下降", "亏损", "风险", "失败", "危机", "问题"]
+        positive_words = [
+            "上涨",
+            "利好",
+            "增长",
+            "盈利",
+            "收益",
+            "成功",
+            "突破",
+            "创新",
+        ]
+        negative_words = [
+            "下跌",
+            "利空",
+            "下降",
+            "亏损",
+            "风险",
+            "失败",
+            "危机",
+            "问题",
+        ]
 
         positive_count = sum(1 for word in positive_words if word in text)
         negative_count = sum(1 for word in negative_words if word in text)
@@ -1011,7 +1085,13 @@ class DataService:
 
         return max_weight
 
-    def _build_cache_key(self, prefix: str, symbols: list[str], start_date: str | None, end_date: str | None) -> str:
+    def _build_cache_key(
+        self,
+        prefix: str,
+        symbols: list[str],
+        start_date: str | None,
+        end_date: str | None,
+    ) -> str:
         """构建缓存键"""
         symbols_str = "-".join(sorted(symbols))
         date_str = f"{start_date or 'none'}_{end_date or 'none'}"

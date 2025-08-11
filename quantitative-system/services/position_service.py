@@ -102,7 +102,9 @@ class PositionService:
 
         return PositionResponse.model_validate(position)
 
-    def update_position(self, position_id: int, update_data: PositionUpdate) -> PositionResponse:
+    def update_position(
+        self, position_id: int, update_data: PositionUpdate
+    ) -> PositionResponse:
         """更新持仓
 
         Args:
@@ -171,7 +173,9 @@ class PositionService:
         positions = self.position_repo.get_active_positions()
         return [PositionResponse.model_validate(pos) for pos in positions]
 
-    def get_positions_by_type(self, position_type: PositionType) -> list[PositionResponse]:
+    def get_positions_by_type(
+        self, position_type: PositionType
+    ) -> list[PositionResponse]:
         """根据持仓类型获取持仓列表
 
         Args:
@@ -195,24 +199,27 @@ class PositionService:
 
             # 计算总成本
             active_positions = self.position_repo.get_active_positions()
-            total_cost = sum(
-                pos.quantity * pos.avg_cost for pos in active_positions
-            )
+            total_cost = sum(pos.quantity * pos.avg_cost for pos in active_positions)
 
             # 计算总收益率
             total_return_rate = Decimal("0")
             if total_cost > 0:
-                total_pnl = Decimal(str(summary_data["total_unrealized_pnl"])) + Decimal(
-                    str(summary_data["total_realized_pnl"])
-                )
+                total_pnl = Decimal(
+                    str(summary_data["total_unrealized_pnl"])
+                ) + Decimal(str(summary_data["total_realized_pnl"]))
                 total_return_rate = (total_pnl / total_cost) * 100
 
             # 统计已平仓持仓数
-            closed_positions = len([
-                pos for pos in self.position_repo.get_positions_by_type(PositionType.LONG)
-                + self.position_repo.get_positions_by_type(PositionType.SHORT)
-                if pos.status == PositionStatus.CLOSED
-            ])
+            closed_positions = len(
+                [
+                    pos
+                    for pos in self.position_repo.get_positions_by_type(
+                        PositionType.LONG
+                    )
+                    + self.position_repo.get_positions_by_type(PositionType.SHORT)
+                    if pos.status == PositionStatus.CLOSED
+                ]
+            )
 
             return PositionSummary(
                 total_positions=summary_data["total_positions"],
@@ -274,7 +281,9 @@ class PositionService:
             # 批量更新价格
             updated_positions = 0
             if price_updates:
-                updated_positions = self.position_repo.update_current_prices(price_updates)
+                updated_positions = self.position_repo.update_current_prices(
+                    price_updates
+                )
 
             result = {
                 "total_symbols": len(symbols),
@@ -305,7 +314,9 @@ class PositionService:
             logger.error(f"更新持仓价格失败: symbol={symbol}, 错误: {e}")
             return False
 
-    def close_position(self, position_id: int, close_price: Decimal, close_date: date | None = None) -> PositionResponse:
+    def close_position(
+        self, position_id: int, close_price: Decimal, close_date: date | None = None
+    ) -> PositionResponse:
         """平仓操作
 
         Args:
@@ -436,7 +447,9 @@ class PositionService:
                 return False
 
             # 更新价格
-            updated_count = self.position_repo.update_current_prices({symbol: latest_price})
+            updated_count = self.position_repo.update_current_prices(
+                {symbol: latest_price}
+            )
             return updated_count > 0
 
         except ExternalServiceError:

@@ -244,9 +244,7 @@ class PositionRepo:
                     update_data.quantity is not None
                     or update_data.current_price is not None
                 ) and position.current_price is not None:
-                    position.market_value = (
-                        position.quantity * position.current_price
-                    )
+                    position.market_value = position.quantity * position.current_price
                     position.unrealized_pnl = position.quantity * (
                         position.current_price - position.avg_cost
                     )

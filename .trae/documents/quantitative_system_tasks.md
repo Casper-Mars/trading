@@ -132,7 +132,7 @@
 
   * _Requirements: 2.1, 5.3_
 
-* [ ] 3.3.2 策略基类与注册器
+* [x] 3.3.2 策略基类与注册器
 
   * 实现策略基类（BaseStrategy）
 
@@ -140,7 +140,7 @@
 
   * _Requirements: 2.6, 2.7_
 
-* [ ] 3.3.3 技术分析策略实现
+* [x] 3.3.3 技术分析策略实现
 
   * 双均线策略：params={short\_window, long\_window, stop\_loss\_pct?}
 
