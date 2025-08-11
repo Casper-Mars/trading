@@ -116,95 +116,129 @@
 
   * _Requirements: 2.1, 2.4, 2.5, 2.6, 2.7, 2.11_
 
-* [ ] 3.3 BacktestService（backtrader 集成）
+* [x] 3.3 BacktestService（基础框架）
+
+  * 回测服务基础框架，包含策略回测、性能分析、风险评估等核心功能
+
+  * 支持多策略对比和详细报告生成
+
+  * _Requirements: 2.1, 2.6-2.14, 5.3_
+
+* [ ] 3.3.1 回测引擎初始化
 
   * 初始化引擎、资金与手续费、添加分析器（Sharpe/Drawdown/Returns/Trades）
 
   * 数据源适配（PandasData），解析回测结果入库
 
-  * 实现策略注册器与核心策略类别（与 docs/trading\_strategies.md 对齐，纳入MVP）：
+  * _Requirements: 2.1, 5.3_
 
-    * 技术分析策略：双均线、三重均线、MACD金叉、布林带突破、RSI反转
+* [ ] 3.3.2 策略基类与注册器
 
-    * 动量策略：价格突破、向上缺口
+  * 实现策略基类（BaseStrategy）
 
-    * 基本面策略：PE-PB双低（价值投资）、成长加速（成长投资）
+  * 实现策略注册器，支持策略动态注册和管理
 
-    * 量化策略：多因子选股、股票配对交易、价差回归
+  * _Requirements: 2.6, 2.7_
 
-    * 新闻基础策略：新闻情感策略、政策驱动策略、事件驱动策略
+* [ ] 3.3.3 技术分析策略实现
 
-    * 风险管理：等权重仓位、固定止损、动态止损（ATR）
+  * 双均线策略：params={short\_window, long\_window, stop\_loss\_pct?}
 
-  * 策略参数与验收标准补充：
+    * 验收：金叉/死叉信号按窗口交叉正确触发；交易次数、持仓区间与手工样本一致；能产出 Sharpe/Drawdown/Returns/Trades 指标
 
-    * 双均线：params={short\_window, long\_window, stop\_loss\_pct?}
+  * 三重均线策略：params={short\_window, mid\_window, long\_window}
 
-      * 验收：金叉/死叉信号按窗口交叉正确触发；交易次数、持仓区间与手工样本一致；能产出 Sharpe/Drawdown/Returns/Trades 指标
+    * 验收：多头/空头排列识别正确；回测可重复；指标产出完整
 
-    * 三重均线：params={short\_window, mid\_window, long\_window}
+  * MACD金叉策略：params={fast\_period, slow\_period, signal\_period}
 
-      * 验收：多头/空头排列识别正确；回测可重复；指标产出完整
+    * 验收：金叉/死叉触发点与计算结果一致；直方图由负转正/正转负与信号匹配
 
-    * MACD金叉：params={fast\_period, slow\_period, signal\_period}
+  * 布林带突破策略：params={period, k, squeeze\_threshold?, take\_profit\_atr\_multiplier?}
 
-      * 验收：金叉/死叉触发点与计算结果一致；直方图由负转正/正转负与信号匹配
+    * 验收：挤压识别与上下轨突破信号正确；失败突破能触发止损
 
-    * 布林带突破：params={period, k, squeeze\_threshold?, take\_profit\_atr\_multiplier?}
+  * RSI反转策略：params={period, overbought, oversold}
 
-      * 验收：挤压识别与上下轨突破信号正确；失败突破能触发止损
+    * 验收：超买/超卖与阈值符合；反转确认后入场/出场逻辑正确
 
-    * RSI反转：params={period, overbought, oversold}
+  * _Requirements: 2.8, 2.9_
 
-      * 验收：超买/超卖与阈值符合；反转确认后入场/出场逻辑正确
+* [ ] 3.3.4 动量策略实现
 
-    * 价格突破：params={breakout\_lookback, confirm\_volume\_ratio?, stop\_loss\_pct?}
+  * 价格突破策略：params={breakout\_lookback, confirm\_volume\_ratio?, stop\_loss\_pct?}
 
-      * 验收：近N日高/低突破识别准确；量能确认可选；假突破能止损
+    * 验收：近N日高/低突破识别准确；量能确认可选；假突破能止损
 
-    * 向上缺口：params={gap\_pct\_threshold, min\_volume?, hold\_days?}
+  * 向上缺口策略：params={gap\_pct\_threshold, min\_volume?, hold\_days?}
 
-      * 验收：跳空幅度判断正确；缺口回补与持有期规则正确执行
+    * 验收：跳空幅度判断正确；缺口回补与持有期规则正确执行
 
-    * 多因子选股：params={factors\[], weights\[], rebalance\_period}
+  * _Requirements: 2.10_
 
-      * 验收：打分/加权与排序选股正确；再平衡在周期边界正确执行
+* [ ] 3.3.5 基本面策略实现
 
-    * 股票配对交易：params={lookback, coint\_pvalue, entry\_z, exit\_z, stop\_z?}
+  * PE-PB双低策略（价值投资）
 
-      * 验收：协整检验与Z-score进出场阈值正确；价差回归到均值时平仓
+  * 成长加速策略（成长投资）
 
-    * 价差回归：params={mean\_window, entry\_std, exit\_std}
+  * _Requirements: 2.11_
 
-      * 验收：偏离均值Nσ进场、回归<阈值出场逻辑正确
+* [ ] 3.3.6 量化策略实现
 
-    * 等权重仓位：params={weight\_per\_position}
+  * 多因子选股策略：params={factors\[], weights\[], rebalance\_period}
 
-      * 验收：头寸分配与持仓上限/最小交易单位符合配置
+    * 验收：打分/加权与排序选股正确；再平衡在周期边界正确执行
 
-    * 固定止损：params={stop\_loss\_pct}
+  * 股票配对交易策略：params={lookback, coint\_pvalue, entry\_z, exit\_z, stop\_z?}
 
-      * 验收：价格回撤达到阈值即触发止损
+    * 验收：协整检验与Z-score进出场阈值正确；价差回归到均值时平仓
 
-    * 动态止损（ATR）：params={atr\_period, atr\_multiplier}
+  * 价差回归策略：params={mean\_window, entry\_std, exit\_std}
 
-      * 验收：基于ATR的止损价计算与更新正确
+    * 验收：偏离均值Nσ进场、回归<阈值出场逻辑正确
 
-    * 新闻情感策略：params={sentiment\_threshold, confidence\_threshold, hold\_days?}
+  * _Requirements: 2.12_
 
-      * 验收：情感评分阈值判断正确；置信度过滤有效；持有期规则正确执行
+* [ ] 3.3.7 新闻基础策略实现
 
-    * 政策驱动策略：params={policy\_impact\_threshold, sector\_filter?, reaction\_delay?}
+  * 新闻情感策略：params={sentiment\_threshold, confidence\_threshold, hold\_days?}
 
-      * 验收：政策影响评分识别准确；行业过滤可选；政策反应延迟处理正确
+    * 验收：情感评分阈值判断正确；置信度过滤有效；持有期规则正确执行
 
-    * 事件驱动策略：params={event\_severity\_threshold, event\_type\_filter?, max\_exposure?}
+  * 政策驱动策略：params={policy\_impact\_threshold, sector\_filter?, reaction\_delay?}
 
-      * 验收：事件严重性评分判断正确；事件类型过滤可选；最大敞口控制有效
+    * 验收：政策影响评分识别准确；行业过滤可选；政策反应延迟处理正确
 
-  * 单元/回测用例：为上述每个策略新增UT（信号/边界/异常）与回测BT用例（固定样本数据，结果可复现），集成到CI
+  * 事件驱动策略：params={event\_severity\_threshold, event\_type\_filter?, max\_exposure?}
 
-  * _Requirements: 2.1, 2.6-2.14, 5.3_
+    * 验收：事件严重性评分判断正确；事件类型过滤可选；最大敞口控制有效
+
+  * _Requirements: 2.13_
+
+* [ ] 3.3.8 风险管理策略实现
+
+  * 等权重仓位策略：params={weight\_per\_position}
+
+    * 验收：头寸分配与持仓上限/最小交易单位符合配置
+
+  * 固定止损策略：params={stop\_loss\_pct}
+
+    * 验收：价格回撤达到阈值即触发止损
+
+  * 动态止损（ATR）策略：params={atr\_period, atr\_multiplier}
+
+    * 验收：基于ATR的止损价计算与更新正确
+
+  * _Requirements: 2.14_
+
+* [ ] 3.3.9 策略测试用例
+
+  * 为上述每个策略新增UT（信号/边界/异常）与回测BT用例（固定样本数据，结果可复现）
+
+  * 集成到CI流程
+
+  * _Requirements: 5.3_
 
 * [ ] 3.4 AIService（阿里百炼）
 
