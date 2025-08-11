@@ -124,7 +124,7 @@
 
   * _Requirements: 2.1, 2.6-2.14, 5.3_
 
-* [ ] 3.3.1 回测引擎初始化
+* [x] 3.3.1 回测引擎初始化
 
   * 初始化引擎、资金与手续费、添加分析器（Sharpe/Drawdown/Returns/Trades）
 

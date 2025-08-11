@@ -6,6 +6,7 @@
 from datetime import datetime
 from typing import Any
 
+import backtrader as bt
 import pandas as pd
 
 from models.enums import BacktestStatus, StrategyType
@@ -40,6 +41,315 @@ class BacktestService:
             StrategyType.MACD: MACDStrategy,
             StrategyType.RSI: RSIStrategy,
         }
+
+        # Backtrader引擎配置
+        self._default_initial_capital = 100000.0
+        self._default_commission_rate = 0.001
+        self._default_slippage_rate = 0.001
+
+    def _initialize_backtrader_engine(
+        self,
+        initial_capital: float | None = None,
+        commission_rate: float | None = None,
+        slippage_rate: float | None = None,
+    ) -> bt.Cerebro:
+        """初始化Backtrader引擎
+
+        Args:
+            initial_capital: 初始资金
+            commission_rate: 手续费率
+            slippage_rate: 滑点率
+
+        Returns:
+            配置好的Cerebro引擎实例
+        """
+        try:
+            # 创建Cerebro引擎
+            cerebro = bt.Cerebro()
+
+            # 设置初始资金
+            capital = initial_capital or self._default_initial_capital
+            cerebro.broker.setcash(capital)
+
+            # 设置手续费
+            commission = commission_rate or self._default_commission_rate
+            cerebro.broker.setcommission(commission=commission)
+
+            # 添加分析器
+            self._add_analyzers(cerebro)
+
+            # 设置数据源格式
+            cerebro.addwriter(bt.WriterFile, csv=False, rounding=4)
+
+
+            logger.info(
+                f"Backtrader引擎初始化完成 - 资金: {capital:,.2f}, "
+                f"手续费: {commission:.4f}, 滑点: {slippage_rate or self._default_slippage_rate:.4f}"
+            )
+
+            return cerebro
+
+        except Exception as e:
+            logger.error(f"Backtrader引擎初始化失败: {e}")
+            raise BacktestError(f"引擎初始化失败: {e}") from e
+
+    def _add_analyzers(self, cerebro: bt.Cerebro) -> None:
+        """添加分析器到Cerebro引擎
+
+        Args:
+            cerebro: Cerebro引擎实例
+        """
+        try:
+            # 添加夏普比率分析器
+            cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
+
+            # 添加回撤分析器
+            cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
+
+            # 添加收益分析器
+            cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
+
+            # 添加交易分析器
+            cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
+
+            # 添加年化收益分析器
+            cerebro.addanalyzer(bt.analyzers.AnnualReturn, _name='annual_return')
+
+            # 添加波动率分析器
+            cerebro.addanalyzer(bt.analyzers.VariabilityWeightedReturn, _name='vwr')
+
+            # 添加Calmar比率分析器
+            cerebro.addanalyzer(bt.analyzers.CalmarRatio, _name='calmar')
+
+            # 添加时间收益分析器
+            cerebro.addanalyzer(bt.analyzers.TimeReturn, _name='time_return')
+
+            logger.info("分析器添加完成")
+
+        except Exception as e:
+            logger.error(f"添加分析器失败: {e}")
+            raise BacktestError(f"添加分析器失败: {e}") from e
+
+    def _create_pandas_data_feed(
+        self,
+        market_data: pd.DataFrame,
+        symbol: str
+    ) -> bt.feeds.PandasData:
+        """创建Pandas数据源适配器
+
+        Args:
+            market_data: 市场数据DataFrame
+            symbol: 股票代码
+
+        Returns:
+            Backtrader数据源
+        """
+        try:
+            # 准备数据格式
+            symbol_data = market_data[[f"{symbol}_open", f"{symbol}_high",
+                                     f"{symbol}_low", f"{symbol}_close",
+                                     f"{symbol}_volume"]].copy()
+
+            # 重命名列以匹配Backtrader格式
+            symbol_data.columns = ['open', 'high', 'low', 'close', 'volume']
+
+            # 确保索引是datetime类型
+            if not isinstance(symbol_data.index, pd.DatetimeIndex):
+                symbol_data.index = pd.to_datetime(symbol_data.index)
+
+
+            # 创建数据源
+            data_feed = bt.feeds.PandasData(
+                dataname=symbol_data,
+                datetime=None,  # 使用索引作为日期
+                open=0,
+                high=1,
+                low=2,
+                close=3,
+                volume=4,
+                openinterest=-1,  # 不使用持仓量
+            )
+
+            logger.info(f"为{symbol}创建数据源成功, 数据范围: {symbol_data.index[0]} 到 {symbol_data.index[-1]}")
+
+            return data_feed
+
+        except Exception as e:
+            logger.error(f"创建{symbol}数据源失败: {e}")
+            raise DataError(f"创建数据源失败: {e}") from e
+
+
+    def _parse_backtrader_results(self, results: list) -> dict[str, Any]:
+        """解析Backtrader回测结果
+
+        Args:
+            results: Backtrader运行结果列表
+
+        Returns:
+            解析后的结果字典
+        """
+        try:
+            if not results or len(results) == 0:
+                raise BacktestError("回测结果为空")
+
+            # 获取第一个策略的结果
+            strat = results[0]
+
+            # 解析分析器结果
+            analyzers_data = {}
+
+
+            # 夏普比率
+            if hasattr(strat.analyzers, 'sharpe'):
+                sharpe_analysis = strat.analyzers.sharpe.get_analysis()
+                analyzers_data['sharpe_ratio'] = sharpe_analysis.get('sharperatio', 0)
+
+            # 回撤分析
+            if hasattr(strat.analyzers, 'drawdown'):
+                drawdown_analysis = strat.analyzers.drawdown.get_analysis()
+                analyzers_data['max_drawdown'] = drawdown_analysis.get('max', {}).get('drawdown', 0) / 100
+                analyzers_data['max_drawdown_period'] = drawdown_analysis.get('max', {}).get('len', 0)
+
+            # 收益分析
+            if hasattr(strat.analyzers, 'returns'):
+                returns_analysis = strat.analyzers.returns.get_analysis()
+                analyzers_data['total_return'] = returns_analysis.get('rtot', 0)
+                analyzers_data['average_return'] = returns_analysis.get('ravg', 0)
+
+            # 交易分析
+            if hasattr(strat.analyzers, 'trades'):
+                trades_analysis = strat.analyzers.trades.get_analysis()
+                analyzers_data['total_trades'] = trades_analysis.get('total', {}).get('total', 0)
+                analyzers_data['winning_trades'] = trades_analysis.get('won', {}).get('total', 0)
+                analyzers_data['losing_trades'] = trades_analysis.get('lost', {}).get('total', 0)
+
+                total_trades = analyzers_data['total_trades']
+                analyzers_data['win_rate'] = (
+                    analyzers_data['winning_trades'] / total_trades
+                    if total_trades > 0 else 0
+                )
+
+                # 盈亏比
+                won_pnl = trades_analysis.get('won', {}).get('pnl', {}).get('total', 0)
+                lost_pnl = abs(trades_analysis.get('lost', {}).get('pnl', {}).get('total', 0))
+                analyzers_data['profit_factor'] = won_pnl / lost_pnl if lost_pnl > 0 else 0
+
+            # 年化收益
+            if hasattr(strat.analyzers, 'annual_return'):
+                annual_analysis = strat.analyzers.annual_return.get_analysis()
+                analyzers_data['annual_returns'] = annual_analysis
+
+            # Calmar比率
+            if hasattr(strat.analyzers, 'calmar'):
+                calmar_analysis = strat.analyzers.calmar.get_analysis()
+                analyzers_data['calmar_ratio'] = calmar_analysis.get('calmarratio', 0)
+
+            # 时间收益
+            if hasattr(strat.analyzers, 'time_return'):
+                time_return_analysis = strat.analyzers.time_return.get_analysis()
+                analyzers_data['time_returns'] = time_return_analysis
+
+            # 获取策略的组合价值历史和每日收益
+            portfolio_values = []
+            daily_returns = []
+            
+            # 从时间收益分析器获取详细的收益数据
+            if hasattr(strat.analyzers, 'time_return'):
+                time_return_data = strat.analyzers.time_return.get_analysis()
+                if time_return_data:
+                    # 提取每日组合价值
+                    for date, return_value in time_return_data.items():
+                        portfolio_values.append({
+                            'date': date.strftime('%Y-%m-%d') if hasattr(date, 'strftime') else str(date),
+                            'value': return_value
+                        })
+                        
+                    # 计算每日收益率
+                    values = list(time_return_data.values())
+                    for i in range(1, len(values)):
+                        daily_return = (values[i] - values[i-1]) / values[i-1] if values[i-1] != 0 else 0
+                        daily_returns.append(daily_return)
+            
+            # 如果没有时间收益数据，使用当前组合价值
+            if not portfolio_values:
+                portfolio_values = [{
+                    'date': datetime.now().strftime('%Y-%m-%d'),
+                    'value': strat.broker.getvalue()
+                }]
+
+            # 获取详细的交易记录
+            trades = []
+            if hasattr(strat.analyzers, 'trades'):
+                trades_analysis = strat.analyzers.trades.get_analysis()
+                
+                # 提取获胜交易详情
+                if 'won' in trades_analysis and 'pnl' in trades_analysis['won']:
+                    won_trades = trades_analysis['won']['pnl']
+                    if isinstance(won_trades, dict) and 'trades' in won_trades:
+                        for trade in won_trades['trades']:
+                            trades.append({
+                                'type': 'win',
+                                'pnl': trade,
+                                'status': 'closed'
+                            })
+                
+                # 提取失败交易详情
+                if 'lost' in trades_analysis and 'pnl' in trades_analysis['lost']:
+                    lost_trades = trades_analysis['lost']['pnl']
+                    if isinstance(lost_trades, dict) and 'trades' in lost_trades:
+                        for trade in lost_trades['trades']:
+                            trades.append({
+                                'type': 'loss',
+                                'pnl': trade,
+                                'status': 'closed'
+                            })
+
+            # 计算额外的性能指标
+            final_value = strat.broker.getvalue()
+            final_cash = strat.broker.getcash()
+            
+            result = {
+                'analyzers': analyzers_data,
+                'portfolio_values': portfolio_values,
+                'daily_returns': daily_returns,
+                'trades': trades,
+                'final_portfolio_value': final_value,
+                'final_cash': final_cash,
+                'total_positions': len(trades),
+                'portfolio_summary': {
+                    'total_value': final_value,
+                    'cash': final_cash,
+                    'positions_value': final_value - final_cash,
+                    'total_return': (final_value / analyzers_data.get('initial_capital', 100000) - 1) if 'initial_capital' in analyzers_data else 0
+                }
+            }
+
+            logger.info(f"回测结果解析完成, 最终组合价值: {result['final_portfolio_value']:,.2f}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"解析回测结果失败: {e}")
+            raise BacktestError(f"解析回测结果失败: {e}") from e
+
+    async def _save_backtest_to_database(
+        self,
+        backtest_result: dict[str, Any]
+    ) -> None:
+        """保存回测结果到数据库
+
+        Args:
+            backtest_result: 回测结果字典
+        """
+        try:
+            # 保存到数据库
+            await self.backtest_repo.save_backtest_result(backtest_result)
+
+            logger.info(f"回测结果已保存到数据库, ID: {backtest_result.get('backtest_id')}")
+
+        except Exception as e:
+            logger.error(f"保存回测结果到数据库失败: {e}")
+            raise BacktestError(f"保存回测结果失败: {e}") from e
 
     async def run_backtest(
         self,
@@ -320,11 +630,105 @@ class BacktestService:
     async def _get_market_data(
         self, symbols: list[str], start_date: str, end_date: str
     ) -> pd.DataFrame:
-        """获取市场数据"""
-        # 这里应该调用DataService获取市场数据
-        # 为了简化，这里返回空DataFrame，实际实现时需要集成DataService
-        logger.warning("市场数据获取功能需要集成DataService")
-        return pd.DataFrame()
+        """获取市场数据
+        
+        Args:
+            symbols: 股票代码列表
+            start_date: 开始日期
+            end_date: 结束日期
+            
+        Returns:
+            包含OHLCV数据的DataFrame
+        """
+        try:
+            # 调用DataService获取市场数据
+            if hasattr(self, 'data_service') and self.data_service:
+                market_data = await self.data_service.get_market_data(
+                    symbols=symbols,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+                
+                if market_data.empty:
+                    raise DataError(f"无法获取{symbols}的市场数据")
+                    
+                logger.info(f"成功获取{len(symbols)}只股票的市场数据，数据范围: {start_date} 到 {end_date}")
+                return market_data
+            else:
+                # 如果没有DataService，生成模拟数据用于测试
+                logger.warning("DataService未配置，使用模拟数据进行测试")
+                return self._generate_mock_market_data(symbols, start_date, end_date)
+                
+        except Exception as e:
+            logger.error(f"获取市场数据失败: {e}")
+            raise DataError(f"获取市场数据失败: {e}") from e
+    
+    def _generate_mock_market_data(
+        self, symbols: list[str], start_date: str, end_date: str
+    ) -> pd.DataFrame:
+        """生成模拟市场数据用于测试
+        
+        Args:
+            symbols: 股票代码列表
+            start_date: 开始日期
+            end_date: 结束日期
+            
+        Returns:
+            模拟的市场数据DataFrame
+        """
+        import numpy as np
+        
+        # 创建日期范围
+        date_range = pd.date_range(start=start_date, end=end_date, freq='D')
+        
+        # 过滤工作日
+        business_days = date_range[date_range.weekday < 5]
+        
+        data = {}
+        
+        for symbol in symbols:
+            # 生成模拟价格数据
+            np.random.seed(hash(symbol) % 2**32)  # 确保每个股票的数据一致
+            
+            # 初始价格
+            initial_price = 100.0
+            
+            # 生成随机收益率
+            returns = np.random.normal(0.001, 0.02, len(business_days))
+            
+            # 计算价格序列
+            prices = [initial_price]
+            for ret in returns[1:]:
+                prices.append(prices[-1] * (1 + ret))
+            
+            # 生成OHLCV数据
+            closes = np.array(prices)
+            
+            # 生成开盘价（基于前一日收盘价加随机波动）
+            opens = np.roll(closes, 1)
+            opens[0] = initial_price
+            opens = opens * (1 + np.random.normal(0, 0.005, len(opens)))
+            
+            # 生成最高价和最低价
+            highs = np.maximum(opens, closes) * (1 + np.abs(np.random.normal(0, 0.01, len(opens))))
+            lows = np.minimum(opens, closes) * (1 - np.abs(np.random.normal(0, 0.01, len(opens))))
+            
+            # 生成成交量
+            volumes = np.random.lognormal(10, 0.5, len(business_days))
+            
+            # 添加到数据字典
+            data[f"{symbol}_open"] = opens
+            data[f"{symbol}_high"] = highs
+            data[f"{symbol}_low"] = lows
+            data[f"{symbol}_close"] = closes
+            data[f"{symbol}_volume"] = volumes
+        
+        # 创建DataFrame
+        df = pd.DataFrame(data, index=business_days)
+        
+        logger.info(f"生成模拟数据完成，包含{len(symbols)}只股票，{len(df)}个交易日")
+        
+        return df
 
     async def _execute_backtest(
         self,
@@ -334,80 +738,48 @@ class BacktestService:
         commission_rate: float,
         slippage_rate: float,
     ) -> dict[str, Any]:
-        """执行回测逻辑"""
+        """执行回测逻辑（使用Backtrader引擎）"""
         try:
-            # 初始化回测状态
-            portfolio_value = [initial_capital]
-            cash = initial_capital
-            positions = {}
-            trades = []
-            daily_returns = []
+            # 初始化Backtrader引擎
+            cerebro = self._initialize_backtrader_engine(
+                initial_capital=initial_capital,
+                commission_rate=commission_rate,
+                slippage_rate=slippage_rate
+            )
 
-            # 模拟交易逻辑（简化版本）
-            for i, (date, row) in enumerate(market_data.iterrows()):
-                # 生成交易信号
-                signals = strategy.generate_signals(market_data.iloc[:i+1])
+            # 添加策略到引擎
+            cerebro.addstrategy(strategy.__class__, **strategy.params)
 
-                # 执行交易
-                for symbol, signal in signals.items():
-                    if signal["action"] == "buy" and cash > 0:
-                        # 买入逻辑
-                        price = row[f"{symbol}_close"] * (1 + slippage_rate)
-                        shares = int(cash * signal["weight"] / price)
-                        cost = shares * price * (1 + commission_rate)
+            # 获取并添加数据源
+            for symbol in market_data.columns:
+                if symbol.endswith('_close'):
+                    symbol_name = symbol.replace('_close', '')
+                    data_feed = self._create_pandas_data_feed(market_data, symbol_name)
+                    cerebro.adddata(data_feed)
 
-                        if cost <= cash:
-                            cash -= cost
-                            positions[symbol] = positions.get(symbol, 0) + shares
-                            trades.append({
-                                "date": date.isoformat(),
-                                "symbol": symbol,
-                                "action": "buy",
-                                "shares": shares,
-                                "price": price,
-                                "cost": cost,
-                            })
+            # 记录初始资金
+            initial_value = cerebro.broker.getvalue()
+            logger.info(f"开始回测, 初始资金: {initial_value:,.2f}")
 
-                    elif signal["action"] == "sell" and symbol in positions and positions[symbol] > 0:
-                        # 卖出逻辑
-                        price = row[f"{symbol}_close"] * (1 - slippage_rate)
-                        shares = min(positions[symbol], int(positions[symbol] * signal["weight"]))
-                        proceeds = shares * price * (1 - commission_rate)
+            # 运行回测
+            results = cerebro.run()
 
-                        cash += proceeds
-                        positions[symbol] -= shares
-                        if positions[symbol] == 0:
-                            del positions[symbol]
+            # 记录最终资金
+            final_value = cerebro.broker.getvalue()
+            logger.info(f"回测完成, 最终资金: {final_value:,.2f}")
 
-                        trades.append({
-                            "date": date.isoformat(),
-                            "symbol": symbol,
-                            "action": "sell",
-                            "shares": shares,
-                            "price": price,
-                            "proceeds": proceeds,
-                        })
+            # 解析回测结果
+            parsed_results = self._parse_backtrader_results(results)
 
-                # 计算当日组合价值
-                position_value = sum(
-                    shares * row[f"{symbol}_close"]
-                    for symbol, shares in positions.items()
-                )
-                total_value = cash + position_value
-                portfolio_value.append(total_value)
+            # 添加基本信息
+            parsed_results.update({
+                'initial_capital': initial_capital,
+                'commission_rate': commission_rate,
+                'slippage_rate': slippage_rate,
+                'backtest_id': f"bt_{int(datetime.now().timestamp())}"
+            })
 
-                # 计算日收益率
-                if len(portfolio_value) > 1:
-                    daily_return = (total_value - portfolio_value[-2]) / portfolio_value[-2]
-                    daily_returns.append(daily_return)
-
-            return {
-                "trades": trades,
-                "daily_returns": daily_returns,
-                "portfolio_value": portfolio_value,
-                "final_cash": cash,
-                "final_positions": positions,
-            }
+            return parsed_results
 
         except Exception as e:
             logger.error(f"回测执行失败: {e}")
@@ -598,3 +970,4 @@ class BacktestService:
         """生成回测ID"""
         from uuid import uuid4
         return f"bt_{uuid4().hex[:12]}"
+
