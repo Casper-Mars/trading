@@ -222,7 +222,14 @@ class MultiFactorStrategy(BaseStrategy):
             return None
 
     def _calculate_technical_factor(self) -> float:
-        """计算技术面因子评分"""
+        """计算技术面因子评分
+
+        技术面因子包括：
+        - 动量因子 (25%): 价格动量和成交量动量
+        - 反转因子 (20%): 短期反转信号
+        - 波动率因子 (20%): 价格波动率和成交量波动率
+        - 技术指标因子 (35%): MA、MACD、RSI、布林带等
+        """
         try:
             # 获取价格数据
             closes = np.array(
@@ -234,42 +241,32 @@ class MultiFactorStrategy(BaseStrategy):
                     for i in range(self.params.lookback_period, 0, -1)
                 ]
             )
+            highs = np.array(
+                [self.data.high[-i] for i in range(self.params.lookback_period, 0, -1)]
+            )
+            lows = np.array(
+                [self.data.low[-i] for i in range(self.params.lookback_period, 0, -1)]
+            )
 
             score = 0.0
 
-            # 动量因子 (20%)
-            momentum = (closes[-1] - closes[0]) / closes[0]
-            momentum_score = min(max(momentum * 2 + 0.5, 0), 1)  # 标准化到0-1
-            score += momentum_score * 0.2
+            # 1. 动量因子 (25%)
+            momentum_score = self._calculate_momentum_factor(closes, volumes)
+            score += momentum_score * 0.25
 
-            # 移动平均因子 (25%)
-            ma_5 = np.mean(closes[-5:])
-            ma_20 = np.mean(closes)
-            ma_signal = 1.0 if closes[-1] > ma_5 > ma_20 else 0.0
-            score += ma_signal * 0.25
+            # 2. 反转因子 (20%)
+            reversal_score = self._calculate_reversal_factor(closes)
+            score += reversal_score * 0.20
 
-            # RSI因子 (20%)
-            rsi = self._calculate_rsi(closes)
-            rsi_score = 0.0
-            if 30 <= rsi <= 70:  # 正常范围
-                rsi_score = 0.7
-            elif rsi < 30:  # 超卖
-                rsi_score = 0.9
-            elif rsi > 70:  # 超买
-                rsi_score = 0.3
-            score += rsi_score * 0.2
+            # 3. 波动率因子 (20%)
+            volatility_score = self._calculate_volatility_factor(closes, volumes)
+            score += volatility_score * 0.20
 
-            # 波动率因子 (15%)
-            volatility = np.std(closes) / np.mean(closes)
-            vol_score = max(1 - volatility * 10, 0)  # 低波动率得分高
-            score += vol_score * 0.15
-
-            # 成交量因子 (20%)
-            avg_volume = np.mean(volumes)
-            current_volume = volumes[-1]
-            volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1
-            volume_score = min(volume_ratio / 2, 1)  # 成交量放大得分高
-            score += volume_score * 0.2
+            # 4. 技术指标因子 (35%)
+            technical_indicator_score = self._calculate_technical_indicators(
+                closes, highs, lows, volumes
+            )
+            score += technical_indicator_score * 0.35
 
             return min(max(score, 0), 1)
 
@@ -278,32 +275,52 @@ class MultiFactorStrategy(BaseStrategy):
             return 0.5  # 默认中性评分
 
     def _calculate_fundamental_factor(self) -> float:
-        """计算基本面因子评分"""
-        try:
-            # 简化的基本面评分（实际应该从数据采集系统获取财务数据）
-            # 这里使用价格相关的基本面指标作为代理
+        """计算基本面因子评分
 
+        基本面因子包括：
+        - 盈利能力 (30%): 使用价格稳定性作为代理
+        - 估值水平 (25%): 使用价格相对位置作为代理
+        - 财务质量 (25%): 使用长期波动率作为代理
+        - 成长性 (20%): 使用长期收益率作为代理
+        """
+        try:
             closes = np.array(
                 [self.data.close[-i] for i in range(self.params.lookback_period, 0, -1)]
             )
 
             score = 0.0
 
-            # 价格趋势稳定性 (40%)
-            price_stability = 1 - (np.std(closes) / np.mean(closes))
-            score += max(price_stability, 0) * 0.4
+            # 盈利能力 (30%) - 使用价格稳定性作为代理
+            recent_volatility = np.std(closes[-10:]) / np.mean(closes[-10:])
+            profitability_score = max(1 - recent_volatility * 10, 0)
+            score += profitability_score * 0.3
 
-            # 价格相对位置 (30%)
+            # 估值水平 (25%) - 使用价格相对位置作为代理
             current_price = closes[-1]
             price_range = np.max(closes) - np.min(closes)
             if price_range > 0:
-                price_position = (current_price - np.min(closes)) / price_range
-                score += price_position * 0.3
+                position = (current_price - np.min(closes)) / price_range
+                # 低位估值得分高
+                valuation_score = 1 - position
+            else:
+                valuation_score = 0.5
+            score += valuation_score * 0.25
 
-            # 长期趋势 (30%)
-            long_term_return = (closes[-1] - closes[0]) / closes[0]
-            trend_score = min(max(long_term_return + 0.5, 0), 1)
-            score += trend_score * 0.3
+            # 财务质量 (25%) - 使用长期波动率作为代理
+            if len(closes) >= 30:
+                long_volatility = np.std(closes) / np.mean(closes)
+                quality_score = max(1 - long_volatility * 8, 0)
+            else:
+                quality_score = 0.5
+            score += quality_score * 0.25
+
+            # 成长性 (20%) - 使用长期收益率作为代理
+            if len(closes) >= 20:
+                long_return = (closes[-1] - closes[0]) / closes[0]
+                growth_score = min(max(long_return * 2 + 0.5, 0), 1)
+            else:
+                growth_score = 0.5
+            score += growth_score * 0.2
 
             return min(max(score, 0), 1)
 
@@ -312,67 +329,120 @@ class MultiFactorStrategy(BaseStrategy):
             return 0.5  # 默认中性评分
 
     def _calculate_news_factor(self) -> float:
-        """计算消息面因子评分"""
-        try:
-            # 简化的消息面评分（实际应该从数据采集系统获取新闻情感数据）
-            # 这里使用价格变化作为消息面的代理指标
+        """计算消息面因子评分
 
+        消息面因子包括：
+        - 市场情绪 (40%): 使用近期价格变化作为代理
+        - 新闻热度 (30%): 使用成交量变化作为代理
+        - 事件影响 (30%): 使用价格跳空作为代理
+        """
+        try:
             closes = np.array(
-                [self.data.close[-i] for i in range(min(5, len(self.data)), 0, -1)]
+                [self.data.close[-i] for i in range(min(10, len(self.data)), 0, -1)]
+            )
+            volumes = np.array(
+                [self.data.volume[-i] for i in range(min(10, len(self.data)), 0, -1)]
             )
 
             if len(closes) < 2:
                 return 0.5
 
-            # 近期价格变化反映市场情绪
+            score = 0.0
+
+            # 市场情绪 (40%) - 使用近期价格变化作为代理
             recent_returns = np.diff(closes) / closes[:-1]
             avg_return = np.mean(recent_returns)
+            sentiment_score = min(max(avg_return * 10 + 0.5, 0), 1)
+            score += sentiment_score * 0.4
 
-            # 将收益率转换为0-1评分
-            news_score = min(max(avg_return * 10 + 0.5, 0), 1)
+            # 新闻热度 (30%) - 使用成交量变化作为代理
+            if len(volumes) >= 5:
+                recent_volume = np.mean(volumes[-3:])
+                avg_volume = np.mean(volumes[:-3]) if len(volumes) > 3 else recent_volume
+                volume_ratio = recent_volume / avg_volume if avg_volume > 0 else 1
+                heat_score = min(volume_ratio / 2, 1)  # 成交量放大2倍得满分
+                score += heat_score * 0.3
+            else:
+                score += 0.5 * 0.3
 
-            return news_score
+            # 事件影响 (30%) - 使用价格跳空作为代理
+            if len(closes) >= 3:
+                # 检测价格跳空
+                gap_ratio = abs(closes[-1] - closes[-2]) / closes[-2]
+                if gap_ratio > 0.03:  # 3%以上的跳空
+                    event_score = 0.8 if closes[-1] > closes[-2] else 0.2
+                else:
+                    event_score = 0.5
+                score += event_score * 0.3
+            else:
+                score += 0.5 * 0.3
+
+            return min(max(score, 0), 1)
 
         except Exception as e:
             logger.error(f"计算消息面因子失败: {e}")
             return 0.5  # 默认中性评分
 
     def _calculate_market_factor(self) -> float:
-        """计算市场面因子评分"""
-        try:
-            # 简化的市场面评分（实际应该考虑大盘走势、行业轮动等）
-            # 这里使用相对强度作为市场面指标
+        """计算市场面因子评分
 
+        市场面因子包括：
+        - 市场表现 (40%): 相对于市场平均的表现
+        - 资金流向 (30%): 基于成交量比率
+        - 市场情绪 (20%): 短期价格动量
+        - 板块轮动 (10%): 相对强度指标
+        """
+        try:
             closes = np.array(
                 [self.data.close[-i] for i in range(self.params.lookback_period, 0, -1)]
             )
-
-            score = 0.0
-
-            # 相对强度 (50%)
-            stock_return = (closes[-1] - closes[0]) / closes[0]
-            # 假设市场平均收益为0（实际应该获取大盘数据）
-            market_return = 0.0
-            relative_strength = stock_return - market_return
-            rs_score = min(max(relative_strength * 2 + 0.5, 0), 1)
-            score += rs_score * 0.5
-
-            # 市场情绪 (30%)
-            # 使用成交量变化作为市场情绪代理
             volumes = np.array(
                 [
                     self.data.volume[-i]
                     for i in range(self.params.lookback_period, 0, -1)
                 ]
             )
-            volume_trend = np.polyfit(range(len(volumes)), volumes, 1)[0]
-            volume_score = min(max(volume_trend / np.mean(volumes) + 0.5, 0), 1)
-            score += volume_score * 0.3
 
-            # 价格动量 (20%)
-            momentum = (closes[-5:].mean() - closes[:5].mean()) / closes[:5].mean()
-            momentum_score = min(max(momentum * 2 + 0.5, 0), 1)
-            score += momentum_score * 0.2
+            if len(closes) < 10:
+                return 0.5
+
+            score = 0.0
+
+            # 市场表现 (40%) - 相对于假设的市场平均表现
+            stock_return = (closes[-1] - closes[-10]) / closes[-10]
+            # 假设市场平均收益率为0（实际应该从市场指数获取）
+            market_return = 0.0
+            relative_performance = stock_return - market_return
+            performance_score = min(max(relative_performance * 3 + 0.5, 0), 1)
+            score += performance_score * 0.4
+
+            # 资金流向 (30%) - 基于成交量比率
+            if len(volumes) >= 10:
+                recent_volume = np.mean(volumes[-5:])
+                avg_volume = np.mean(volumes[-10:-5])
+                volume_ratio = recent_volume / avg_volume if avg_volume > 0 else 1
+                flow_score = min(volume_ratio / 2.5, 1)  # 成交量放大2.5倍得满分
+                score += flow_score * 0.3
+            else:
+                score += 0.5 * 0.3
+
+            # 市场情绪 (20%) - 短期价格动量
+            if len(closes) >= 5:
+                short_momentum = (closes[-1] - closes[-3]) / closes[-3]
+                sentiment_score = min(max(short_momentum * 8 + 0.5, 0), 1)
+                score += sentiment_score * 0.2
+            else:
+                score += 0.5 * 0.2
+
+            # 板块轮动 (10%) - 相对强度
+            if len(closes) >= 20:
+                long_return = (closes[-1] - closes[-20]) / closes[-20]
+                short_return = (closes[-1] - closes[-5]) / closes[-5]
+                relative_strength = short_return - long_return * 0.25  # 短期相对长期的强度
+                rotation_score = min(max(relative_strength * 4 + 0.5, 0), 1)
+                score += rotation_score * 0.1
+            else:
+                score += 0.5 * 0.1
 
             return min(max(score, 0), 1)
 
@@ -558,3 +628,231 @@ class MultiFactorStrategy(BaseStrategy):
 
         base_stats.update(factor_stats)
         return base_stats
+
+    # ===== 从FactorService迁移的详细因子计算方法 =====
+
+    def _calculate_momentum_factor(self, closes: np.ndarray, volumes: np.ndarray) -> float:
+        """计算动量因子"""
+        try:
+            score = 0.0
+
+            # 价格动量 (60%)
+            if len(closes) >= 10:
+                short_momentum = (closes[-1] - closes[-5]) / closes[-5]  # 5日动量
+                long_momentum = (closes[-1] - closes[-10]) / closes[-10]  # 10日动量
+                price_momentum = (short_momentum + long_momentum) / 2
+                price_score = min(max(price_momentum * 5 + 0.5, 0), 1)
+                score += price_score * 0.6
+
+            # 成交量动量 (40%)
+            if len(volumes) >= 5:
+                recent_volume = np.mean(volumes[-3:])
+                avg_volume = np.mean(volumes[:-3]) if len(volumes) > 3 else recent_volume
+                volume_ratio = recent_volume / avg_volume if avg_volume > 0 else 1
+                volume_score = min(volume_ratio / 3, 1)  # 成交量放大3倍得满分
+                score += volume_score * 0.4
+
+            return score
+
+        except Exception:
+            return 0.5
+
+    def _calculate_reversal_factor(self, closes: np.ndarray) -> float:
+        """计算反转因子"""
+        try:
+            if len(closes) < 5:
+                return 0.5
+
+            # 短期反转信号
+            recent_return = (closes[-1] - closes[-2]) / closes[-2]
+            prev_return = (closes[-2] - closes[-3]) / closes[-3]
+
+            # 反转信号：前期下跌后反弹
+            if prev_return < -0.02 and recent_return > 0.01:
+                return 0.8
+            elif prev_return > 0.02 and recent_return < -0.01:
+                return 0.2
+            else:
+                return 0.5
+
+        except Exception:
+            return 0.5
+
+    def _calculate_volatility_factor(self, closes: np.ndarray, volumes: np.ndarray) -> float:
+        """计算波动率因子"""
+        try:
+            score = 0.0
+
+            # 价格波动率 (70%)
+            if len(closes) >= 10:
+                returns = np.diff(closes) / closes[:-1]
+                volatility = np.std(returns)
+                # 低波动率得分高
+                vol_score = max(1 - volatility * 20, 0)
+                score += vol_score * 0.7
+
+            # 成交量波动率 (30%)
+            if len(volumes) >= 10:
+                volume_changes = np.diff(volumes) / volumes[:-1]
+                volume_vol = np.std(volume_changes)
+                # 适中的成交量波动率得分高
+                vol_vol_score = max(1 - abs(volume_vol - 0.3) * 2, 0)
+                score += vol_vol_score * 0.3
+
+            return score
+
+        except Exception:
+            return 0.5
+
+    def _calculate_technical_indicators(
+        self, closes: np.ndarray, highs: np.ndarray, lows: np.ndarray, volumes: np.ndarray
+    ) -> float:
+        """计算技术指标因子"""
+        try:
+            score = 0.0
+
+            # MA指标 (25%)
+            ma_score = self._calculate_ma_score(closes)
+            score += ma_score * 0.25
+
+            # MACD指标 (25%)
+            macd_score = self._calculate_macd_score(closes)
+            score += macd_score * 0.25
+
+            # RSI指标 (25%)
+            rsi_score = self._calculate_rsi_score(closes)
+            score += rsi_score * 0.25
+
+            # 布林带指标 (25%)
+            bb_score = self._calculate_bollinger_score(closes)
+            score += bb_score * 0.25
+
+            return score
+
+        except Exception:
+            return 0.5
+
+    def _calculate_ma_score(self, closes: np.ndarray) -> float:
+        """计算移动平均线评分"""
+        try:
+            if len(closes) < 20:
+                return 0.5
+
+            ma5 = np.mean(closes[-5:])
+            ma10 = np.mean(closes[-10:])
+            ma20 = np.mean(closes[-20:])
+            current_price = closes[-1]
+
+            # 多头排列得分高
+            if current_price > ma5 > ma10 > ma20:
+                return 0.9
+            elif current_price > ma5 > ma10:
+                return 0.7
+            elif current_price > ma5:
+                return 0.6
+            elif current_price < ma5 < ma10 < ma20:
+                return 0.1
+            else:
+                return 0.4
+
+        except Exception:
+            return 0.5
+
+    def _calculate_macd_score(self, closes: np.ndarray) -> float:
+        """计算MACD评分"""
+        try:
+            if len(closes) < 26:
+                return 0.5
+
+            # 计算MACD
+            ema12 = self._calculate_ema(closes, 12)
+            ema26 = self._calculate_ema(closes, 26)
+            macd_line = ema12 - ema26
+            signal_line = self._calculate_ema(macd_line, 9)
+            histogram = macd_line - signal_line
+
+            # MACD金叉和柱状图分析
+            if len(histogram) >= 2:
+                if macd_line[-1] > signal_line[-1] and histogram[-1] > histogram[-2]:
+                    return 0.8  # 金叉且柱状图增长
+                elif macd_line[-1] < signal_line[-1] and histogram[-1] < histogram[-2]:
+                    return 0.2  # 死叉且柱状图下降
+                else:
+                    return 0.5
+
+            return 0.5
+
+        except Exception:
+            return 0.5
+
+    def _calculate_rsi_score(self, closes: np.ndarray) -> float:
+        """计算RSI评分"""
+        try:
+            if len(closes) < 15:
+                return 0.5
+
+            # 计算RSI
+            deltas = np.diff(closes)
+            gains = np.where(deltas > 0, deltas, 0)
+            losses = np.where(deltas < 0, -deltas, 0)
+
+            avg_gain = np.mean(gains[-14:])
+            avg_loss = np.mean(losses[-14:])
+
+            if avg_loss == 0:
+                rsi = 100
+            else:
+                rs = avg_gain / avg_loss
+                rsi = 100 - (100 / (1 + rs))
+
+            # RSI评分
+            if 30 <= rsi <= 70:
+                return 0.7  # 正常范围
+            elif 20 <= rsi < 30:
+                return 0.9  # 超卖
+            elif 70 < rsi <= 80:
+                return 0.3  # 超买
+            elif rsi < 20:
+                return 0.95  # 严重超卖
+            else:  # rsi > 80
+                return 0.1  # 严重超买
+
+        except Exception:
+            return 0.5
+
+    def _calculate_bollinger_score(self, closes: np.ndarray) -> float:
+        """计算布林带评分"""
+        try:
+            if len(closes) < 20:
+                return 0.5
+
+            # 计算布林带
+            ma20 = np.mean(closes[-20:])
+            std20 = np.std(closes[-20:])
+            upper_band = ma20 + 2 * std20
+            lower_band = ma20 - 2 * std20
+            current_price = closes[-1]
+
+            # 布林带位置评分
+            if current_price <= lower_band:
+                return 0.9  # 触及下轨，超卖
+            elif current_price >= upper_band:
+                return 0.1  # 触及上轨，超买
+            else:
+                # 在布林带内的相对位置
+                position = (current_price - lower_band) / (upper_band - lower_band)
+                return 0.3 + 0.4 * (1 - abs(position - 0.5) * 2)  # 中间位置得分高
+
+        except Exception:
+            return 0.5
+
+    def _calculate_ema(self, data: np.ndarray, period: int) -> np.ndarray:
+        """计算指数移动平均线"""
+        alpha = 2 / (period + 1)
+        ema = np.zeros_like(data)
+        ema[0] = data[0]
+
+        for i in range(1, len(data)):
+            ema[i] = alpha * data[i] + (1 - alpha) * ema[i - 1]
+
+        return ema
