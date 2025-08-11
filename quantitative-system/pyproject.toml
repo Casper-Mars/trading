@@ -8,6 +8,7 @@ dependencies = [
     "aiohttp>=3.12.15",
     "apscheduler>=3.11.0",
     "backtrader>=1.9.78.123",
+    "dashscope>=1.20.0",
     "fastapi>=0.116.1",
     "httpx>=0.28.1",
     "loguru>=0.7.3",
@@ -29,6 +30,17 @@ dev = [
     "pytest-cov>=4.1.0",
     "types-redis>=4.6.0",
     "types-requests>=2.31.0",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.0.0",
+    "black>=24.0.0",
+    "isort>=5.13.0",
+    "mypy>=1.8.0",
+    "ruff>=0.1.0",
 ]
 
 [build-system]

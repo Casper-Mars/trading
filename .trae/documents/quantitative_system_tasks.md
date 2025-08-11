@@ -234,9 +234,9 @@
 
   * _Requirements: 2.12, 2.13, 5.3_
 
-* [ ] 3.6 AIService（阿里百炼）
+* [x] 3.6 AIService（阿里百炼）
 
-  * 实现 dashscope 客户端封装（或HTTP调用）：鉴权、超时、重试
+  * 集成 dashscope 官方SDK：配置鉴权、超时、重试等参数
 
   * 组装 Prompt（策略分析/风险评估/操作建议），解析响应为结构化建议
 
@@ -244,7 +244,7 @@
 
   * _Requirements: 3.1-3.16_
 
-* [ ] 3.7 PlanService
+- [x] 3.7 PlanService
 
   * 将结构化建议格式化为 Markdown（表格/章节），保存与查询
 
@@ -254,7 +254,7 @@
 
 ## 阶段4：业务编排层（Business Orchestration）（M1）
 
-* [ ] 4.1 BaseOrchestrator 基础编排器
+* [x] 4.1 BaseOrchestrator 基础编排器
 
   * 实现编排器基类：统一的错误处理、日志记录、事务管理接口
 
@@ -264,7 +264,7 @@
 
   * _Requirements: 5.5, 5.6_
 
-* [ ] 4.2 PlanOrchestrator 方案生成编排器
+* [x] 4.2 PlanOrchestrator 方案生成编排器
 
   * 编排完整的方案生成流程：数据获取→回测分析→AI分析→方案格式化→结果保存
 
@@ -274,7 +274,7 @@
 
   * _Requirements: 3.1-3.16, 4.1-4.8_
 
-* [ ] 4.3 BacktestOrchestrator 回测分析编排器
+* [x] 4.3 BacktestOrchestrator 回测分析编排器
 
   * 编排回测任务执行流程：策略配置验证→数据准备→回测执行→结果分析→报告生成
 
@@ -284,7 +284,7 @@
 
   * _Requirements: 2.6-2.14, 5.3_
 
-* [ ] 4.4 PositionOrchestrator 持仓管理编排器
+* [x] 4.4 PositionOrchestrator 持仓管理编排器
 
   * 编排持仓相关的复合操作：持仓更新→价格刷新→盈亏计算→风险评估
 
