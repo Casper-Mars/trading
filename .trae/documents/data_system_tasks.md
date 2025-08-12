@@ -153,28 +153,28 @@
 
 ### 阶段四：HTTP API服务模块 (第4周)
 
-- [ ] 15. FastAPI应用框架搭建
+- [x] 15. FastAPI应用框架搭建
   - 实现FastAPI应用入口 (main.py)
   - 配置CORS、中间件、异常处理
   - 实现依赖注入和服务容器
   - 添加API文档自动生成配置
   - _Requirements: REQ-5.6, REQ-5.8_
 
-- [ ] 16. 查询服务实现
+- [x] 16. 查询服务实现
   - 实现统一查询服务 (services/query_service.py)
   - 实现Redis缓存管理 (repositories/cache_repo.py)
   - 实现分页查询和结果聚合功能
   - 添加查询参数验证和优化
   - _Requirements: REQ-5.2, REQ-5.3, REQ-5.9_
 
-- [ ] 17. 股票数据API接口
+- [x] 17. 股票数据API接口
   - 实现股票基础信息查询接口 (api/routes/stocks.py)
   - 实现股票行情数据查询接口
   - 实现财务数据查询接口
   - 添加接口参数验证和错误处理
   - _Requirements: REQ-5.1, REQ-5.2, REQ-5.3, REQ-5.6_
 
-- [ ] 18. 新闻数据API接口
+- [x] 18. 新闻数据API接口
   - 实现新闻数据查询接口 (api/routes/news.py)
   - 实现情感分析结果查询接口
   - 支持按股票代码和时间范围查询
