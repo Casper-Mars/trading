@@ -2,137 +2,161 @@
 
 ## 项目结构
 
-采用简洁清晰的三层架构，遵循Go项目标准布局：
+采用现代化Python项目结构，遵循分层架构和领域驱动设计原则：
 
 ```
-data-collection-system/
-├── main.go                # 应用入口
-├── config.yaml           # 配置文件
-├── docker-compose.yml    # Docker配置
-├── go.mod                 # Go模块文件
-├── go.sum                 # Go依赖锁定
-├── README.md              # 项目说明
+quantitative-system/
+├── main.py                    # 应用入口
+├── pyproject.toml            # 项目配置和依赖管理
+├── uv.lock                   # 依赖锁定文件
+├── .env.example              # 环境变量示例
+├── .gitignore                # Git忽略文件
+├── README.md                 # 项目说明文档
+├── Makefile                  # 构建和开发命令
+├── mypy.ini                  # 类型检查配置
+├── .pre-commit-config.yaml   # 代码质量检查配置
 │
-├── api/                   # 接入层 (API Layer)
-│   ├── http/              # HTTP接口
-│   │   ├── handlers/      # HTTP处理器
-│   │   ├── middleware/    # 中间件
-│   │   └── routes.go      # 路由配置
-│   ├── cron/              # 定时任务
-│   │   ├── scheduler.go   # 任务调度器
-│   │   ├── jobs/          # 定时任务定义
-│   │   └── manager.go     # 任务管理器
-│   └── grpc/              # gRPC接口(预留)
+├── config/                   # 配置管理层
+│   ├── __init__.py
+│   ├── settings.py          # 应用配置
+│   ├── database.py          # 数据库配置
+│   └── logging.py           # 日志配置
 │
-├── biz/                   # 业务编排层 (Business Layer)
-│   └── collection.go      # 数据采集业务
-├── service/               # 服务层 (Service Layer)
-│   ├── collection/        # 数据采集服务
-│   │   ├── service.go     # 采集服务
-│   │   ├── tushare.go     # Tushare数据采集
-│   │   ├── news.go        # 新闻数据采集
-│   │   └── validator.go   # 数据验证器
-│   ├── processing/        # 数据处理服务
-│   │   ├── service.go     # 加工业务服务
-│   │   ├── cleaner.go     # 数据清洗
-│   │   ├── nlp.go         # NLP处理
-│   │   └── enricher.go    # 数据增强
-│   ├── query/             # 数据查询服务
-│   │   ├── service.go     # 查询业务服务
-│   │   ├── stock.go       # 股票数据查询
-│   │   ├── news.go        # 新闻数据查询
-│   │   └── aggregator.go  # 数据聚合
-│   ├── task/              # 任务管理服务
-│       ├── service.go     # 任务业务服务
-│       ├── scheduler.go   # 任务调度
-│       └── monitor.go     # 任务监控
+├── api/                      # API接口层
+│   ├── __init__.py
+│   ├── routes/              # 路由定义
+│   ├── dependencies.py     # 依赖注入
+│   └── middleware.py        # 中间件
 │
-├── repo/                  # 数据仓库层 (Repository Layer)
-│   ├── mysql/             # MySQL数据访问
-│   │   ├── stock.go       # 股票数据仓库
-│   │   ├── news.go        # 新闻数据仓库
-│   │   ├── market.go      # 市场数据仓库
-│   │   ├── financial.go   # 财务数据仓库
-│   │   └── task.go        # 任务数据仓库
-│   ├── redis/             # Redis缓存访问
-│   │   ├── cache.go       # 缓存操作
-│   │   └── session.go     # 会话管理
-│   └── external/          # 外部数据源
-│       ├── tushare/       # Tushare API客户端
-│       ├── crawler/       # 网页爬虫
-│       └── nlp/           # NLP服务客户端
+├── scheduler/                # 调度层
+│   ├── __init__.py
+│   ├── jobs.py              # 任务定义
+│   ├── scheduler.py         # 调度器
+│   └── manager.py           # 任务管理器
 │
-├── model/                 # 数据模型定义
-│   ├── stock.go           # 股票模型
-│   ├── news.go            # 新闻模型
-│   ├── market.go          # 市场数据模型
-│   ├── financial.go       # 财务数据模型
-│   └── task.go            # 任务模型
+├── biz/                      # 业务编排层
+│   ├── __init__.py
+│   ├── data_collection_orchestrator.py  # 数据采集编排器
+│   ├── nlp_processing_orchestrator.py   # NLP处理编排器
+│   ├── quality_control_orchestrator.py  # 质量控制编排器
+│   └── base_orchestrator.py             # 编排器基类
 │
-├── pkg/                   # 公共包 (Shared Package)
-│   ├── config/            # 配置管理
-│   ├── logger/            # 日志组件
-│   ├── errors/            # 错误定义
-│   ├── utils/             # 工具函数
-│   ├── types/             # 公共类型
-│   └── constants/         # 常量定义
+├── services/                 # 业务服务层
+│   ├── __init__.py
+│   ├── collection_service.py    # 数据采集服务
+│   ├── nlp_service.py          # NLP处理服务
+│   ├── quality_service.py      # 数据质量服务
+│   ├── query_service.py        # 查询服务
+│   ├── config_service.py       # 配置管理服务
+│   └── task_service.py         # 任务管理服务
 │
-└── scripts/               # 脚本文件
-    ├── migrate.sql        # 数据库迁移
-    └── deploy.sh          # 部署脚本
+├── models/                   # 数据模型层
+│   ├── __init__.py
+│   ├── database.py          # SQLAlchemy数据库模型
+│   ├── schemas.py           # Pydantic请求/响应模型
+│   ├── enums.py             # 枚举定义
+│   └── types.py             # 自定义类型
+│
+├── repositories/             # 数据访问层
+│   ├── __init__.py
+│   ├── stock_repo.py        # 股票数据仓库
+│   ├── news_repo.py         # 新闻数据仓库
+│   ├── task_repo.py         # 任务数据仓库
+│   ├── cache_repo.py        # 缓存数据仓库
+│   └── base_repo.py         # 仓库基类
+│
+├── clients/                  # 外部客户端层
+│   ├── __init__.py
+│   ├── tushare_client.py    # Tushare API客户端
+│   └── news_crawler.py      # 新闻爬虫客户端
+│
+├── strategies/               # 策略模块（预留）
+│   ├── __init__.py
+│   └── base_strategy.py     # 策略基类
+│
+├── utils/                    # 工具模块
+│   ├── __init__.py
+│   ├── logger.py            # 日志工具
+│   ├── exceptions.py        # 异常定义
+│   ├── validators.py        # 数据验证
+│   ├── helpers.py           # 辅助函数
+│   └── constants.py         # 常量定义
+│
+├── tests/                    # 测试模块
+│   ├── __init__.py
+│   ├── unit/                # 单元测试
+│   ├── integration/         # 集成测试
+│   └── fixtures/            # 测试数据
+│
+├── scripts/                  # 脚本文件
+│   ├── migrate.py           # 数据库迁移
+│   ├── init_data.py         # 初始化数据
+│   └── deploy.sh            # 部署脚本
+│
+├── docs/                     # 文档目录
+│   └── api.md               # API文档
+│
+
 ```
 
-#### 目录说明
+## 架构分层说明
 
-**简洁架构分层设计**
+**分层设计原则**：
+- **单一职责**：每层只负责特定的业务逻辑
+- **依赖倒置**：上层依赖下层的抽象接口，而非具体实现
+- **松耦合**：层与层之间通过接口交互，降低耦合度
+- **高内聚**：同一层内的模块功能相关性强
 
-* **api/**：接口层，负责外部接口适配，包括HTTP接口和定时任务
-* **biz/**：业务逻辑层，负责业务流程编排和跨领域协调
-* **module/**：模块层，按业务领域划分的核心业务服务
-* **repo/**：数据仓库层，负责数据持久化和外部数据源访问
-* **model/**：数据模型层，定义核心业务实体和数据结构
-* **pkg/**：公共组件层，提供通用的技术组件和工具
-* **scripts/**：脚本文件，包含部署和数据库迁移脚本
+**各层职责**：
 
-**各层职责**
-
-1. **接口层 (api/)**
-   - **http/**: HTTP接口适配和路由配置，包含handlers、middleware和routes
-   - **cron/**: 定时任务调度，包含scheduler、jobs和manager
+1. **API接口层 (api/)**
+   - HTTP接口适配和路由配置
    - 请求参数验证和响应格式化
    - 中间件处理（认证、限流、日志等）
+   - 依赖注入管理
 
-2. **业务逻辑层 (biz/)**
-   - 业务流程编排和跨领域协调
-   - 复杂业务场景的工作流管理
-   - 任务执行编排，组合多个service完成具体业务
-   - 跨服务的事务管理和数据一致性保证
+2. **调度层 (scheduler/)**
+   - 定时任务调度和管理
+   - 任务执行状态监控
+   - 任务失败重试机制
+   - 任务优先级管理
 
-3. **服务层 (service/)**
-   - **collection/**: 数据采集服务，包含数据采集服务、Tushare采集、新闻采集等
-   - **processing/**: 数据处理服务，包含数据清洗、NLP处理、数据增强等
-   - **query/**: 数据查询服务，包含股票查询、新闻查询、数据聚合等
-   - **task/**: 任务管理服务，只负责任务的CRUD操作，不包含业务执行逻辑
+3. **业务编排层 (biz/)**
+   - 复杂业务流程编排
+   - 跨服务协调和事务管理
+   - 业务规则执行
+   - 工作流管理
 
-4. **数据仓库层 (repo/)**
-   - **mysql/**: MySQL数据访问，包含各业务实体的DAO实现
-   - **redis/**: Redis缓存访问，提供缓存操作和会话管理
-   - **external/**: 外部数据源访问，包含Tushare、爬虫、NLP等客户端
-   - 数据持久化实现
-   - 外部服务集成
+4. **业务服务层 (services/)**
+   - 核心业务逻辑实现
+   - 单一业务领域服务
+   - 业务规则验证
+   - 服务间协作
 
-5. **数据模型层 (model/)**
-   - 定义核心业务实体：股票、新闻、市场数据、财务数据、任务等
-   - 数据传输对象(DTO)和值对象(VO)
-   - 业务规则和约束定义
+5. **数据访问层 (repositories/)**
+   - 数据持久化操作
+   - 数据查询和缓存
+   - 数据访问抽象
+   - 事务管理
 
-6. **公共组件层 (pkg/)**
-   - **config/**: 配置管理组件
-   - **logger/**: 日志组件
-   - **errors/**: 错误处理组件
-   - **response/**: 统一响应格式组件
-   - **validator/**: 参数验证组件
-   - **utils/**: 通用工具函数
+6. **外部客户端层 (clients/)**
+   - 第三方API集成
+   - 外部服务调用
+   - 数据源适配
+   - 网络通信处理
+
+7. **数据模型层 (models/)**
+   - 业务实体定义
+   - 数据传输对象
+   - 数据验证规则
+   - 类型定义
+
+8. **工具模块层 (utils/)**
+   - 通用工具函数
+   - 公共组件
+   - 异常处理
+   - 常量定义
+
 
 
 
