@@ -10,9 +10,21 @@ class Settings(BaseSettings):
     debug: bool = False
     environment: str = "development"  # development, staging, production
 
-    # 数据库配置
-    database_url: str = "sqlite:///./quantitative_system.db"
+    # 数据库配置 (使用MySQL数据库)
+    database_url: str = "mysql+pymysql://root:root123@localhost:3306/trading_data?charset=utf8mb4"
     database_echo: bool = False
+    database_pool_size: int = 10
+    database_max_overflow: int = 20
+    database_pool_timeout: int = 30
+    database_pool_recycle: int = 3600
+
+    # MySQL配置（Docker Compose环境）
+    mysql_host: str = "localhost"
+    mysql_port: int = 3306
+    mysql_user: str = "root"
+    mysql_password: str = "root123"  # noqa: S105
+    mysql_database: str = "trading_data"
+    mysql_charset: str = "utf8mb4"
 
     # Redis配置
     redis_host: str = "localhost"
@@ -31,6 +43,12 @@ class Settings(BaseSettings):
     data_collection_base_url: str = "http://localhost:8080"
     data_collection_timeout: int = 30
     data_collection_max_retries: int = 3
+
+    # Tushare API配置
+    tushare_token: str | None = None
+    tushare_timeout: int = 30
+    tushare_max_retries: int = 3
+    tushare_retry_delay: float = 1.0
 
     # 回测配置
     backtest_initial_cash: float = 100000.0

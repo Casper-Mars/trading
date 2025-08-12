@@ -35,28 +35,28 @@
 
 ### 阶段一：项目基础设施搭建 (第1周)
 
-- [ ] 1. 项目环境初始化和依赖管理
+- [x] 1. 项目环境初始化和依赖管理
   - 使用UV创建Python虚拟环境
   - 配置pyproject.toml文件，添加核心依赖：FastAPI、SQLAlchemy、Pydantic、httpx、loguru、Alembic、tushare等
   - 设置开发工具配置：mypy.ini、.pre-commit-config.yaml、.gitignore
   - 创建项目目录结构，按照设计文档的分层架构组织代码
   - _Requirements: REQ-7.1, REQ-7.2, REQ-7.5_
 
-- [ ] 2. 数据库基础设施搭建
+- [x] 2. 数据库基础设施搭建
   - 安装和配置MySQL 8.0数据库
   - 安装和配置Redis 7.0缓存数据库
   - 创建数据库连接配置模块 (config/database.py)
   - 使用Alembic Python库初始化数据库版本管理（Alembic是SQLAlchemy的数据库迁移工具，用于跟踪数据库表结构变更）
   - _Requirements: REQ-7.1_
 
-- [ ] 3. 核心数据模型定义
+- [x] 3. 核心数据模型定义
   - 实现SQLAlchemy数据库模型 (models/database.py)
   - 创建stocks、stock_daily、financial_data、news、sentiment_analysis表结构
   - 定义Pydantic请求/响应模型 (models/schemas.py)
   - 创建枚举类型和自定义类型定义 (models/enums.py, models/types.py)
   - _Requirements: REQ-1.3, REQ-1.4, REQ-1.5, REQ-2.2_
 
-- [ ] 4. 配置管理和日志系统
+- [x] 4. 配置管理和日志系统
   - 实现基于Pydantic Settings的配置管理 (config/settings.py)
   - 配置环境变量管理，创建.env.example文件
   - 实现结构化日志系统 (utils/logger.py)

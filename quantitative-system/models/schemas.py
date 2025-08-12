@@ -355,3 +355,412 @@ class PaginatedTasksResponse(PaginatedResponse):
     """分页任务响应Schema"""
 
     items: list[TaskResponse] = Field(..., description="任务列表")
+
+
+# ============= 财务数据相关Schema =============
+
+
+class FinancialDataBase(BaseSchema):
+    """财务数据基础Schema"""
+
+    ts_code: str = Field(..., max_length=20, description="TS代码")
+    end_date: str = Field(..., max_length=8, description="报告期")
+    report_type: str | None = Field(None, max_length=10, description="报告类型")
+    basic_eps: Decimal | None = Field(None, description="基本每股收益")
+    diluted_eps: Decimal | None = Field(None, description="稀释每股收益")
+    total_revenue: Decimal | None = Field(None, description="营业总收入")
+    revenue: Decimal | None = Field(None, description="营业收入")
+    n_income: Decimal | None = Field(None, description="净利润")
+    n_income_attr_p: Decimal | None = Field(None, description="净利润(不含少数股东损益)")
+    total_profit: Decimal | None = Field(None, description="利润总额")
+    operate_profit: Decimal | None = Field(None, description="营业利润")
+    ebit: Decimal | None = Field(None, description="息税前利润")
+    ebitda: Decimal | None = Field(None, description="息税折旧摊销前利润")
+    rd_exp: Decimal | None = Field(None, description="研发费用")
+
+
+class FinancialDataCreate(FinancialDataBase):
+    """创建财务数据Schema"""
+
+    ann_date: str | None = Field(None, max_length=8, description="公告日期")
+    f_ann_date: str | None = Field(None, max_length=8, description="实际公告日期")
+    comp_type: str | None = Field(None, max_length=10, description="公司类型")
+    # 包含所有其他财务指标字段
+    int_income: Decimal | None = Field(None, description="利息收入")
+    prem_earned: Decimal | None = Field(None, description="已赚保费")
+    comm_income: Decimal | None = Field(None, description="手续费及佣金收入")
+    n_commis_income: Decimal | None = Field(None, description="手续费及佣金净收入")
+    n_oth_income: Decimal | None = Field(None, description="其他经营净收益")
+    n_oth_b_income: Decimal | None = Field(None, description="加:其他业务净收益")
+    prem_income: Decimal | None = Field(None, description="保险业务收入")
+    out_prem: Decimal | None = Field(None, description="减:分出保费")
+    une_prem_reser: Decimal | None = Field(None, description="提取未到期责任准备金")
+    reins_income: Decimal | None = Field(None, description="其中:分保费收入")
+    n_sec_tb_income: Decimal | None = Field(None, description="代理买卖证券业务净收入")
+    n_sec_uw_income: Decimal | None = Field(None, description="证券承销业务净收入")
+    n_asset_mg_income: Decimal | None = Field(None, description="受托客户资产管理业务净收入")
+    oth_b_income: Decimal | None = Field(None, description="其他业务收入")
+    fv_value_chg_gain: Decimal | None = Field(None, description="加:公允价值变动净收益")
+    invest_income: Decimal | None = Field(None, description="加:投资净收益")
+    ass_invest_income: Decimal | None = Field(None, description="其中:对联营企业和合营企业的投资收益")
+    forex_gain: Decimal | None = Field(None, description="加:汇兑净收益")
+    total_cogs: Decimal | None = Field(None, description="营业总成本")
+    oper_cost: Decimal | None = Field(None, description="减:营业成本")
+    int_exp: Decimal | None = Field(None, description="减:利息支出")
+    comm_exp: Decimal | None = Field(None, description="减:手续费及佣金支出")
+    biz_tax_surchg: Decimal | None = Field(None, description="减:营业税金及附加")
+    sell_exp: Decimal | None = Field(None, description="减:销售费用")
+    admin_exp: Decimal | None = Field(None, description="减:管理费用")
+    fin_exp: Decimal | None = Field(None, description="减:财务费用")
+    assets_impair_loss: Decimal | None = Field(None, description="减:资产减值损失")
+    income_tax: Decimal | None = Field(None, description="所得税费用")
+    minority_gain: Decimal | None = Field(None, description="少数股东损益")
+    oth_compr_income: Decimal | None = Field(None, description="其他综合收益")
+    t_compr_income: Decimal | None = Field(None, description="综合收益总额")
+    compr_inc_attr_p: Decimal | None = Field(None, description="归属于母公司(或股东)的综合收益总额")
+    compr_inc_attr_m_s: Decimal | None = Field(None, description="归属于少数股东的综合收益总额")
+
+
+class FinancialDataUpdate(BaseSchema):
+    """更新财务数据Schema"""
+
+    ann_date: str | None = Field(None, max_length=8, description="公告日期")
+    f_ann_date: str | None = Field(None, max_length=8, description="实际公告日期")
+    report_type: str | None = Field(None, max_length=10, description="报告类型")
+    basic_eps: Decimal | None = Field(None, description="基本每股收益")
+    diluted_eps: Decimal | None = Field(None, description="稀释每股收益")
+    total_revenue: Decimal | None = Field(None, description="营业总收入")
+    revenue: Decimal | None = Field(None, description="营业收入")
+    n_income: Decimal | None = Field(None, description="净利润")
+    n_income_attr_p: Decimal | None = Field(None, description="净利润(不含少数股东损益)")
+    total_profit: Decimal | None = Field(None, description="利润总额")
+    operate_profit: Decimal | None = Field(None, description="营业利润")
+    ebit: Decimal | None = Field(None, description="息税前利润")
+    ebitda: Decimal | None = Field(None, description="息税折旧摊销前利润")
+    rd_exp: Decimal | None = Field(None, description="研发费用")
+
+
+class FinancialDataResponse(FinancialDataBase):
+    """财务数据响应Schema"""
+
+    id: int
+    ann_date: str | None = Field(None, description="公告日期")
+    f_ann_date: str | None = Field(None, description="实际公告日期")
+    comp_type: str | None = Field(None, description="公司类型")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+
+class FinancialDataQuery(BaseSchema):
+    """财务数据查询Schema"""
+
+    ts_code: str | None = Field(None, description="TS代码")
+    start_date: str | None = Field(None, description="开始日期")
+    end_date: str | None = Field(None, description="结束日期")
+    report_type: str | None = Field(None, description="报告类型")
+    limit: int = Field(100, ge=1, le=1000, description="返回数量限制")
+
+
+# ============= 情感分析相关Schema =============
+
+
+class SentimentAnalysisBase(BaseSchema):
+    """情感分析基础Schema"""
+
+    news_id: int = Field(..., description="新闻ID")
+    content_type: str = Field(..., max_length=20, description="内容类型")
+    sentiment_score: Decimal = Field(..., description="情感分数(-1到1)")
+    sentiment_label: str = Field(..., max_length=20, description="情感标签")
+    confidence: Decimal = Field(..., description="置信度(0到1)")
+    model_name: str = Field(..., max_length=100, description="使用的模型名称")
+    model_version: str | None = Field(None, max_length=50, description="模型版本")
+
+
+class SentimentAnalysisCreate(SentimentAnalysisBase):
+    """创建情感分析Schema"""
+
+    keywords: list[str] | None = Field(None, description="关键词")
+    emotions: dict[str, Any] | None = Field(None, description="详细情感分析")
+    topics: list[str] | None = Field(None, description="主题标签")
+    entities: list[dict[str, Any]] | None = Field(None, description="实体识别结果")
+    processing_time: Decimal | None = Field(None, description="处理时间(秒)")
+    error_message: str | None = Field(None, description="错误信息")
+
+
+class SentimentAnalysisUpdate(BaseSchema):
+    """更新情感分析Schema"""
+
+    sentiment_score: Decimal | None = Field(None, description="情感分数(-1到1)")
+    sentiment_label: str | None = Field(None, max_length=20, description="情感标签")
+    confidence: Decimal | None = Field(None, description="置信度(0到1)")
+    keywords: list[str] | None = Field(None, description="关键词")
+    emotions: dict[str, Any] | None = Field(None, description="详细情感分析")
+    topics: list[str] | None = Field(None, description="主题标签")
+    entities: list[dict[str, Any]] | None = Field(None, description="实体识别结果")
+    error_message: str | None = Field(None, description="错误信息")
+
+
+class SentimentAnalysisResponse(SentimentAnalysisBase):
+    """情感分析响应Schema"""
+
+    id: int
+    keywords: list[str] | None = Field(None, description="关键词")
+    emotions: dict[str, Any] | None = Field(None, description="详细情感分析")
+    topics: list[str] | None = Field(None, description="主题标签")
+    entities: list[dict[str, Any]] | None = Field(None, description="实体识别结果")
+    processing_time: Decimal | None = Field(None, description="处理时间(秒)")
+    error_message: str | None = Field(None, description="错误信息")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+
+class SentimentAnalysisQuery(BaseSchema):
+    """情感分析查询Schema"""
+
+    news_id: int | None = Field(None, description="新闻ID")
+    content_type: str | None = Field(None, description="内容类型")
+    sentiment_label: str | None = Field(None, description="情感标签")
+    model_name: str | None = Field(None, description="模型名称")
+    min_confidence: Decimal | None = Field(None, description="最小置信度")
+    start_date: datetime | None = Field(None, description="开始时间")
+    end_date: datetime | None = Field(None, description="结束时间")
+    limit: int = Field(100, ge=1, le=1000, description="返回数量限制")
+
+
+class SentimentBatchRequest(BaseSchema):
+    """批量情感分析请求Schema"""
+
+    news_ids: list[int] = Field(..., description="新闻ID列表")
+    content_types: list[str] = Field(["title", "content"], description="内容类型列表")
+    model_name: str = Field("default", description="使用的模型名称")
+    force_reprocess: bool = Field(False, description="是否强制重新处理")
+
+
+class SentimentBatchResponse(BaseSchema):
+    """批量情感分析响应Schema"""
+
+    total_requested: int = Field(..., description="请求总数")
+    total_processed: int = Field(..., description="处理成功数")
+    total_failed: int = Field(..., description="处理失败数")
+    results: list[SentimentAnalysisResponse] = Field(..., description="分析结果列表")
+    errors: list[dict[str, Any]] = Field(..., description="错误信息列表")
+    processing_time: Decimal = Field(..., description="总处理时间(秒)")
+
+
+# ============= 股票基础信息相关Schema =============
+
+
+class StockBasicInfoBase(BaseSchema):
+    """股票基础信息基础Schema"""
+
+    ts_code: str = Field(..., max_length=20, description="TS代码")
+    symbol: str = Field(..., max_length=10, description="股票代码")
+    name: str = Field(..., max_length=20, description="股票名称")
+    area: str | None = Field(None, max_length=20, description="地域")
+    industry: str | None = Field(None, max_length=50, description="所属行业")
+    market: str | None = Field(None, max_length=10, description="市场类型")
+    exchange: str | None = Field(None, max_length=10, description="交易所代码")
+    list_status: str | None = Field(None, max_length=1, description="上市状态")
+    list_date: str | None = Field(None, max_length=8, description="上市日期")
+    is_hs: str | None = Field(None, max_length=1, description="是否沪深港通标的")
+
+
+class StockBasicInfoCreate(StockBasicInfoBase):
+    """创建股票基础信息Schema"""
+
+    curr_type: str | None = Field(None, max_length=10, description="交易货币")
+    delist_date: str | None = Field(None, max_length=8, description="退市日期")
+
+
+class StockBasicInfoUpdate(BaseSchema):
+    """更新股票基础信息Schema"""
+
+    name: str | None = Field(None, max_length=20, description="股票名称")
+    area: str | None = Field(None, max_length=20, description="地域")
+    industry: str | None = Field(None, max_length=50, description="所属行业")
+    list_status: str | None = Field(None, max_length=1, description="上市状态")
+    delist_date: str | None = Field(None, max_length=8, description="退市日期")
+    is_hs: str | None = Field(None, max_length=1, description="是否沪深港通标的")
+
+
+class StockBasicInfoResponse(StockBasicInfoBase):
+    """股票基础信息响应Schema"""
+
+    curr_type: str | None = Field(None, description="交易货币")
+    delist_date: str | None = Field(None, description="退市日期")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+
+class StockBasicInfoQuery(BaseSchema):
+    """股票基础信息查询Schema"""
+
+    ts_code: str | None = Field(None, description="TS代码")
+    symbol: str | None = Field(None, description="股票代码")
+    name: str | None = Field(None, description="股票名称")
+    industry: str | None = Field(None, description="所属行业")
+    market: str | None = Field(None, description="市场类型")
+    list_status: str | None = Field(None, description="上市状态")
+    is_hs: str | None = Field(None, description="是否沪深港通标的")
+    limit: int = Field(100, ge=1, le=1000, description="返回数量限制")
+
+
+# ============= 股票日线数据相关Schema =============
+
+
+class StockDailyDataBase(BaseSchema):
+    """股票日线数据基础Schema"""
+
+    ts_code: str = Field(..., max_length=20, description="TS代码")
+    trade_date: str = Field(..., max_length=8, description="交易日期")
+    open: Decimal | None = Field(None, description="开盘价")
+    high: Decimal | None = Field(None, description="最高价")
+    low: Decimal | None = Field(None, description="最低价")
+    close: Decimal | None = Field(None, description="收盘价")
+    pre_close: Decimal | None = Field(None, description="昨收价")
+    change: Decimal | None = Field(None, description="涨跌额")
+    pct_chg: Decimal | None = Field(None, description="涨跌幅")
+    vol: Decimal | None = Field(None, description="成交量(手)")
+    amount: Decimal | None = Field(None, description="成交额(千元)")
+
+
+class StockDailyDataCreate(StockDailyDataBase):
+    """创建股票日线数据Schema"""
+
+    pass
+
+
+class StockDailyDataUpdate(BaseSchema):
+    """更新股票日线数据Schema"""
+
+    open: Decimal | None = Field(None, description="开盘价")
+    high: Decimal | None = Field(None, description="最高价")
+    low: Decimal | None = Field(None, description="最低价")
+    close: Decimal | None = Field(None, description="收盘价")
+    pre_close: Decimal | None = Field(None, description="昨收价")
+    change: Decimal | None = Field(None, description="涨跌额")
+    pct_chg: Decimal | None = Field(None, description="涨跌幅")
+    vol: Decimal | None = Field(None, description="成交量(手)")
+    amount: Decimal | None = Field(None, description="成交额(千元)")
+
+
+class StockDailyDataResponse(StockDailyDataBase):
+    """股票日线数据响应Schema"""
+
+    id: int
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+
+class StockDailyDataQuery(BaseSchema):
+    """股票日线数据查询Schema"""
+
+    ts_code: str | None = Field(None, description="TS代码")
+    start_date: str | None = Field(None, description="开始日期")
+    end_date: str | None = Field(None, description="结束日期")
+    limit: int = Field(100, ge=1, le=1000, description="返回数量限制")
+
+
+# ============= 新闻数据相关Schema =============
+
+
+class NewsDataBase(BaseSchema):
+    """新闻数据基础Schema"""
+
+    title: str = Field(..., max_length=500, description="新闻标题")
+    content: str = Field(..., description="新闻内容")
+    source: str | None = Field(None, max_length=100, description="新闻来源")
+    author: str | None = Field(None, max_length=100, description="作者")
+    publish_time: datetime | None = Field(None, description="发布时间")
+    url: str | None = Field(None, max_length=1000, description="原文链接")
+    category: str | None = Field(None, max_length=50, description="新闻分类")
+    tags: list[str] | None = Field(None, description="标签")
+    related_stocks: list[str] | None = Field(None, description="相关股票")
+
+
+class NewsDataCreate(NewsDataBase):
+    """创建新闻数据Schema"""
+
+    sentiment_score: Decimal | None = Field(None, description="情感分数")
+    sentiment_label: str | None = Field(None, max_length=20, description="情感标签")
+    keywords: list[str] | None = Field(None, description="关键词")
+    summary: str | None = Field(None, description="新闻摘要")
+    is_processed: bool = Field(False, description="是否已处理")
+
+
+class NewsDataUpdate(BaseSchema):
+    """更新新闻数据Schema"""
+
+    title: str | None = Field(None, max_length=500, description="新闻标题")
+    content: str | None = Field(None, description="新闻内容")
+    source: str | None = Field(None, max_length=100, description="新闻来源")
+    author: str | None = Field(None, max_length=100, description="作者")
+    publish_time: datetime | None = Field(None, description="发布时间")
+    category: str | None = Field(None, max_length=50, description="新闻分类")
+    tags: list[str] | None = Field(None, description="标签")
+    related_stocks: list[str] | None = Field(None, description="相关股票")
+    sentiment_score: Decimal | None = Field(None, description="情感分数")
+    sentiment_label: str | None = Field(None, max_length=20, description="情感标签")
+    keywords: list[str] | None = Field(None, description="关键词")
+    summary: str | None = Field(None, description="新闻摘要")
+    is_processed: bool | None = Field(None, description="是否已处理")
+
+
+class NewsDataResponse(NewsDataBase):
+    """新闻数据响应Schema"""
+
+    id: int
+    sentiment_score: Decimal | None = Field(None, description="情感分数")
+    sentiment_label: str | None = Field(None, description="情感标签")
+    keywords: list[str] | None = Field(None, description="关键词")
+    summary: str | None = Field(None, description="新闻摘要")
+    is_processed: bool = Field(..., description="是否已处理")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
+
+
+class NewsDataQuery(BaseSchema):
+    """新闻数据查询Schema"""
+
+    title: str | None = Field(None, description="新闻标题关键词")
+    source: str | None = Field(None, description="新闻来源")
+    category: str | None = Field(None, description="新闻分类")
+    related_stocks: list[str] | None = Field(None, description="相关股票")
+    sentiment_label: str | None = Field(None, description="情感标签")
+    is_processed: bool | None = Field(None, description="是否已处理")
+    start_date: datetime | None = Field(None, description="开始时间")
+    end_date: datetime | None = Field(None, description="结束时间")
+    limit: int = Field(100, ge=1, le=1000, description="返回数量限制")
+
+
+# ============= 分页响应Schema =============
+
+
+class PaginatedFinancialDataResponse(PaginatedResponse):
+    """分页财务数据响应Schema"""
+
+    items: list[FinancialDataResponse] = Field(..., description="财务数据列表")
+
+
+class PaginatedSentimentAnalysisResponse(PaginatedResponse):
+    """分页情感分析响应Schema"""
+
+    items: list[SentimentAnalysisResponse] = Field(..., description="情感分析列表")
+
+
+class PaginatedStockBasicInfoResponse(PaginatedResponse):
+    """分页股票基础信息响应Schema"""
+
+    items: list[StockBasicInfoResponse] = Field(..., description="股票基础信息列表")
+
+
+class PaginatedStockDailyDataResponse(PaginatedResponse):
+    """分页股票日线数据响应Schema"""
+
+    items: list[StockDailyDataResponse] = Field(..., description="股票日线数据列表")
+
+
+class PaginatedNewsDataResponse(PaginatedResponse):
+    """分页新闻数据响应Schema"""
+
+    items: list[NewsDataResponse] = Field(..., description="新闻数据列表")
