@@ -72,7 +72,7 @@
 
 ### 阶段二：Tushare数据采集模块 (第1-2周)
 
-- [ ] 6. Tushare API客户端实现
+- [x] 6. Tushare API客户端实现
   - 安装tushare官方Python库（pip install tushare）
   - 实现Tushare API客户端 (clients/tushare_client.py)
   - 配置API密钥管理和认证机制
@@ -80,7 +80,7 @@
   - 添加错误处理和日志记录功能
   - _Requirements: REQ-1.6, REQ-7.2_
 
-- [ ] 7. 统一数据采集服务实现
+- [x] 7. 统一数据采集服务实现
   - 实现统一的数据采集服务 (services/collection_service.py)
   - 集成股票基础信息、行情数据、财务数据采集功能
   - 实现数据预处理和格式标准化
