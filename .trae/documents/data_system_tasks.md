@@ -122,11 +122,12 @@
   - _Requirements: REQ-2.1, REQ-2.5, REQ-2.6_
 
 - [ ] 12. FinBERT模型和文本处理器集成
-  - 调研和选择合适的FinBERT模型实现
+  - 调研和选择合适的FinBERT开源模型实现（本地部署）
   - 实现FinBERT客户端 (clients/finbert_client.py)
   - 实现文本预处理器 (utils/text_processor.py)
-  - 配置模型加载和推理环境
+  - 配置本地模型加载和推理环境（transformers + torch）
   - 实现模型调用的错误处理和重试机制
+  - 优化模型推理性能（批处理、模型量化等）
   - _Requirements: REQ-3.1, REQ-3.6_
 
 - [ ] 13. 统一NLP处理服务实现

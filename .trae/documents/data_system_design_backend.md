@@ -205,10 +205,14 @@ graph TB
         end
     end
     
+        subgraph "NLP处理层"
+            P[FinBERT模型]
+        end
+    end
+    
     subgraph "外部数据源"
         N[Tushare API]
         O[金融新闻网站]
-        P[FinBERT模型]
     end
     
     A --> C
@@ -230,15 +234,16 @@ graph TB
     J --> M
     K --> N
     K --> O
-    F --> P
+    G --> P
 ```
 
 ### 1.2 核心模块概述
 
 1. **API层**：FastAPI HTTP服务器和APScheduler定时任务调度
 2. **业务服务层**：数据采集、NLP处理、数据质量管控、查询服务
-3. **数据访问层**：MySQL/Redis数据访问和外部API客户端
-4. **存储层**：MySQL主数据库和Redis缓存
+3. **NLP处理层**：本地部署的FinBERT模型，提供金融文本情感分析能力
+4. **数据访问层**：MySQL/Redis数据访问和外部API客户端
+5. **存储层**：MySQL主数据库和Redis缓存
 
 ### 1.3 技术栈选型
 
@@ -252,6 +257,9 @@ graph TB
 | 数据验证   | Pydantic    | 2.0+      | 类型安全，数据验证      |
 | 日志     | Loguru      | 0.7+      | 简单易用，结构化日志     |
 | 配置管理   | Pydantic Settings | 2.0+ | 类型安全的配置管理      |
+| NLP模型   | FinBERT     | -         | 金融领域专业NLP模型，本地部署 |
+| 深度学习框架 | PyTorch     | 2.0+      | FinBERT模型推理引擎    |
+| 模型库    | Transformers | 4.30+     | HuggingFace模型加载   |
 
 ### 1.4 数据流概览
 
@@ -354,6 +362,8 @@ classDiagram
         +predict_sentiment()
         +extract_features()
         +handle_errors()
+        +batch_predict()
+        +optimize_inference()
     }
     
     class TextProcessor {
@@ -382,6 +392,41 @@ class NLPService:
         
     async def batch_process_news(self, news_list: List[NewsData]) -> List[SentimentAnalysis]:
         """批量处理新闻"""
+
+class FinBERTClient:
+    def __init__(self, model_path: str = "ProsusAI/finbert"):
+        """初始化FinBERT客户端（本地部署）"""
+        
+    def load_model(self) -> None:
+        """加载FinBERT模型到本地内存
+        
+        技术实现：
+        - 使用transformers库加载预训练模型
+        - 支持模型量化以减少内存占用
+        - 配置GPU/CPU推理环境
+        """
+        
+    async def predict_sentiment(self, text: str) -> SentimentResult:
+        """单条文本情感分析"""
+        
+    async def batch_predict(self, texts: List[str]) -> List[SentimentResult]:
+        """批量文本情感分析（性能优化）"""
+        
+    def extract_features(self, text: str) -> torch.Tensor:
+        """提取文本特征向量"""
+        
+    def optimize_inference(self) -> None:
+        """推理性能优化
+        
+        优化策略：
+        - 模型量化（INT8/FP16）
+        - 批处理优化
+        - 缓存机制
+        - 异步推理
+        """
+        
+    def handle_errors(self, error: Exception) -> None:
+        """错误处理和重试机制"""
 ```
 
 ### 2.3 数据质量服务（Quality Service）
@@ -975,3 +1020,17 @@ jobs:
 - 部署简单，适合MVP快速验证
 - 扩展性好，支持后续功能迭代
 - 专业性强，FinBERT模型金融领域效果优秀
+
+#### [2024-12-19] v1.1 FinBERT模型架构修正
+
+**修正内容**：
+1. **架构图修正**：将FinBERT模型从"外部数据源"移动到"NLP处理层"
+2. **技术栈补充**：添加PyTorch、Transformers等本地部署相关技术栈
+3. **模块概述更新**：明确NLP处理层包含本地部署的FinBERT模型
+4. **接口设计完善**：详细设计FinBERTClient的本地部署实现接口
+5. **任务描述优化**：明确任务12中FinBERT模型的本地部署要求
+
+**修正原因**：
+- 根据PRD文档，FinBERT模型应为本地部署，而非外部服务
+- 确保架构设计与产品需求保持一致
+- 明确本地部署的技术实现方案和性能优化策略
