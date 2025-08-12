@@ -366,16 +366,162 @@ class QualityService:
 
         return None
 
+    def validate_news_data(self, data: list[dict]) -> dict:
+        """验证新闻数据质量
+
+        Args:
+            data: 新闻数据列表
+
+        Returns:
+            dict: 验证结果
+        """
+        if not data:
+            return {
+                "is_valid": False,
+                "total_count": 0,
+                "valid_count": 0,
+                "error_count": 0,
+                "warnings": [],
+                "errors": ["新闻数据为空"]
+            }
+
+        total_count = len(data)
+        valid_count = 0
+        errors = []
+        warnings = []
+
+        for i, item in enumerate(data):
+            item_errors = []
+            item_warnings = []
+
+            # 检查必需字段
+            required_fields = ["title", "content"]
+            for field in required_fields:
+                if not item.get(field):
+                    item_errors.append(f"第{i+1}条新闻缺少必需字段: {field}")
+
+            # 检查标题长度
+            title = item.get("title", "")
+            if title and len(title) > 500:
+                item_errors.append(f"第{i+1}条新闻标题过长: {len(title)}字符 > 500字符")
+            elif title and len(title) < 5:
+                item_warnings.append(f"第{i+1}条新闻标题过短: {len(title)}字符 < 5字符")
+
+            # 检查内容长度
+            content = item.get("content", "")
+            if content and len(content) < 10:
+                item_warnings.append(f"第{i+1}条新闻内容过短: {len(content)}字符 < 10字符")
+
+            # 检查来源长度
+            source = item.get("source")
+            if source and len(source) > 100:
+                item_errors.append(f"第{i+1}条新闻来源过长: {len(source)}字符 > 100字符")
+
+            # 检查发布时间格式
+            publish_time = item.get("publish_time")
+            if publish_time:
+                parsed_time = self._parse_date(str(publish_time))
+                if not parsed_time:
+                    item_errors.append(f"第{i+1}条新闻发布时间格式无效: {publish_time}")
+                elif parsed_time > datetime.now():
+                    item_warnings.append(f"第{i+1}条新闻发布时间为未来时间: {publish_time}")
+
+            # 检查URL格式
+            url = item.get("url")
+            if url:
+                if len(url) > 1000:
+                    item_errors.append(f"第{i+1}条新闻URL过长: {len(url)}字符 > 1000字符")
+                elif not url.startswith(("http://", "https://")):
+                    item_warnings.append(f"第{i+1}条新闻URL格式可能无效: {url}")
+
+            # 检查分类长度
+            category = item.get("category")
+            if category and len(category) > 50:
+                item_errors.append(f"第{i+1}条新闻分类过长: {len(category)}字符 > 50字符")
+
+            # 检查情感分数范围
+            sentiment_score = item.get("sentiment_score")
+            if sentiment_score is not None:
+                try:
+                    score = float(sentiment_score)
+                    if not -1 <= score <= 1:
+                        item_errors.append(f"第{i+1}条新闻情感分数超出范围: {score} (应在-1到1之间)")
+                except (ValueError, TypeError):
+                    item_errors.append(f"第{i+1}条新闻情感分数格式无效: {sentiment_score}")
+
+            # 检查情感标签
+            sentiment_label = item.get("sentiment_label")
+            if sentiment_label:
+                valid_labels = ["positive", "negative", "neutral"]
+                if sentiment_label not in valid_labels:
+                    item_warnings.append(f"第{i+1}条新闻情感标签可能无效: {sentiment_label}")
+                if len(sentiment_label) > 20:
+                    item_errors.append(f"第{i+1}条新闻情感标签过长: {len(sentiment_label)}字符 > 20字符")
+
+            # 检查相关股票代码格式
+            related_stocks = item.get("related_stocks")
+            if related_stocks and isinstance(related_stocks, list):
+                for stock_code in related_stocks:
+                    if not self._is_valid_ts_code(stock_code):
+                        item_warnings.append(f"第{i+1}条新闻相关股票代码格式可能无效: {stock_code}")
+
+            # 统计错误和警告
+            if item_errors:
+                errors.extend(item_errors)
+            else:
+                valid_count += 1
+
+            if item_warnings:
+                warnings.extend(item_warnings)
+
+        return {
+            "is_valid": len(errors) == 0,
+            "total_count": total_count,
+            "valid_count": valid_count,
+            "error_count": total_count - valid_count,
+            "warnings": warnings,
+            "errors": errors,
+            "quality_score": valid_count / total_count if total_count > 0 else 0
+        }
+
+    def _parse_date(self, date_str: str) -> datetime | None:
+        """解析日期字符串"""
+        if not date_str:
+            return None
+
+        try:
+            # 尝试多种日期格式
+            for fmt in ["%Y%m%d", "%Y-%m-%d", "%Y/%m/%d"]:
+                try:
+                    return datetime.strptime(date_str, fmt)
+                except ValueError:
+                    continue
+            return None
+        except Exception:
+            return None
+
     def get_data_quality_report(self, data_list: list[dict[str, Any]], data_type: str) -> dict[str, Any]:
         """生成数据质量报告
 
         Args:
             data_list: 数据列表
-            data_type: 数据类型
+            data_type: 数据类型 (stock_basic, daily_data, financial_data, news_data)
 
         Returns:
             数据质量报告
         """
+        if data_type == "news_data":
+            validation_result = self.validate_news_data(data_list)
+            return {
+                "data_type": data_type,
+                "total_records": validation_result.get("total_count", 0),
+                "valid_records": validation_result.get("valid_count", 0),
+                "invalid_records": validation_result.get("error_count", 0),
+                "quality_score": validation_result.get("quality_score", 0),
+                "validation_details": validation_result,
+                "generated_at": datetime.now().isoformat()
+            }
+
         if not data_list:
             return {'total_count': 0, 'valid_count': 0, 'invalid_count': 0, 'quality_rate': 0.0}
 
