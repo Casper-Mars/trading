@@ -184,7 +184,7 @@
 
 ### 阶段五：手动数据采集触发模块 (第5周)
 
-- [ ] 19. 手动采集API接口实现
+- [x] 19. 手动采集API接口实现
   - 实现手动数据采集路由 (api/routes/collection.py)
   - 实现全量数据采集接口 POST /api/v1/collection/full
   - 实现增量数据采集接口 POST /api/v1/collection/incremental
@@ -192,7 +192,7 @@
   - 实现日期范围采集接口 POST /api/v1/collection/range
   - _Requirements: REQ-6.1, REQ-6.2, REQ-6.3, REQ-6.4_
 
-- [ ] 20. 采集任务管理接口实现
+- [x] 20. 采集任务管理接口实现
   - 实现任务状态查询接口 GET /api/v1/collection/tasks/{task_id}
   - 实现任务列表查询接口 GET /api/v1/collection/tasks
   - 实现任务取消接口 DELETE /api/v1/collection/tasks/{task_id}
