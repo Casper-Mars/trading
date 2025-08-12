@@ -284,3 +284,142 @@ class TaskRepository:
                 "type_counts": {},
                 "total_tasks": 0,
             }
+
+    def create_task(self, task: Task) -> int | None:
+        """创建任务
+
+        Args:
+            task: 任务对象
+
+        Returns:
+            创建的任务ID，失败返回None
+        """
+        try:
+            with self._get_session() as session:
+                session.add(task)
+                session.commit()
+                session.refresh(task)
+                logger.info(f"任务创建成功: ID={task.id}, 名称={task.name}")
+                return task.id
+
+        except Exception as e:
+            logger.error(f"创建任务失败: {e}")
+            return None
+
+    def get_pending_tasks_by_priority(self, limit: int = 10) -> list[Task]:
+        """按优先级获取待执行任务
+
+        Args:
+            limit: 返回数量限制
+
+        Returns:
+            按优先级排序的待执行任务列表
+        """
+        try:
+            with self._get_session() as session:
+                from sqlalchemy import or_
+
+                statement = (
+                    select(Task)
+                    .where(
+                        and_(
+                            Task.status == TaskStatus.PENDING,
+                            or_(
+                                Task.scheduled_at.is_(None),
+                                Task.scheduled_at <= datetime.now(),
+                            ),
+                        )
+                    )
+                    .order_by(Task.priority, Task.created_at)
+                    .limit(limit)
+                )
+                tasks = session.exec(statement).all()
+                return list(tasks)
+
+        except Exception as e:
+            logger.error(f"获取待执行任务失败: {e}")
+            return []
+
+    def get_running_tasks_by_type(self, task_type: TaskType) -> list[Task]:
+        """获取指定类型的运行中任务
+
+        Args:
+            task_type: 任务类型
+
+        Returns:
+            运行中的任务列表
+        """
+        try:
+            with self._get_session() as session:
+                statement = (
+                    select(Task)
+                    .where(
+                        and_(
+                            Task.task_type == task_type,
+                            Task.status.in_([TaskStatus.PENDING, TaskStatus.RUNNING])
+                        )
+                    )
+                    .order_by(desc(Task.created_at))
+                )
+                tasks = session.exec(statement).all()
+                return list(tasks)
+
+        except Exception as e:
+            logger.error(f"获取运行中任务失败: 任务类型={task_type}, 错误: {e}")
+            return []
+
+    async def update_task_progress(self, task_id: int, processed_records: int, total_records: int) -> bool:
+        """更新任务进度
+
+        Args:
+            task_id: 任务ID
+            processed_records: 已处理记录数
+            total_records: 总记录数
+
+        Returns:
+            是否更新成功
+        """
+        try:
+            with self._get_session() as session:
+                statement = select(Task).where(Task.id == task_id)
+                task = session.exec(statement).first()
+
+                if not task:
+                    logger.error(f"任务不存在: ID={task_id}")
+                    return False
+
+                # 更新进度信息
+                task.progress = processed_records
+                task.total_count = total_records
+                task.updated_at = datetime.now()
+
+                session.add(task)
+                session.commit()
+
+                logger.info(f"任务进度更新成功: ID={task_id}, 进度={processed_records}/{total_records}")
+                return True
+
+        except Exception as e:
+            logger.error(f"更新任务进度失败: ID={task_id}, 错误: {e}")
+            return False
+
+    def update_task(self, task: Task) -> bool:
+        """更新任务
+
+        Args:
+            task: 任务对象
+
+        Returns:
+            是否更新成功
+        """
+        try:
+            with self._get_session() as session:
+                # 合并任务对象到会话
+                session.merge(task)
+                session.commit()
+                logger.debug(f"任务更新成功: ID={task.id}")
+                return True
+
+        except Exception as e:
+            logger.error(f"更新任务失败: ID={task.id}, 错误: {e}")
+            return False

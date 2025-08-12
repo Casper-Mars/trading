@@ -249,6 +249,8 @@ class Task(SQLModel, table=True):
     params: dict[str, Any] | None = Field(
         default=None, sa_column=Column(JSON), description="任务参数"
     )
+    processed_records: int = Field(default=0, description="已处理记录数")
+    total_records: int | None = Field(default=None, description="总记录数")
     result: dict[str, Any] | None = Field(
         default=None, sa_column=Column(JSON), description="任务结果"
     )

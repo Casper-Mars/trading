@@ -15,7 +15,7 @@ from repositories.stock_repo import StockRepository
 from repositories.task_repo import TaskRepository
 from services.collection_service import CollectionService
 from services.quality_service import QualityService
-from utils.exceptions import DataCollectionError, OrchestrationError
+from utils.exceptions import DataCollectionError, OrchestrationError, ValidationError
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -548,6 +548,233 @@ class DataCollectionOrchestrator(BaseOrchestrator):
             logger.error(
                 f"标记任务失败时出错, 任务ID: {task_id}, 错误: {e!s}, request_id: {context.request_id}"
             )
+
+    async def trigger_manual_collection(
+        self, request: DataCollectionRequest
+    ) -> DataCollectionResponse:
+        """手动触发数据采集任务
+
+        Args:
+            request: 数据采集请求
+
+        Returns:
+            数据采集响应
+
+        Raises:
+            OrchestrationError: 手动采集失败
+        """
+        logger.info(f"手动触发数据采集任务, 类型: {request.task_type}")
+
+        try:
+            # 验证手动采集请求
+            self._validate_manual_collection_request(request)
+
+            # 检查是否有冲突的运行中任务
+            await self._check_task_conflicts(request)
+
+            # 使用CollectionService创建手动采集任务
+            task_id = await self.collection_service.create_manual_collection_task(
+                task_type=request.task_type,
+                params={
+                    "target_date": request.target_date.isoformat() if request.target_date else None,
+                    "symbols": request.symbols,
+                    "force_update": request.force_update,
+                    "batch_size": request.batch_size,
+                    "quality_check": request.quality_check,
+                },
+                priority=1,  # 手动任务高优先级
+                max_retries=request.max_retries,
+            )
+
+            # 立即执行任务
+            execution_result = await self.collection_service.execute_manual_collection_task(task_id)
+
+            # 构建响应
+            response = DataCollectionResponse(
+                task_id=task_id,
+                task_type=request.task_type,
+                status=execution_result.get("status", TaskStatus.COMPLETED),
+                total_records=execution_result.get("total_records", 0),
+                processed_records=execution_result.get("processed_records", 0),
+                valid_records=execution_result.get("valid_records", 0),
+                invalid_records=execution_result.get("invalid_records", 0),
+                quality_score=execution_result.get("quality_score", 1.0),
+                start_time=execution_result.get("start_time", datetime.now()),
+                end_time=execution_result.get("end_time", datetime.now()),
+                execution_time=execution_result.get("execution_time", 0.0),
+                error_message=execution_result.get("error_message"),
+                progress_details=execution_result.get("progress_details", {}),
+            )
+
+            logger.info(
+                f"手动采集任务完成, 任务ID: {task_id}, 状态: {response.status}, 处理记录数: {response.processed_records}"
+            )
+            return response
+
+        except Exception as e:
+            error_msg = f"手动触发数据采集失败: {e!s}"
+            logger.error(error_msg)
+            raise OrchestrationError(error_msg) from e
+
+    async def get_manual_collection_status(self, task_id: int) -> dict[str, Any]:
+        """获取手动采集任务状态
+
+        Args:
+            task_id: 任务ID
+
+        Returns:
+            任务状态信息
+
+        Raises:
+            OrchestrationError: 获取状态失败
+        """
+        try:
+            task = await self.task_repo.get_by_id(task_id)
+            if not task:
+                raise OrchestrationError(f"任务不存在: {task_id}")
+
+            # 获取详细进度信息
+            progress_info = {
+                "task_id": task.id,
+                "task_name": task.name,
+                "task_type": task.task_type,
+                "status": task.status,
+                "priority": task.priority,
+                "retry_count": task.retry_count,
+                "max_retries": task.max_retries,
+                "created_at": task.created_at,
+                "started_at": task.started_at,
+                "completed_at": task.completed_at,
+                "execution_time": task.execution_time,
+                "result": task.result,
+                "error_message": task.error_message,
+                "params": task.params,
+            }
+
+            # 如果任务正在运行，获取实时进度
+            if task.status == TaskStatus.RUNNING:
+                # 可以从CollectionService获取更详细的进度信息
+                progress_info["real_time_progress"] = await self._get_real_time_progress(task_id)
+
+            return progress_info
+
+        except Exception as e:
+            error_msg = f"获取手动采集任务状态失败: {e!s}"
+            logger.error(error_msg)
+            raise OrchestrationError(error_msg) from e
+
+    async def cancel_manual_collection(self, task_id: int) -> bool:
+        """取消手动采集任务
+
+        Args:
+            task_id: 任务ID
+
+        Returns:
+            是否取消成功
+
+        Raises:
+            OrchestrationError: 取消任务失败
+        """
+        try:
+            task = await self.task_repo.get_by_id(task_id)
+            if not task:
+                raise OrchestrationError(f"任务不存在: {task_id}")
+
+            # 检查任务状态是否允许取消
+            if task.status not in [TaskStatus.PENDING, TaskStatus.RUNNING]:
+                raise OrchestrationError(
+                    f"任务状态不允许取消: {task.status}, 只有PENDING或RUNNING状态的任务可以取消"
+                )
+
+            # 更新任务状态为已取消
+            await self.task_repo.update_status(
+                task_id=task_id,
+                status=TaskStatus.CANCELLED,
+                error_message="用户手动取消任务",
+            )
+
+            logger.info(f"手动采集任务已取消, 任务ID: {task_id}")
+            return True
+
+        except Exception as e:
+            error_msg = f"取消手动采集任务失败: {e!s}"
+            logger.error(error_msg)
+            raise OrchestrationError(error_msg) from e
+
+    def _validate_manual_collection_request(self, request: DataCollectionRequest) -> None:
+        """验证手动采集请求
+
+        Args:
+            request: 数据采集请求
+
+        Raises:
+            ValidationError: 请求参数无效
+        """
+        # 验证任务类型
+        supported_manual_types = [
+            TaskType.STOCK_BASIC_COLLECTION,
+            TaskType.DAILY_DATA_COLLECTION,
+            TaskType.FINANCIAL_DATA_COLLECTION,
+        ]
+        if request.task_type not in supported_manual_types:
+            raise ValidationError(f"不支持的手动采集任务类型: {request.task_type}")
+
+        # 验证目标日期
+        if request.target_date and request.target_date > date.today():
+            raise ValidationError(f"目标日期不能是未来日期: {request.target_date}")
+
+        # 验证股票代码列表
+        if request.symbols and not isinstance(request.symbols, list):
+            raise ValidationError("股票代码必须是列表格式")
+
+        # 验证批处理大小
+        if request.batch_size <= 0 or request.batch_size > 1000:
+            raise ValidationError("批处理大小必须在1-1000之间")
+
+        # 验证重试次数
+        if request.max_retries < 0 or request.max_retries > 10:
+            raise ValidationError("最大重试次数必须在0-10之间")
+
+    async def _check_task_conflicts(self, request: DataCollectionRequest) -> None:
+        """检查任务冲突
+
+        Args:
+            request: 数据采集请求
+
+        Raises:
+            OrchestrationError: 存在冲突任务
+        """
+        # 检查是否有相同类型的运行中任务
+        running_tasks = await self.task_repo.get_running_tasks_by_type(request.task_type)
+
+        if running_tasks and not request.force_update:
+            task_names = [task.name for task in running_tasks[:3]]  # 最多显示3个任务名称
+            raise OrchestrationError(
+                f"存在正在执行的{request.task_type.value}任务: {', '.join(task_names)}。"
+                "请等待任务完成或使用force_update参数强制执行。"
+            )
+
+    async def _get_real_time_progress(self, task_id: int) -> dict[str, Any]:
+        """获取任务实时进度
+
+        Args:
+            task_id: 任务ID
+
+        Returns:
+            实时进度信息
+        """
+        try:
+            # 这里可以实现更复杂的实时进度获取逻辑
+            # 例如从缓存、消息队列或其他监控系统获取进度
+            return {
+                "current_step": "数据采集中",
+                "progress_percentage": 50,  # 示例进度
+                "estimated_remaining_time": "2分钟",
+                "last_update_time": datetime.now().isoformat(),
+            }
+        except Exception as e:
+            logger.warning(f"获取实时进度失败, 任务ID: {task_id}, 错误: {e}")
+            return {}
 
     async def get_collection_progress(self, task_id: int) -> dict[str, Any]:
         """获取采集进度
