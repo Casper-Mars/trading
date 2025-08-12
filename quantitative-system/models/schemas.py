@@ -559,6 +559,22 @@ class SentimentBatchResponse(BaseSchema):
     processing_time: Decimal = Field(..., description="总处理时间(秒)")
 
 
+class SentimentStatisticsResponse(BaseSchema):
+    """情感统计响应Schema"""
+
+    total_count: int = Field(..., description="总数量")
+    positive_count: int = Field(..., description="正面情感数量")
+    negative_count: int = Field(..., description="负面情感数量")
+    neutral_count: int = Field(..., description="中性情感数量")
+    positive_ratio: Decimal = Field(..., description="正面情感比例")
+    negative_ratio: Decimal = Field(..., description="负面情感比例")
+    neutral_ratio: Decimal = Field(..., description="中性情感比例")
+    avg_sentiment_score: Decimal = Field(..., description="平均情感分数")
+    avg_confidence: Decimal = Field(..., description="平均置信度")
+    date_range: dict[str, str] | None = Field(None, description="日期范围")
+    category_stats: dict[str, Any] | None = Field(None, description="分类统计")
+
+
 # ============= 股票基础信息相关Schema =============
 
 

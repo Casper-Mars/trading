@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import Select
 
-from models.database import News, SentimentAnalysis, Stock, StockDaily
+from models.database import NewsData, SentimentAnalysis, StockBasicInfo, StockDailyData
 from models.enums import CacheType, SentimentType
 from repositories.cache_repo import CacheRepo
 from utils.exceptions import ValidationError
@@ -49,7 +49,7 @@ class SortParams(BaseModel):
     """排序参数模型"""
 
     field: str = Field(description="排序字段")
-    order: str = Field(default="desc", regex="^(asc|desc)$", description="排序方向")
+    order: str = Field(default="desc", pattern="^(asc|desc)$", description="排序方向")
 
     @validator("field")
     def validate_field(cls, v):  # noqa: N805
@@ -279,11 +279,11 @@ class QueryService:
 
         try:
             # 构建基础查询
-            query = session.query(Stock)
+            query = session.query(StockBasicInfo)
 
             # 应用过滤条件
             if filters:
-                query = self._apply_filters(query, filters, Stock)
+                query = self._apply_filters(query, filters, StockBasicInfo)
 
             # 获取总数
             total_query = query.statement.with_only_columns(func.count())
@@ -291,7 +291,7 @@ class QueryService:
             total = total_result.scalar()
 
             # 应用排序
-            query = self._apply_sorting(query, sort_params, Stock)
+            query = self._apply_sorting(query, sort_params, StockBasicInfo)
 
             # 应用分页
             query = query.offset(pagination.offset).limit(pagination.limit)
@@ -373,11 +373,11 @@ class QueryService:
 
         try:
             # 构建基础查询
-            query = session.query(StockDaily).options(selectinload(StockDaily.stock))
+            query = session.query(StockDailyData).options(selectinload(StockDailyData.stock))
 
             # 应用过滤条件
             if filters:
-                query = self._apply_filters(query, filters, StockDaily)
+                query = self._apply_filters(query, filters, StockDailyData)
 
             # 获取总数
             total_query = query.statement.with_only_columns(func.count())
@@ -385,7 +385,7 @@ class QueryService:
             total = total_result.scalar()
 
             # 应用排序
-            query = self._apply_sorting(query, sort_params, StockDaily)
+            query = self._apply_sorting(query, sort_params, StockDailyData)
 
             # 应用分页
             query = query.offset(pagination.offset).limit(pagination.limit)
@@ -474,11 +474,11 @@ class QueryService:
 
         try:
             # 构建基础查询
-            query = session.query(News).options(selectinload(News.sentiment_analysis))
+            query = session.query(NewsData).options(selectinload(NewsData.sentiment_analysis))
 
             # 应用过滤条件
             if filters:
-                query = self._apply_filters(query, filters, News)
+                query = self._apply_filters(query, filters, NewsData)
 
             # 获取总数
             total_query = query.statement.with_only_columns(func.count())
@@ -486,7 +486,7 @@ class QueryService:
             total = total_result.scalar()
 
             # 应用排序
-            query = self._apply_sorting(query, sort_params, News)
+            query = self._apply_sorting(query, sort_params, NewsData)
 
             # 应用分页
             query = query.offset(pagination.offset).limit(pagination.limit)
@@ -575,13 +575,13 @@ class QueryService:
             # 应用过滤条件
             if filters:
                 # 通过关联的新闻表进行过滤
-                query = query.join(News)
+                query = query.join(NewsData)
                 if filters.stock_code:
-                    query = query.filter(News.stock_codes.contains(filters.stock_code))
+                    query = query.filter(NewsData.stock_codes.contains(filters.stock_code))
                 if filters.start_date:
-                    query = query.filter(News.published_at >= filters.start_date)
+                    query = query.filter(NewsData.published_at >= filters.start_date)
                 if filters.end_date:
-                    query = query.filter(News.published_at <= filters.end_date)
+                    query = query.filter(NewsData.published_at <= filters.end_date)
 
             # 统计各种情感类型的数量
             sentiment_counts = await session.execute(

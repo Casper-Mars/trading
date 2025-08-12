@@ -768,6 +768,9 @@ class FinancialData(SQLModel, table=True):
     )
 
 
+# 删除重复的表定义，使用已存在的NewsData、StockBasicInfo和StockDailyData
+
+
 class SentimentAnalysis(SQLModel, table=True):
     """情感分析结果表"""
 

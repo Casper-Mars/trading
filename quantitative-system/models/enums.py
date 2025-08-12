@@ -156,6 +156,14 @@ class LogLevel(IntEnum):
     CRITICAL = 5  # 严重错误
 
 
+class SentimentType(IntEnum):
+    """情感类型"""
+
+    POSITIVE = 1  # 积极
+    NEGATIVE = 2  # 消极
+    NEUTRAL = 3  # 中性
+
+
 class CacheType(IntEnum):
     """缓存类型"""
 
@@ -167,6 +175,7 @@ class CacheType(IntEnum):
     API_RESPONSE = 6  # API响应缓存
     CALCULATION_RESULT = 7  # 计算结果缓存
     TEMPORARY = 8  # 临时缓存
+    QUERY_RESULT = 9  # 查询结果缓存
 
 
 class APIStatus(IntEnum):

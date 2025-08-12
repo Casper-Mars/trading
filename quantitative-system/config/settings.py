@@ -63,10 +63,11 @@ class Settings(BaseSettings):
     log_rotation: str = "1 day"
     log_retention: str = "30 days"
 
-    # API配置
+    # API服务配置
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     api_reload: bool = False
+    allowed_origins: list[str] = ["*"]  # CORS允许的源
 
     # 安全配置
     secret_key: str = "your-secret-key-change-in-production"  # noqa: S105

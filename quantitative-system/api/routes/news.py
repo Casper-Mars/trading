@@ -12,7 +12,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config.database import get_db
+from config.database import get_session
 from models.schemas import (
     NewsDataResponse,
     PaginatedNewsDataResponse,
@@ -55,7 +55,7 @@ async def get_news(
         "publish_time", description="排序字段：publish_time, title, source"
     ),
     sort_order: str = Query("desc", description="排序方向：asc-升序，desc-降序"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
 ) -> PaginatedNewsDataResponse:
     """查询新闻数据
 
@@ -158,7 +158,7 @@ async def get_sentiment_analysis(
         "created_at", description="排序字段：created_at, confidence, sentiment_score"
     ),
     sort_order: str = Query("desc", description="排序方向：asc-升序，desc-降序"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
 ) -> PaginatedSentimentAnalysisResponse:
     """查询情感分析结果
 
@@ -253,7 +253,7 @@ async def get_sentiment_statistics(
         "sentiment",
         description="分组方式：sentiment-按情感类型，date-按日期，stock-按股票",
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
 ) -> SentimentStatisticsResponse:
     """获取情感统计数据
 
@@ -315,7 +315,7 @@ async def get_sentiment_statistics(
 )
 async def get_news_detail(
     news_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
 ) -> NewsDataResponse:
     """获取单条新闻详情
 
@@ -382,7 +382,7 @@ async def get_news_detail(
 )
 async def get_news_sentiment(
     news_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
 ) -> SentimentAnalysisResponse:
     """获取新闻情感分析结果
 

@@ -37,6 +37,24 @@ class DataValidationError(QuantitativeSystemError):
     pass
 
 
+class ValidationError(QuantitativeSystemError):
+    """验证错误"""
+
+    pass
+
+
+class BusinessError(QuantitativeSystemError):
+    """业务错误"""
+
+    pass
+
+
+class DataNotFoundError(QuantitativeSystemError):
+    """数据未找到错误"""
+
+    pass
+
+
 class BacktestError(QuantitativeSystemError):
     """回测错误"""
 

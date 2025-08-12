@@ -16,6 +16,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from api.routes import api_router
@@ -41,8 +42,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # 启动时的初始化逻辑
     try:
         # 测试数据库连接
-        async with get_db_session() as session:
-            await session.execute("SELECT 1")
+        with get_db_session() as session:
+            session.execute(text("SELECT 1"))
         logger.info("数据库连接测试成功")
     except Exception as e:
         logger.error(f"数据库连接测试失败: {e}")

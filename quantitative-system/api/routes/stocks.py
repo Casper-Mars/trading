@@ -12,7 +12,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config.database import get_db
+from config.database import get_session
 from models.schemas import (
     FinancialDataResponse,
     PaginatedFinancialDataResponse,
@@ -62,7 +62,7 @@ async def get_stocks_basic(
         "ts_code", description="排序字段：ts_code, symbol, name, list_date"
     ),
     sort_order: str = Query("asc", description="排序方向：asc-升序，desc-降序"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
 ) -> PaginatedStockBasicInfoResponse:
     """查询股票基础信息
 
@@ -167,7 +167,7 @@ async def get_stocks_daily(
         "trade_date", description="排序字段：trade_date, ts_code, close, vol"
     ),
     sort_order: str = Query("desc", description="排序方向：asc-升序，desc-降序"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
 ) -> PaginatedStockDailyDataResponse:
     """查询股票日线数据
 
@@ -257,7 +257,7 @@ async def get_stocks_financial(
         "end_date", description="排序字段：end_date, ts_code, total_revenue, net_profit"
     ),
     sort_order: str = Query("desc", description="排序方向：asc-升序，desc-降序"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
 ) -> PaginatedFinancialDataResponse:
     """查询股票财务数据
 
@@ -340,7 +340,7 @@ async def get_stocks_financial(
 )
 async def get_stock_basic(
     ts_code: str,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
 ) -> StockBasicInfoResponse:
     """获取单个股票基础信息
 
@@ -403,7 +403,7 @@ async def get_stock_basic(
 )
 async def get_stock_latest_daily(
     ts_code: str,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_session),
 ) -> StockDailyDataResponse:
     """获取股票最新日线数据
 
