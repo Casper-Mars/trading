@@ -1,182 +1,161 @@
-# Requirements Document
+# Requirements Document - 数据采集子系统
 
-## Introduction
+## 文档信息
 
-数据采集子系统是量化交易平台的核心基础设施，为平台内的回测系统、量化系统提供统一的数据服务。作为平台的数据中枢，该子系统负责从外部数据源采集金融市场数据，进行数据处理和质量管控，并通过标准化的RESTful API为上层业务系统提供高可用的数据服务。系统需要支持股票基础数据、行情数据、财务数据、新闻数据、宏观经济数据等多种数据类型的采集和查询，确保数据的准确性、完整性和时效性。
+| 项目    | 内容          |
+| ----- | ----------- |
+| 子系统名称 | 量化平台数据采集子系统 |
+| 文档版本  | v1.0        |
+| 创建日期  | 2024-12-19  |
+| 最后更新  | 2024-12-19  |
+| 需求分析师 | AI Assistant |
+| 文档状态  | 待评审         |
+| 所属平台  | 量化交易平台      |
 
-## Requirements
+## 1. 项目介绍
 
-### Requirement 1
+数据采集子系统是量化交易平台的核心基础设施，负责从多个数据源采集金融数据，通过FinBERT模型进行智能NLP处理，并为回测系统和量化系统提供统一的RESTful API服务。本文档使用EARS语法（Easy Approach to Requirements Syntax）定义系统的功能需求和验收标准。
 
-**User Story:** 作为回测系统，我希望能够查询股票的基础信息数据，以便我可以获取股票的基本属性信息用于策略回测。
+### 1.1 系统目标
 
-#### Acceptance Criteria
+- 构建MVP版本的数据采集和处理系统
+- 提供多维度金融数据（技术面、基本面、市场面、消息面）
+- 实现智能新闻情感分析和实体识别
+- 为上层系统提供标准化数据接口
 
-1. WHEN 回测系统请求股票基础数据 THEN 系统 SHALL 提供股票代码、名称、交易所、行业、板块等基础信息
-2. WHEN 回测系统指定查询条件 THEN 系统 SHALL 支持按交易所、行业、板块、状态等维度进行筛选
-3. WHEN 回测系统请求分页查询 THEN 系统 SHALL 支持分页返回结果，默认每页100条，最大1000条
-4. WHEN 回测系统查询特定股票详情 THEN 系统 SHALL 返回该股票的完整基础信息
-5. IF 查询参数无效 THEN 系统 SHALL 返回详细的错误信息和错误码
+### 1.2 核心用户
 
-### Requirement 2
+- **回测系统**：需要历史全量数据进行策略回测
+- **量化系统**：需要实时和日度数据进行策略分析
+- **开发人员**：需要API接口进行数据查询和集成
 
-**User Story:** 作为量化系统，我希望能够获取实时和历史的行情数据，以便我可以进行策略计算和交易决策。
+## 2. 功能需求
 
-#### Acceptance Criteria
+### Requirement 1: Tushare数据采集
 
-1. WHEN 量化系统请求行情数据 THEN 系统 SHALL 提供开盘价、最高价、最低价、收盘价、成交量、成交额等行情信息
-2. WHEN 量化系统指定时间周期 THEN 系统 SHALL 支持1分钟、5分钟、15分钟、30分钟、1小时、日线等多种周期
-3. WHEN 量化系统指定时间范围 THEN 系统 SHALL 返回指定时间段内的历史行情数据
-4. WHEN 量化系统请求批量查询 THEN 系统 SHALL 支持最多50个股票代码的批量查询
-5. WHEN 量化系统需要实时数据 THEN 系统 SHALL 提供毫秒级响应的实时行情查询
-6. IF 请求的数据量超过限制 THEN 系统 SHALL 返回错误提示并建议分批查询
-
-### Requirement 3
-
-**User Story:** 作为回测系统，我希望能够获取上市公司的财务数据，以便我可以进行基本面分析和价值投资策略回测。
-
-#### Acceptance Criteria
-
-1. WHEN 回测系统请求财务数据 THEN 系统 SHALL 提供利润表、资产负债表、现金流量表的核心财务指标
-2. WHEN 回测系统指定报告期类型 THEN 系统 SHALL 支持季报(Q1/Q2/Q3)和年报(A)的查询
-3. WHEN 回测系统请求财务比率 THEN 系统 SHALL 提供ROE、ROA、毛利率、净利率、流动比率等财务比率指标
-4. WHEN 回测系统指定时间范围 THEN 系统 SHALL 返回指定报告期范围内的财务数据
-5. WHEN 回测系统指定返回字段 THEN 系统 SHALL 支持按需返回特定的财务指标字段
-6. IF 财务数据缺失 THEN 系统 SHALL 在响应中标明数据状态并提供可用的替代数据
-
-### Requirement 4
-
-**User Story:** 作为量化系统，我希望能够获取结构化的新闻和消息面数据，以便我可以进行情感分析和事件驱动策略。
+**User Story:** 作为量化系统，我希望能够从Tushare获取全面的股票数据，以便我可以进行技术分析和基本面分析。
 
 #### Acceptance Criteria
 
-1. WHEN 量化系统请求新闻数据 THEN 系统 SHALL 提供新闻标题、内容、发布时间、相关股票等信息
-2. WHEN 量化系统指定筛选条件 THEN 系统 SHALL 支持按股票代码、行业、新闻分类、情感倾向进行筛选
-3. WHEN 量化系统请求情感分析结果 THEN 系统 SHALL 提供正面、负面、中性的情感标签和情感得分
-4. WHEN 量化系统查询新闻详情 THEN 系统 SHALL 返回完整的新闻内容和NLP分析结果
-5. WHEN 量化系统请求重要新闻 THEN 系统 SHALL 支持按重要程度(1-5级)进行筛选
-6. IF 新闻内容包含敏感信息 THEN 系统 SHALL 进行适当的内容过滤和标记
+1. **REQ-1.1** WHEN 系统启动初始化时 THEN 系统 SHALL 采集全A股的基础信息数据
+2. **REQ-1.2** WHEN 执行日度数据更新时 THEN 系统 SHALL 采集最新交易日的行情数据
+3. **REQ-1.3** WHEN 采集股票基础信息时 THEN 系统 SHALL 包含股票代码、名称、行业分类、上市日期等字段
+4. **REQ-1.4** WHEN 采集行情数据时 THEN 系统 SHALL 包含开高低收价格、成交量、成交额等字段
+5. **REQ-1.5** WHEN 采集财务数据时 THEN 系统 SHALL 包含利润表、资产负债表、现金流量表数据
+6. **REQ-1.6** IF Tushare API调用失败 THEN 系统 SHALL 记录错误日志并进行重试机制
+7. **REQ-1.7** WHEN 数据采集完成时 THEN 系统 SHALL 验证数据完整性和格式正确性
 
-### Requirement 5
+### Requirement 2: 新闻数据采集
 
-**User Story:** 作为量化系统，我希望能够获取宏观经济数据，以便我可以进行宏观策略分析和市场环境判断。
-
-#### Acceptance Criteria
-
-1. WHEN 量化系统请求宏观指标列表 THEN 系统 SHALL 提供所有可用的宏观经济指标及其描述
-2. WHEN 量化系统查询宏观数据 THEN 系统 SHALL 提供GDP、CPI、PMI等关键宏观经济指标数据
-3. WHEN 量化系统指定周期类型 THEN 系统 SHALL 支持日度、周度、月度、季度、年度等不同周期的数据
-4. WHEN 量化系统指定时间范围 THEN 系统 SHALL 返回指定时间段内的宏观数据
-5. WHEN 量化系统请求多个指标 THEN 系统 SHALL 支持批量查询多个宏观经济指标
-6. IF 宏观数据更新延迟 THEN 系统 SHALL 在响应中标明数据的最后更新时间
-
-### Requirement 6
-
-**User Story:** 作为量化系统，我希望能够获取市场情绪和资金流向数据，以便我可以进行市场情绪分析和资金面策略。
+**User Story:** 作为量化系统，我希望能够获取金融新闻数据，以便我可以分析市场情绪和消息面影响。
 
 #### Acceptance Criteria
 
-1. WHEN 量化系统请求市场情绪指标 THEN 系统 SHALL 提供恐慌指数、投资者情绪指数等市场情绪数据
-2. WHEN 量化系统查询资金流向 THEN 系统 SHALL 提供北向资金、融资融券等资金流向数据
-3. WHEN 量化系统指定时间范围 THEN 系统 SHALL 返回指定时间段内的情绪和资金数据
-4. WHEN 量化系统请求特定指标 THEN 系统 SHALL 支持按情绪指标类型进行筛选查询
-5. WHEN 量化系统需要实时数据 THEN 系统 SHALL 提供当日最新的市场情绪和资金流向数据
-6. IF 情绪数据异常 THEN 系统 SHALL 提供数据质量标识和异常说明
+1. **REQ-2.1** WHEN 执行新闻采集任务时 THEN 系统 SHALL 从权威金融网站爬取相关新闻
+2. **REQ-2.2** WHEN 爬取新闻数据时 THEN 系统 SHALL 包含标题、内容、来源、发布时间等字段
+3. **REQ-2.3** WHEN 处理新闻数据时 THEN 系统 SHALL 进行文本清洗和去重处理
+4. **REQ-2.4** WHEN 新闻数据处理完成时 THEN 系统 SHALL 将新闻与相关股票代码进行关联
+5. **REQ-2.5** IF 网站访问被限制 THEN 系统 SHALL 遵守robots.txt规则并实施访问频率控制
+6. **REQ-2.6** WHEN 新闻采集异常时 THEN 系统 SHALL 记录详细错误信息并继续处理其他新闻
 
-### Requirement 7
+### Requirement 3: NLP智能处理
 
-**User Story:** 作为量化系统，我希望能够获取行业数据和行业排行信息，以便我可以进行行业轮动和板块策略分析。
-
-#### Acceptance Criteria
-
-1. WHEN 量化系统请求行业列表 THEN 系统 SHALL 提供所有行业的代码、名称和分类信息
-2. WHEN 量化系统查询行业数据 THEN 系统 SHALL 提供行业指数、涨跌幅、成交量等行业统计数据
-3. WHEN 量化系统请求行业排行 THEN 系统 SHALL 支持按涨跌幅、资金净流入等指标进行排序
-4. WHEN 量化系统指定时间范围 THEN 系统 SHALL 返回指定时间段内的行业数据
-5. WHEN 量化系统指定返回字段 THEN 系统 SHALL 支持按需返回特定的行业指标字段
-6. IF 行业分类发生变更 THEN 系统 SHALL 及时更新行业信息并保持历史数据的一致性
-
-### Requirement 8
-
-**User Story:** 作为系统管理员，我希望能够管理数据采集任务，以便我可以控制数据采集的频率、范围和状态。
+**User Story:** 作为量化系统，我希望能够获取新闻的情感分析结果，以便我可以量化消息面对股价的影响。
 
 #### Acceptance Criteria
 
-1. WHEN 管理员创建采集任务 THEN 系统 SHALL 支持配置任务类型、采集对象、调度规则和参数
-2. WHEN 管理员查询任务列表 THEN 系统 SHALL 显示所有任务的状态、类型、最后执行时间等信息
-3. WHEN 管理员查询任务详情 THEN 系统 SHALL 提供任务的完整配置信息和执行历史
-4. WHEN 管理员更新任务配置 THEN 系统 SHALL 支持修改任务的调度规则、参数和启用状态
-5. WHEN 管理员删除任务 THEN 系统 SHALL 停止任务执行并清理相关资源
-6. WHEN 管理员手动执行任务 THEN 系统 SHALL 立即启动任务执行并返回执行状态
-7. IF 任务执行失败 THEN 系统 SHALL 记录详细的错误日志并支持重试机制
+1. **REQ-3.1** WHEN 新闻数据入库后 THEN 系统 SHALL 使用FinBERT模型进行情感分析
+2. **REQ-3.2** WHEN 执行情感分析时 THEN 系统 SHALL 输出情感倾向（正面/负面/中性）和置信度
+3. **REQ-3.3** WHEN 处理新闻文本时 THEN 系统 SHALL 识别文中的公司、人物、事件等实体
+4. **REQ-3.4** WHEN 完成NLP处理时 THEN 系统 SHALL 提取新闻的核心关键词
+5. **REQ-3.5** WHEN 计算情感强度时 THEN 系统 SHALL 提供量化的情感强度级别（1-10）
+6. **REQ-3.6** IF FinBERT模型处理失败 THEN 系统 SHALL 记录错误并标记该新闻为待处理状态
+7. **REQ-3.7** WHEN NLP处理完成时 THEN 系统 SHALL 将结果存储到sentiment_analysis表中
 
-### Requirement 9
+### Requirement 4: 数据质量管控
 
-**User Story:** 作为系统管理员，我希望能够监控系统的健康状态和运行情况，以便我可以及时发现和处理系统问题。
-
-#### Acceptance Criteria
-
-1. WHEN 管理员检查系统健康状态 THEN 系统 SHALL 提供数据库、缓存、外部API等组件的连接状态
-2. WHEN 管理员查询系统统计信息 THEN 系统 SHALL 显示数据量统计、更新时间等关键指标
-3. WHEN 管理员查询数据同步状态 THEN 系统 SHALL 提供各类数据的最后同步时间和同步状态
-4. WHEN 系统出现异常 THEN 系统 SHALL 自动记录错误日志并触发告警通知
-5. WHEN 管理员查看系统日志 THEN 系统 SHALL 提供结构化的日志查询和过滤功能
-6. IF 系统负载过高 THEN 系统 SHALL 启动限流机制并通知管理员
-
-### Requirement 10
-
-**User Story:** 作为数据采集子系统，我希望能够保证数据质量和完整性，以便我可以为上层业务系统提供可靠的数据服务。
+**User Story:** 作为系统管理员，我希望系统能够自动检测和处理数据质量问题，以便确保数据的准确性和可靠性。
 
 #### Acceptance Criteria
 
-1. WHEN 系统接收外部数据 THEN 系统 SHALL 进行格式验证、完整性检查和业务规则验证
-2. WHEN 系统发现数据异常 THEN 系统 SHALL 自动标记异常数据并触发人工审核流程
-3. WHEN 系统处理重复数据 THEN 系统 SHALL 自动去重并保留最新的有效数据
-4. WHEN 系统检测到数据缺失 THEN 系统 SHALL 尝试从历史数据补齐或从备用数据源获取
-5. WHEN 系统数据更新延迟 THEN 系统 SHALL 在延迟超过30分钟时发送告警通知
-6. WHEN 系统提供数据服务 THEN 系统 SHALL 确保数据完整性达到99.9%
-7. IF 数据质量检查失败 THEN 系统 SHALL 暂停相关数据的对外服务直到问题解决
+1. **REQ-4.1** WHEN 数据入库前 THEN 系统 SHALL 验证数据格式和必填字段完整性
+2. **REQ-4.2** WHEN 检测到异常数据时 THEN 系统 SHALL 自动进行数据清洗和修正
+3. **REQ-4.3** WHEN 发现数据缺失时 THEN 系统 SHALL 记录缺失情况并尝试补充数据
+4. **REQ-4.4** WHEN 数据验证失败时 THEN 系统 SHALL 生成详细的错误报告
+5. **REQ-4.5** IF 数据质量问题严重 THEN 系统 SHALL 发送告警通知
+6. **REQ-4.6** WHEN 执行数据清洗时 THEN 系统 SHALL 保留原始数据的备份
 
-### Requirement 11
+### Requirement 5: HTTP API服务
 
-**User Story:** 作为数据采集子系统，我希望能够提供高性能的API服务，以便我可以满足平台内各系统的并发访问需求。
-
-#### Acceptance Criteria
-
-1. WHEN 系统接收API请求 THEN 系统 SHALL 在100ms内响应常规查询请求
-2. WHEN 系统面临高并发访问 THEN 系统 SHALL 支持每秒500+的并发查询请求
-3. WHEN 系统处理热点数据查询 THEN 系统 SHALL 使用Redis缓存提高响应速度
-4. WHEN 系统接收批量查询请求 THEN 系统 SHALL 支持批量数据导出和分页查询
-5. WHEN 系统负载过高 THEN 系统 SHALL 启动限流和降级机制保护系统稳定性
-6. WHEN 系统提供服务 THEN 系统 SHALL 保证99.9%的服务可用性
-7. IF API请求参数错误 THEN 系统 SHALL 返回详细的错误码和错误信息
-
-### Requirement 12
-
-**User Story:** 作为数据采集子系统，我希望能够对新闻数据进行智能清洗和关联处理，以便量化系统能够直接获取与特定股票和行业相关的结构化新闻数据。
+**User Story:** 作为回测系统和量化系统，我希望通过标准的RESTful API获取数据，以便我可以集成到自己的业务流程中。
 
 #### Acceptance Criteria
 
-1. WHEN 系统接收原始新闻数据 THEN 系统 SHALL 进行内容预处理，包括去除HTML标签、特殊字符清理和格式标准化
-2. WHEN 系统处理新闻内容 THEN 系统 SHALL 使用NLP技术进行实体识别，提取公司名称、股票代码、行业关键词等实体信息
-3. WHEN 系统识别出实体信息 THEN 系统 SHALL 将新闻内容与系统内的股票代码进行精确匹配和关联
-4. WHEN 系统进行股票关联 THEN 系统 SHALL 支持多种匹配方式，包括股票代码、公司全称、简称和别名匹配
-5. WHEN 系统处理行业相关新闻 THEN 系统 SHALL 将新闻与相应的行业分类进行关联映射
-6. WHEN 系统完成新闻清洗 THEN 系统 SHALL 为每条新闻生成结构化的关联标签，包括相关股票列表和行业分类
-7. WHEN 系统发现重复或相似新闻 THEN 系统 SHALL 进行去重处理并保留信息最完整的版本
-8. IF 新闻内容无法关联到具体股票或行业 THEN 系统 SHALL 标记为通用市场新闻并进行分类存储
+1. **REQ-5.1** WHEN 客户端请求股票基础信息时 THEN 系统 SHALL 返回JSON格式的股票数据
+2. **REQ-5.2** WHEN 客户端请求行情数据时 THEN 系统 SHALL 支持按股票代码和日期范围查询
+3. **REQ-5.3** WHEN 客户端请求财务数据时 THEN 系统 SHALL 支持按股票代码和报告期查询
+4. **REQ-5.4** WHEN 客户端请求新闻数据时 THEN 系统 SHALL 返回新闻内容和情感分析结果
+5. **REQ-5.5** WHEN 客户端请求情感分析数据时 THEN 系统 SHALL 支持按股票代码和时间范围查询
+6. **REQ-5.6** WHEN API请求参数错误时 THEN 系统 SHALL 返回明确的错误信息和状态码
+7. **REQ-5.7** WHEN API服务正常运行时 THEN 系统 SHALL 提供系统状态和数据同步状态查询接口
+8. **REQ-5.8** IF 数据库查询超时 THEN 系统 SHALL 返回超时错误并记录日志
+9. **REQ-5.9** WHEN 查询大量数据时 THEN 系统 SHALL 支持分页查询功能
 
-### Requirement 13
+### Requirement 6: 定时任务调度
 
-**User Story:** 作为数据采集子系统，我希望能够安全可靠地与外部数据源交互，以便我可以稳定地获取各类金融数据。
+**User Story:** 作为系统管理员，我希望系统能够自动执行数据采集和处理任务，以便保持数据的时效性。
 
 #### Acceptance Criteria
 
-1. WHEN 系统调用外部API THEN 系统 SHALL 遵守外部API的频率限制避免被限流
-2. WHEN 系统遇到网络异常 THEN 系统 SHALL 实施自动重试机制并在恢复后补齐数据
-3. WHEN 系统调用外部API失败 THEN 系统 SHALL 尝试降级到备用数据源
-4. WHEN 系统存储敏感配置 THEN 系统 SHALL 使用环境变量管理API密钥等敏感信息
-5. WHEN 系统进行数据传输 THEN 系统 SHALL 使用加密连接保护数据安全
-6. WHEN 系统记录操作日志 THEN 系统 SHALL 记录关键操作便于问题排查和审计
-7. IF 外部数据源不可用 THEN 系统 SHALL 记录异常状态并通知管理员
+1. **REQ-6.1** WHEN 系统启动时 THEN 系统 SHALL 自动配置和启动定时任务调度器
+2. **REQ-6.2** WHEN 交易日结束后 THEN 系统 SHALL 自动执行日度数据采集任务
+3. **REQ-6.3** WHEN 新闻采集任务执行时 THEN 系统 SHALL 按配置的频率进行采集
+4. **REQ-6.4** WHEN NLP处理任务执行时 THEN 系统 SHALL 处理所有待处理的新闻数据
+5. **REQ-6.5** IF 定时任务执行失败 THEN 系统 SHALL 记录错误日志并尝试重新执行
+6. **REQ-6.6** WHEN 任务执行完成时 THEN 系统 SHALL 更新任务执行状态和时间戳
 
+### Requirement 7: 配置管理
+
+**User Story:** 作为开发人员，我希望能够通过配置文件管理系统参数，以便在不同环境中灵活部署。
+
+#### Acceptance Criteria
+
+1. **REQ-7.1** WHEN 系统启动时 THEN 系统 SHALL 从配置文件加载数据库连接参数
+2. **REQ-7.2** WHEN 系统初始化时 THEN 系统 SHALL 从配置文件加载Tushare API密钥
+3. **REQ-7.3** WHEN 配置定时任务时 THEN 系统 SHALL 支持通过配置文件设置任务执行时间
+4. **REQ-7.4** WHEN 配置NLP模型时 THEN 系统 SHALL 支持通过配置文件设置模型路径和参数
+5. **REQ-7.5** IF 配置文件格式错误 THEN 系统 SHALL 提供明确的错误提示并拒绝启动
+6. **REQ-7.6** WHEN 配置参数变更时 THEN 系统 SHALL 支持热重载配置（非关键参数）
+
+## 3. 验收标准
+
+### 3.1 MVP功能验收标准
+
+- 所有核心功能需求100%实现
+- Tushare数据采集功能正常运行
+- 新闻数据采集和NLP处理功能正常运行
+- HTTP API服务能够正常响应查询请求
+- 数据质量管控基本功能正常
+- 定时任务调度功能正常
+- 配置管理功能正常
+
+## 修改记录
+
+### [2024-12-19] v1.0 初始版本创建
+
+**创建内容**：
+1. **需求结构设计**：采用EARS语法定义7个核心功能需求模块
+2. **功能需求覆盖**：涵盖数据采集、NLP处理、API服务、质量管控等核心功能
+3. **MVP聚焦**：专注核心功能实现，简化验收标准
+
+**需求特点**：
+- 基于PRD v4.0文档的功能设计
+- 使用结构化的EARS语法表达
+- 专注MVP核心功能，避免过度设计
+- 为后续设计和开发提供明确指导
+
+**技术对齐**：
+- 与PRD中的Python技术栈保持一致
+- 支持FinBERT模型的NLP处理需求
+- 符合单体架构的设计原则
+- 满足MVP快速验证的要求
