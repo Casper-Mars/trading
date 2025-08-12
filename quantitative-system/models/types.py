@@ -73,10 +73,78 @@ class LimitedString(TypeDecorator):
         return dialect.type_descriptor(String(length=self.max_length))
 
 
-# ============= 业务类型定义 =============
+# ============= 数据类 =============
+
+class FinancialData:
+    """金融数据基类"""
+
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+
+class StockBasicInfo:
+    """股票基本信息数据类"""
+
+    def __init__(
+        self,
+        ts_code: str,
+        symbol: str,
+        name: str,
+        area: str | None = None,
+        industry: str | None = None,
+        market: str | None = None,
+        list_date: str | None = None,
+        **kwargs
+    ):
+        self.ts_code = ts_code
+        self.symbol = symbol
+        self.name = name
+        self.area = area
+        self.industry = industry
+        self.market = market
+        self.list_date = list_date
+        # 支持额外的字段
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+
+class StockDailyData:
+    """股票日线数据类"""
+
+    def __init__(
+        self,
+        ts_code: str,
+        trade_date: str,
+        open: Decimal | None = None,
+        high: Decimal | None = None,
+        low: Decimal | None = None,
+        close: Decimal | None = None,
+        pre_close: Decimal | None = None,
+        change: Decimal | None = None,
+        pct_chg: Decimal | None = None,
+        vol: Decimal | None = None,
+        amount: Decimal | None = None,
+        **kwargs
+    ):
+        self.ts_code = ts_code
+        self.trade_date = trade_date
+        self.open = open
+        self.high = high
+        self.low = low
+        self.close = close
+        self.pre_close = pre_close
+        self.change = change
+        self.pct_chg = pct_chg
+        self.vol = vol
+        self.amount = amount
+        # 支持额外的字段
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
 
 class StockInfo:
-    """股票基础信息类型"""
+    """股票基本信息数据类（向后兼容）"""
 
     def __init__(
         self,

@@ -97,3 +97,8 @@ class Settings(BaseSettings):
 
 # 全局配置实例
 settings = Settings()
+
+
+def get_settings() -> Settings:
+    """获取应用配置实例"""
+    return settings

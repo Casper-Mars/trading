@@ -97,6 +97,12 @@ class RateLimitError(QuantitativeSystemError):
     pass
 
 
+class CrawlerError(QuantitativeSystemError):
+    """爬虫错误"""
+
+    pass
+
+
 class TimeoutError(QuantitativeSystemError):
     """超时错误"""
 
