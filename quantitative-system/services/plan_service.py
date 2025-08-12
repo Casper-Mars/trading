@@ -54,7 +54,9 @@ class PlanService:
 
     def __init__(self):
         """初始化方案服务"""
-        self.plans_storage: dict[str, dict[str, Any]] = {}  # 简单内存存储,实际应使用数据库
+        self.plans_storage: dict[
+            str, dict[str, Any]
+        ] = {}  # 简单内存存储,实际应使用数据库
         logger.info("PlanService initialized")
 
     async def generate_plan(self, request: PlanRequest) -> PlanResponse:
@@ -87,7 +89,7 @@ class PlanService:
                 markdown_content=markdown_content,
                 created_at=datetime.now(),
                 strategy_name=request.strategy_name,
-                summary=summary
+                summary=summary,
             )
 
             # 保存方案
@@ -187,62 +189,62 @@ class PlanService:
 | 项目 | 内容 |
 |------|------|
 | 策略名称 | {request.strategy_name} |
-| 生成时间 | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} |
-| 分析类型 | {analysis.get('analysis_type', '综合分析')} |
+| 生成时间 | {datetime.now().strftime("%Y-%m-%d %H:%M:%S")} |
+| 分析类型 | {analysis.get("analysis_type", "综合分析")} |
 
 ## 策略分析
 
 ### 策略表现评估
 
-{self._format_strategy_analysis(analysis.get('strategy_analysis', {}))}
+{self._format_strategy_analysis(analysis.get("strategy_analysis", {}))}
 
 ### 回测结果概览
 
 | 指标 | 数值 |
 |------|------|
-| 总收益率 | {backtest.get('total_return', 'N/A')} |
-| 年化收益率 | {backtest.get('annual_return', 'N/A')} |
-| 最大回撤 | {backtest.get('max_drawdown', 'N/A')} |
-| 夏普比率 | {backtest.get('sharpe_ratio', 'N/A')} |
-| 胜率 | {backtest.get('win_rate', 'N/A')} |
+| 总收益率 | {backtest.get("total_return", "N/A")} |
+| 年化收益率 | {backtest.get("annual_return", "N/A")} |
+| 最大回撤 | {backtest.get("max_drawdown", "N/A")} |
+| 夏普比率 | {backtest.get("sharpe_ratio", "N/A")} |
+| 胜率 | {backtest.get("win_rate", "N/A")} |
 
 ## 风险评估
 
 ### 风险等级
 
-{self._format_risk_assessment(analysis.get('risk_assessment', {}))}
+{self._format_risk_assessment(analysis.get("risk_assessment", {}))}
 
 ### 风险控制建议
 
-{self._format_risk_suggestions(analysis.get('risk_assessment', {}))}
+{self._format_risk_suggestions(analysis.get("risk_assessment", {}))}
 
 ## 操作建议
 
 ### 具体建议
 
-{self._format_operation_suggestions(analysis.get('operation_suggestions', []))}
+{self._format_operation_suggestions(analysis.get("operation_suggestions", []))}
 
 ### 建议优先级
 
-{self._format_suggestion_priorities(analysis.get('operation_suggestions', []))}
+{self._format_suggestion_priorities(analysis.get("operation_suggestions", []))}
 
 ## 市场展望
 
 ### 短期预期
 
-{self._format_market_outlook(analysis.get('market_outlook', {}))}
+{self._format_market_outlook(analysis.get("market_outlook", {}))}
 
 ### 关键因子
 
-{self._format_key_factors(analysis.get('key_factors', []))}
+{self._format_key_factors(analysis.get("key_factors", []))}
 
 ## 风险警告
 
-{self._format_warnings(analysis.get('warnings', []))}
+{self._format_warnings(analysis.get("warnings", []))}
 
 ## 置信度评分
 
-**分析可信度**: {analysis.get('confidence_score', 'N/A')}
+**分析可信度**: {analysis.get("confidence_score", "N/A")}
 
 ---
 
@@ -277,7 +279,7 @@ class PlanService:
         if "level" in risk_assessment:
             content.append(f"**风险等级**: {risk_assessment['level']}")
         if "main_risks" in risk_assessment:
-            risks = risk_assessment['main_risks']
+            risks = risk_assessment["main_risks"]
             if isinstance(risks, list):
                 risk_list = "\n".join([f"- {risk}" for risk in risks])
                 content.append(f"**主要风险**:\n{risk_list}")
@@ -350,7 +352,7 @@ class PlanService:
         if "short_term" in market_outlook:
             content.append(f"**短期预期**: {market_outlook['short_term']}")
         if "factors" in market_outlook:
-            factors = market_outlook['factors']
+            factors = market_outlook["factors"]
             if isinstance(factors, list):
                 factor_list = "\n".join([f"- {factor}" for factor in factors])
                 content.append(f"**影响因素**:\n{factor_list}")
@@ -408,7 +410,7 @@ class PlanService:
         plan_data = {
             "response": response.model_dump(),
             "request": request.model_dump(),
-            "created_at": response.created_at
+            "created_at": response.created_at,
         }
 
         self.plans_storage[response.plan_id] = plan_data
@@ -434,7 +436,10 @@ class PlanService:
                 continue
 
             # 按策略名称过滤
-            if request.strategy_name and response_data["strategy_name"] != request.strategy_name:
+            if (
+                request.strategy_name
+                and response_data["strategy_name"] != request.strategy_name
+            ):
                 continue
 
             # 按日期范围过滤

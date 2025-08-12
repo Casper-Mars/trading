@@ -25,10 +25,14 @@ Amount = Annotated[Decimal, Field(max_digits=15, decimal_places=2, description="
 Ratio = Annotated[Decimal, Field(max_digits=8, decimal_places=4, description="比率")]
 
 # 成交量类型
-Volume = Annotated[Decimal, Field(max_digits=20, decimal_places=2, description="成交量")]
+Volume = Annotated[
+    Decimal, Field(max_digits=20, decimal_places=2, description="成交量")
+]
 
 # 情感分数类型 (-1到1之间)
-SentimentScore = Annotated[Decimal, Field(max_digits=5, decimal_places=4, ge=-1, le=1, description="情感分数")]
+SentimentScore = Annotated[
+    Decimal, Field(max_digits=5, decimal_places=4, ge=-1, le=1, description="情感分数")
+]
 
 # JSON数据类型
 JSONData = dict[str, Any]
@@ -44,6 +48,7 @@ KeywordList = list[str]
 
 # ============= SQLAlchemy自定义类型 =============
 
+
 class PreciseDecimal(TypeDecorator):
     """精确小数类型，用于金融数据"""
 
@@ -56,7 +61,9 @@ class PreciseDecimal(TypeDecorator):
         super().__init__(precision=precision, scale=scale)
 
     def load_dialect_impl(self, dialect):
-        return dialect.type_descriptor(DECIMAL(precision=self.precision, scale=self.scale))
+        return dialect.type_descriptor(
+            DECIMAL(precision=self.precision, scale=self.scale)
+        )
 
 
 class LimitedString(TypeDecorator):
@@ -74,6 +81,7 @@ class LimitedString(TypeDecorator):
 
 
 # ============= 数据类 =============
+
 
 class FinancialData:
     """金融数据基类"""
@@ -95,7 +103,7 @@ class StockBasicInfo:
         industry: str | None = None,
         market: str | None = None,
         list_date: str | None = None,
-        **kwargs
+        **kwargs,
     ):
         self.ts_code = ts_code
         self.symbol = symbol
@@ -125,7 +133,7 @@ class StockDailyData:
         pct_chg: Decimal | None = None,
         vol: Decimal | None = None,
         amount: Decimal | None = None,
-        **kwargs
+        **kwargs,
     ):
         self.ts_code = ts_code
         self.trade_date = trade_date

@@ -10,5 +10,5 @@ __all__ = [
     "NewsArticle",
     "NewsCrawler",
     "TushareClient",
-    "crawl_financial_news"
+    "crawl_financial_news",
 ]

@@ -26,10 +26,10 @@ class FactorService:
 
     # 默认四维度权重配置
     DEFAULT_WEIGHTS: ClassVar[dict[str, float]] = {
-        "technical": 0.35,    # 技术面权重
+        "technical": 0.35,  # 技术面权重
         "fundamental": 0.25,  # 基本面权重
-        "news": 0.25,         # 消息面权重
-        "market": 0.15,       # 市场面权重
+        "news": 0.25,  # 消息面权重
+        "market": 0.15,  # 市场面权重
     }
 
     def __init__(
@@ -59,11 +59,11 @@ class FactorService:
 
         self._cache_ttl = 300  # 5分钟缓存
 
-        logger.info(
-            f"FactorService初始化完成, 权重配置: {self.factor_weights}"
-        )
+        logger.info(f"FactorService初始化完成, 权重配置: {self.factor_weights}")
 
-    def _validate_and_normalize_weights(self, weights: dict[str, float]) -> dict[str, float]:
+    def _validate_and_normalize_weights(
+        self, weights: dict[str, float]
+    ) -> dict[str, float]:
         """验证和标准化权重配置
 
         Args:
@@ -215,7 +215,9 @@ class FactorService:
 
             # 获取市场数据
             end_date = pd.Timestamp.now().strftime("%Y-%m-%d")
-            start_date = (pd.Timestamp.now() - pd.Timedelta(days=lookback_period * 2)).strftime("%Y-%m-%d")
+            start_date = (
+                pd.Timestamp.now() - pd.Timedelta(days=lookback_period * 2)
+            ).strftime("%Y-%m-%d")
 
             market_data = await self.data_service.get_market_data(
                 [symbol], start_date, end_date, use_cache=use_cache
@@ -227,13 +229,21 @@ class FactorService:
             # 过滤指定股票的数据
             stock_data = market_data[market_data["symbol"] == symbol].copy()
             if len(stock_data) < lookback_period:
-                logger.warning(f"股票 {symbol} 数据不足, 实际: {len(stock_data)}, 需要: {lookback_period}")
+                logger.warning(
+                    f"股票 {symbol} 数据不足, 实际: {len(stock_data)}, 需要: {lookback_period}"
+                )
 
             # 计算四维度因子评分
-            technical_score = await self._calculate_technical_factors(stock_data, lookback_period)
-            fundamental_score = await self._calculate_fundamental_factors(stock_data, symbol)
+            technical_score = await self._calculate_technical_factors(
+                stock_data, lookback_period
+            )
+            fundamental_score = await self._calculate_fundamental_factors(
+                stock_data, symbol
+            )
             news_score = await self._calculate_news_factors(symbol)
-            market_score = await self._calculate_market_factors(stock_data, lookback_period)
+            market_score = await self._calculate_market_factors(
+                stock_data, lookback_period
+            )
 
             # 计算综合评分
             composite_score = (
@@ -328,7 +338,9 @@ class FactorService:
             logger.error(f"计算技术面因子失败: {e}")
             return 0.5
 
-    def _calculate_momentum_factor(self, closes: np.ndarray, volumes: np.ndarray) -> float:
+    def _calculate_momentum_factor(
+        self, closes: np.ndarray, volumes: np.ndarray
+    ) -> float:
         """计算动量因子"""
         try:
             score = 0.0
@@ -344,7 +356,9 @@ class FactorService:
             # 成交量动量 (40%)
             if len(volumes) >= 5:
                 recent_volume = np.mean(volumes[-3:])
-                avg_volume = np.mean(volumes[:-3]) if len(volumes) > 3 else recent_volume
+                avg_volume = (
+                    np.mean(volumes[:-3]) if len(volumes) > 3 else recent_volume
+                )
                 volume_ratio = recent_volume / avg_volume if avg_volume > 0 else 1
                 volume_score = min(volume_ratio / 3, 1)  # 成交量放大3倍得满分
                 score += volume_score * 0.4
@@ -375,7 +389,9 @@ class FactorService:
         except Exception:
             return 0.5
 
-    def _calculate_volatility_factor(self, closes: np.ndarray, volumes: np.ndarray) -> float:
+    def _calculate_volatility_factor(
+        self, closes: np.ndarray, volumes: np.ndarray
+    ) -> float:
         """计算波动率因子"""
         try:
             score = 0.0
@@ -402,7 +418,11 @@ class FactorService:
             return 0.5
 
     def _calculate_technical_indicators(
-        self, closes: np.ndarray, highs: np.ndarray, lows: np.ndarray, volumes: np.ndarray
+        self,
+        closes: np.ndarray,
+        highs: np.ndarray,
+        lows: np.ndarray,
+        volumes: np.ndarray,
     ) -> float:
         """计算技术指标因子"""
         try:
@@ -697,7 +717,9 @@ class FactorService:
             # 2. 资金流向 (25%)
             if len(volumes) >= 5:
                 recent_volume = np.mean(volumes[-3:])
-                avg_volume = np.mean(volumes[:-3]) if len(volumes) > 3 else recent_volume
+                avg_volume = (
+                    np.mean(volumes[:-3]) if len(volumes) > 3 else recent_volume
+                )
                 volume_ratio = recent_volume / avg_volume if avg_volume > 0 else 1
                 flow_score = min(volume_ratio / 2, 1)  # 成交量放大代表资金流入
                 score += flow_score * 0.25

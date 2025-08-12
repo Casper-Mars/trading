@@ -8,11 +8,11 @@ from .manager import ExecutionRecord, JobConfig, TaskManager
 from .scheduler import TaskScheduler
 
 __all__ = [
-    'DataCollectionJobs',
-    'ExecutionRecord',
-    'HealthCheckJobs',
-    'JobConfig',
-    'SystemMaintenanceJobs',
-    'TaskManager',
-    'TaskScheduler'
+    "DataCollectionJobs",
+    "ExecutionRecord",
+    "HealthCheckJobs",
+    "JobConfig",
+    "SystemMaintenanceJobs",
+    "TaskManager",
+    "TaskScheduler",
 ]

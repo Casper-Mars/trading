@@ -59,7 +59,12 @@ class BacktestOrchestrator(BaseOrchestrator):
     前置检查 → 策略验证 → 数据准备 → 回测执行 → 结果分析 → 报告生成
     """
 
-    def __init__(self, data_service: DataService, backtest_service: BacktestService, strategy_registry: StrategyRegistry):
+    def __init__(
+        self,
+        data_service: DataService,
+        backtest_service: BacktestService,
+        strategy_registry: StrategyRegistry,
+    ):
         """初始化回测分析编排器
 
         Args:
@@ -74,7 +79,9 @@ class BacktestOrchestrator(BaseOrchestrator):
 
         logger.info("BacktestOrchestrator initialized")
 
-    async def execute_backtest(self, request: BacktestExecutionRequest) -> BacktestExecutionResponse:
+    async def execute_backtest(
+        self, request: BacktestExecutionRequest
+    ) -> BacktestExecutionResponse:
         """执行回测分析
 
         Args:
@@ -87,8 +94,7 @@ class BacktestOrchestrator(BaseOrchestrator):
             OrchestrationError: 回测执行失败
         """
         context = OrchestrationContext(
-            operation="backtest_execution",
-            request_data=request.dict()
+            operation="backtest_execution", request_data=request.dict()
         )
 
         logger.info(f"Starting backtest execution, request_id: {context.request_id}")
@@ -99,10 +105,14 @@ class BacktestOrchestrator(BaseOrchestrator):
             return result
 
         except Exception as e:
-            logger.error(f"Backtest execution failed: {e!s}, request_id: {context.request_id}")
+            logger.error(
+                f"Backtest execution failed: {e!s}, request_id: {context.request_id}"
+            )
             raise OrchestrationError(f"Backtest execution failed: {e!s}") from e
 
-    async def _pre_check(self, request: BacktestExecutionRequest, context: OrchestrationContext) -> bool:
+    async def _pre_check(
+        self, request: BacktestExecutionRequest, context: OrchestrationContext
+    ) -> bool:
         """前置检查
 
         Args:
@@ -139,23 +149,33 @@ class BacktestOrchestrator(BaseOrchestrator):
                 )
 
             # 5. 验证策略参数
-            strategy_info = self.strategy_registry.get_strategy_info(request.strategy_name)
+            strategy_info = self.strategy_registry.get_strategy_info(
+                request.strategy_name
+            )
             if strategy_info and "param_ranges" in strategy_info:
-                self._validate_strategy_params(request.strategy_params, strategy_info["param_ranges"])
+                self._validate_strategy_params(
+                    request.strategy_params, strategy_info["param_ranges"]
+                )
 
             # 保存验证结果到上下文
-            self._set_context_data('symbols', request.symbols, context)
-            self._set_context_data('strategy_name', request.strategy_name, context)
-            self._set_context_data('date_range', f"{request.start_date} - {request.end_date}", context)
+            self._set_context_data("symbols", request.symbols, context)
+            self._set_context_data("strategy_name", request.strategy_name, context)
+            self._set_context_data(
+                "date_range", f"{request.start_date} - {request.end_date}", context
+            )
 
-            logger.info(f"Pre-check completed successfully, request_id: {context.request_id}")
+            logger.info(
+                f"Pre-check completed successfully, request_id: {context.request_id}"
+            )
             return True
 
         except Exception as e:
             logger.error(f"Pre-check failed: {e!s}, request_id: {context.request_id}")
             raise OrchestrationError(f"Pre-check failed: {e!s}") from e
 
-    async def _call_services(self, request: BacktestExecutionRequest, context: OrchestrationContext) -> dict[str, Any]:
+    async def _call_services(
+        self, request: BacktestExecutionRequest, context: OrchestrationContext
+    ) -> dict[str, Any]:
         """调用服务
 
         Args:
@@ -182,32 +202,36 @@ class BacktestOrchestrator(BaseOrchestrator):
                 lambda: self.data_service.get_stock_data(
                     symbols=request.symbols,
                     start_date=request.start_date,
-                    end_date=request.end_date
+                    end_date=request.end_date,
                 ),
-                context
+                context,
             )
 
             # 获取市场数据
             market_data = await self._safe_service_call(
                 "data_service",
                 lambda: self.data_service.get_market_data(
-                    start_date=request.start_date,
-                    end_date=request.end_date
+                    start_date=request.start_date, end_date=request.end_date
                 ),
-                context
+                context,
             )
 
             if stock_data is None:
                 raise OrchestrationError("Failed to get stock data")
 
-            results['stock_data'] = stock_data
-            results['market_data'] = market_data
+            results["stock_data"] = stock_data
+            results["market_data"] = market_data
 
             # 添加回滚操作
             self._add_rollback_action(
-                'cleanup_data_cache',
-                {'cache_keys': [f"stock_data_{context.request_id}", f"market_data_{context.request_id}"]},
-                context
+                "cleanup_data_cache",
+                {
+                    "cache_keys": [
+                        f"stock_data_{context.request_id}",
+                        f"market_data_{context.request_id}",
+                    ]
+                },
+                context,
             )
 
             # 2. 回测执行
@@ -223,49 +247,57 @@ class BacktestOrchestrator(BaseOrchestrator):
                 market_data=market_data,
                 strategy_params=request.strategy_params,
                 risk_level=request.risk_level,
-                time_horizon=request.time_horizon
+                time_horizon=request.time_horizon,
             )
 
             if request.parallel_execution:
                 # 并行执行（如果支持多个策略或多个股票组合）
-                backtest_result = await self._execute_parallel_backtest(backtest_request, context)
+                backtest_result = await self._execute_parallel_backtest(
+                    backtest_request, context
+                )
             else:
                 # 串行执行
                 backtest_result = await self._safe_service_call(
                     "backtest_service",
                     lambda: self.backtest_service.run_backtest(backtest_request),
-                    context
+                    context,
                 )
 
-            results['backtest_result'] = backtest_result
+            results["backtest_result"] = backtest_result
 
             # 3. 结果分析
             if backtest_result:
                 performance_metrics = self._analyze_performance(backtest_result)
                 risk_metrics = self._analyze_risk(backtest_result)
 
-                results['performance_metrics'] = performance_metrics
-                results['risk_metrics'] = risk_metrics
+                results["performance_metrics"] = performance_metrics
+                results["risk_metrics"] = risk_metrics
 
             # 4. 报告生成（如果需要）
             if request.generate_report and backtest_result:
                 report_content = self._generate_report(
                     backtest_result,
-                    results.get('performance_metrics', {}),
-                    results.get('risk_metrics', {}),
+                    results.get("performance_metrics", {}),
+                    results.get("risk_metrics", {}),
                     request,
-                    context
+                    context,
                 )
-                results['report_content'] = report_content
+                results["report_content"] = report_content
 
-            logger.info(f"Service calls completed successfully, request_id: {context.request_id}")
+            logger.info(
+                f"Service calls completed successfully, request_id: {context.request_id}"
+            )
             return results
 
         except Exception as e:
-            logger.error(f"Service calls failed: {e!s}, request_id: {context.request_id}")
+            logger.error(
+                f"Service calls failed: {e!s}, request_id: {context.request_id}"
+            )
             raise OrchestrationError(f"Service orchestration failed: {e!s}") from e
 
-    async def _aggregate_results(self, service_results: dict[str, Any], context: OrchestrationContext) -> BacktestExecutionResponse:
+    async def _aggregate_results(
+        self, service_results: dict[str, Any], context: OrchestrationContext
+    ) -> BacktestExecutionResponse:
         """聚合结果
 
         Args:
@@ -282,29 +314,35 @@ class BacktestOrchestrator(BaseOrchestrator):
 
         try:
             # 获取服务结果
-            backtest_result = service_results.get('backtest_result')
-            performance_metrics = service_results.get('performance_metrics', {})
-            risk_metrics = service_results.get('risk_metrics', {})
-            report_content = service_results.get('report_content')
+            backtest_result = service_results.get("backtest_result")
+            performance_metrics = service_results.get("performance_metrics", {})
+            risk_metrics = service_results.get("risk_metrics", {})
+            report_content = service_results.get("report_content")
 
             if not backtest_result:
                 raise OrchestrationError("Missing backtest result")
 
             # 构建执行摘要
             execution_summary = {
-                'symbols_count': len(self._get_context_data('symbols', context, [])),
-                'strategy_used': self._get_context_data('strategy_name', context, 'unknown'),
-                'date_range': self._get_context_data('date_range', context, 'unknown'),
-                'execution_time': context.execution_time,
-                'data_points': len(service_results.get('stock_data', {}).get('price_data', [])),
-                'trades_count': backtest_result.get('trades_count', 0),
-                'success_rate': backtest_result.get('win_rate', 0.0)
+                "symbols_count": len(self._get_context_data("symbols", context, [])),
+                "strategy_used": self._get_context_data(
+                    "strategy_name", context, "unknown"
+                ),
+                "date_range": self._get_context_data("date_range", context, "unknown"),
+                "execution_time": context.execution_time,
+                "data_points": len(
+                    service_results.get("stock_data", {}).get("price_data", [])
+                ),
+                "trades_count": backtest_result.get("trades_count", 0),
+                "success_rate": backtest_result.get("win_rate", 0.0),
             }
 
             # 构建响应
             response = BacktestExecutionResponse(
                 task_id=context.request_id,
-                strategy_name=self._get_context_data('strategy_name', context, 'unknown'),
+                strategy_name=self._get_context_data(
+                    "strategy_name", context, "unknown"
+                ),
                 execution_status="completed",
                 backtest_result=backtest_result,
                 performance_metrics=performance_metrics,
@@ -312,21 +350,27 @@ class BacktestOrchestrator(BaseOrchestrator):
                 execution_summary=execution_summary,
                 report_content=report_content,
                 created_at=context.created_at,
-                completed_at=context.completed_at
+                completed_at=context.completed_at,
             )
 
             # 保存聚合结果到上下文
-            self._set_context_data('final_response', response.dict(), context)
+            self._set_context_data("final_response", response.dict(), context)
 
-            logger.info(f"Result aggregation completed successfully, request_id: {context.request_id}")
+            logger.info(
+                f"Result aggregation completed successfully, request_id: {context.request_id}"
+            )
 
             return response
 
         except Exception as e:
-            logger.error(f"Result aggregation failed: {e!s}, request_id: {context.request_id}")
+            logger.error(
+                f"Result aggregation failed: {e!s}, request_id: {context.request_id}"
+            )
             raise OrchestrationError(f"Failed to aggregate results: {e!s}") from e
 
-    def _validate_strategy_params(self, params: dict[str, Any], param_ranges: dict[str, Any]) -> None:
+    def _validate_strategy_params(
+        self, params: dict[str, Any], param_ranges: dict[str, Any]
+    ) -> None:
         """验证策略参数
 
         Args:
@@ -340,14 +384,20 @@ class BacktestOrchestrator(BaseOrchestrator):
             if param_name in param_ranges:
                 param_range = param_ranges[param_name]
                 if isinstance(param_range, dict):
-                    min_val = param_range.get('min')
-                    max_val = param_range.get('max')
+                    min_val = param_range.get("min")
+                    max_val = param_range.get("max")
                     if min_val is not None and param_value < min_val:
-                        raise OrchestrationError(f"Parameter '{param_name}' value {param_value} is below minimum {min_val}")
+                        raise OrchestrationError(
+                            f"Parameter '{param_name}' value {param_value} is below minimum {min_val}"
+                        )
                     if max_val is not None and param_value > max_val:
-                        raise OrchestrationError(f"Parameter '{param_name}' value {param_value} is above maximum {max_val}")
+                        raise OrchestrationError(
+                            f"Parameter '{param_name}' value {param_value} is above maximum {max_val}"
+                        )
 
-    async def _execute_parallel_backtest(self, request: BacktestRequest, context: OrchestrationContext) -> dict[str, Any]:
+    async def _execute_parallel_backtest(
+        self, request: BacktestRequest, context: OrchestrationContext
+    ) -> dict[str, Any]:
         """执行并行回测
 
         Args:
@@ -373,12 +423,12 @@ class BacktestOrchestrator(BaseOrchestrator):
             性能指标
         """
         return {
-            'total_return': backtest_result.get('total_return', 0.0),
-            'annual_return': backtest_result.get('annual_return', 0.0),
-            'sharpe_ratio': backtest_result.get('sharpe_ratio', 0.0),
-            'win_rate': backtest_result.get('win_rate', 0.0),
-            'profit_factor': backtest_result.get('profit_factor', 0.0),
-            'avg_trade_return': backtest_result.get('avg_trade_return', 0.0)
+            "total_return": backtest_result.get("total_return", 0.0),
+            "annual_return": backtest_result.get("annual_return", 0.0),
+            "sharpe_ratio": backtest_result.get("sharpe_ratio", 0.0),
+            "win_rate": backtest_result.get("win_rate", 0.0),
+            "profit_factor": backtest_result.get("profit_factor", 0.0),
+            "avg_trade_return": backtest_result.get("avg_trade_return", 0.0),
         }
 
     def _analyze_risk(self, backtest_result: dict[str, Any]) -> dict[str, Any]:
@@ -391,15 +441,21 @@ class BacktestOrchestrator(BaseOrchestrator):
             风险指标
         """
         return {
-            'max_drawdown': backtest_result.get('max_drawdown', 0.0),
-            'volatility': backtest_result.get('volatility', 0.0),
-            'var_95': backtest_result.get('var_95', 0.0),
-            'beta': backtest_result.get('beta', 0.0),
-            'downside_deviation': backtest_result.get('downside_deviation', 0.0)
+            "max_drawdown": backtest_result.get("max_drawdown", 0.0),
+            "volatility": backtest_result.get("volatility", 0.0),
+            "var_95": backtest_result.get("var_95", 0.0),
+            "beta": backtest_result.get("beta", 0.0),
+            "downside_deviation": backtest_result.get("downside_deviation", 0.0),
         }
 
-    def _generate_report(self, backtest_result: dict[str, Any], performance_metrics: dict[str, Any],
-                        risk_metrics: dict[str, Any], request: BacktestExecutionRequest, context: OrchestrationContext) -> str:
+    def _generate_report(
+        self,
+        backtest_result: dict[str, Any],
+        performance_metrics: dict[str, Any],
+        risk_metrics: dict[str, Any],
+        request: BacktestExecutionRequest,
+        context: OrchestrationContext,
+    ) -> str:
         """生成回测报告
 
         Args:
@@ -440,7 +496,7 @@ class BacktestOrchestrator(BaseOrchestrator):
             f"- **最大单笔亏损**: {backtest_result.get('max_trade_loss', 0.0):.2%}",
             "",
             "---",
-            f"*报告生成时间: {context.completed_at}*"
+            f"*报告生成时间: {context.completed_at}*",
         ]
 
         return "\n".join(report_lines)

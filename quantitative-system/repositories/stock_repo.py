@@ -55,7 +55,9 @@ class StockRepository(BaseRepository):
             logger.error(error_msg)
             raise DatabaseError(error_msg) from e
 
-    async def create_stock_basic_info(self, stock_data: StockBasicInfo) -> StockBasicInfo:
+    async def create_stock_basic_info(
+        self, stock_data: StockBasicInfo
+    ) -> StockBasicInfo:
         """创建股票基础信息
 
         Args:
@@ -79,7 +81,9 @@ class StockRepository(BaseRepository):
             logger.error(error_msg)
             raise DatabaseError(error_msg) from e
 
-    async def update_stock_basic_info(self, ts_code: str, update_data: dict[str, Any]) -> StockBasicInfo:
+    async def update_stock_basic_info(
+        self, ts_code: str, update_data: dict[str, Any]
+    ) -> StockBasicInfo:
         """更新股票基础信息
 
         Args:
@@ -128,7 +132,9 @@ class StockRepository(BaseRepository):
             DatabaseError: 数据库操作失败时
         """
         try:
-            stmt = select(StockBasicInfo).where(StockBasicInfo.list_status == list_status)
+            stmt = select(StockBasicInfo).where(
+                StockBasicInfo.list_status == list_status
+            )
             result = await self.session.execute(stmt)
             return result.scalars().all()
         except Exception as e:
@@ -161,7 +167,9 @@ class StockRepository(BaseRepository):
 
     # ==================== 股票日线数据操作 ====================
 
-    async def get_daily_data(self, ts_code: str, trade_date: str | date) -> StockDailyData | None:
+    async def get_daily_data(
+        self, ts_code: str, trade_date: str | date
+    ) -> StockDailyData | None:
         """获取股票日线数据
 
         Args:
@@ -181,7 +189,7 @@ class StockRepository(BaseRepository):
             stmt = select(StockDailyData).where(
                 and_(
                     StockDailyData.ts_code == ts_code,
-                    StockDailyData.trade_date == trade_date
+                    StockDailyData.trade_date == trade_date,
                 )
             )
             result = await self.session.execute(stmt)
@@ -191,11 +199,13 @@ class StockRepository(BaseRepository):
             logger.error(error_msg)
             raise DatabaseError(error_msg) from e
 
-    async def get_daily_data_range(self,
-                                   ts_code: str,
-                                   start_date: str | date | None = None,
-                                   end_date: str | date | None = None,
-                                   limit: int | None = None) -> list[StockDailyData]:
+    async def get_daily_data_range(
+        self,
+        ts_code: str,
+        start_date: str | date | None = None,
+        end_date: str | date | None = None,
+        limit: int | None = None,
+    ) -> list[StockDailyData]:
         """获取股票日线数据范围
 
         Args:
@@ -235,7 +245,9 @@ class StockRepository(BaseRepository):
             logger.error(error_msg)
             raise DatabaseError(error_msg) from e
 
-    async def batch_create_daily_data(self, daily_data_list: list[StockDailyData]) -> int:
+    async def batch_create_daily_data(
+        self, daily_data_list: list[StockDailyData]
+    ) -> int:
         """批量创建股票日线数据
 
         Args:
@@ -312,7 +324,9 @@ class StockRepository(BaseRepository):
 
     # ==================== 财务数据操作 ====================
 
-    async def get_financial_data(self, ts_code: str, end_date: str | date) -> FinancialData | None:
+    async def get_financial_data(
+        self, ts_code: str, end_date: str | date
+    ) -> FinancialData | None:
         """获取财务数据
 
         Args:
@@ -331,8 +345,7 @@ class StockRepository(BaseRepository):
 
             stmt = select(FinancialData).where(
                 and_(
-                    FinancialData.ts_code == ts_code,
-                    FinancialData.end_date == end_date
+                    FinancialData.ts_code == ts_code, FinancialData.end_date == end_date
                 )
             )
             result = await self.session.execute(stmt)
@@ -342,11 +355,13 @@ class StockRepository(BaseRepository):
             logger.error(error_msg)
             raise DatabaseError(error_msg) from e
 
-    async def get_financial_data_range(self,
-                                       ts_code: str,
-                                       start_date: str | date | None = None,
-                                       end_date: str | date | None = None,
-                                       limit: int | None = None) -> list[FinancialData]:
+    async def get_financial_data_range(
+        self,
+        ts_code: str,
+        start_date: str | date | None = None,
+        end_date: str | date | None = None,
+        limit: int | None = None,
+    ) -> list[FinancialData]:
         """获取财务数据范围
 
         Args:
@@ -386,7 +401,9 @@ class StockRepository(BaseRepository):
             logger.error(error_msg)
             raise DatabaseError(error_msg) from e
 
-    async def batch_create_financial_data(self, financial_data_list: list[FinancialData]) -> int:
+    async def batch_create_financial_data(
+        self, financial_data_list: list[FinancialData]
+    ) -> int:
         """批量创建财务数据
 
         Args:
@@ -413,7 +430,9 @@ class StockRepository(BaseRepository):
             logger.error(error_msg)
             raise DatabaseError(error_msg) from e
 
-    async def get_last_financial_data_date(self, ts_code: str | None = None) -> date | None:
+    async def get_last_financial_data_date(
+        self, ts_code: str | None = None
+    ) -> date | None:
         """获取最后的财务数据日期
 
         Args:
@@ -490,22 +509,24 @@ class StockRepository(BaseRepository):
             latest_financial_data = latest_financial[0] if latest_financial else None
 
             return {
-                'basic_info': stock_info,
-                'latest_daily': latest_daily_data,
-                'latest_financial': latest_financial_data
+                "basic_info": stock_info,
+                "latest_daily": latest_daily_data,
+                "latest_financial": latest_financial_data,
             }
         except Exception as e:
             error_msg = f"获取股票综合数据失败: {ts_code}, 错误: {e}"
             logger.error(error_msg)
             raise DatabaseError(error_msg) from e
 
-    async def search_stocks(self,
-                            keyword: str | None = None,
-                            industry: str | None = None,
-                            market: str | None = None,
-                            list_status: str = "L",
-                            limit: int = 100,
-                            offset: int = 0) -> list[StockBasicInfo]:
+    async def search_stocks(
+        self,
+        keyword: str | None = None,
+        industry: str | None = None,
+        market: str | None = None,
+        list_status: str = "L",
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[StockBasicInfo]:
         """搜索股票
 
         Args:
@@ -523,12 +544,14 @@ class StockRepository(BaseRepository):
             DatabaseError: 数据库操作失败时
         """
         try:
-            stmt = select(StockBasicInfo).where(StockBasicInfo.list_status == list_status)
+            stmt = select(StockBasicInfo).where(
+                StockBasicInfo.list_status == list_status
+            )
 
             if keyword:
                 stmt = stmt.where(
-                    StockBasicInfo.ts_code.contains(keyword) |
-                    StockBasicInfo.name.contains(keyword)
+                    StockBasicInfo.ts_code.contains(keyword)
+                    | StockBasicInfo.name.contains(keyword)
                 )
 
             if industry:

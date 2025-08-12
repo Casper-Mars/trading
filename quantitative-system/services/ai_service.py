@@ -24,7 +24,10 @@ class AIAnalysisRequest(BaseModel):
     factor_scores: dict[str, float] = Field(..., description="因子评分")
     market_data: dict[str, Any] = Field(..., description="市场数据")
     position_data: dict[str, Any] | None = Field(None, description="持仓数据")
-    analysis_type: str = Field("comprehensive", description="分析类型:strategy/risk/recommendation/comprehensive")
+    analysis_type: str = Field(
+        "comprehensive",
+        description="分析类型:strategy/risk/recommendation/comprehensive",
+    )
 
 
 class AIAnalysisResponse(BaseModel):
@@ -61,7 +64,9 @@ class AIService:
         if self.api_key:
             dashscope.api_key = self.api_key
         else:
-            logger.warning("DashScope API key not configured, AI service will use fallback mode")
+            logger.warning(
+                "DashScope API key not configured, AI service will use fallback mode"
+            )
 
         # 缓存最近的分析结果用于降级
         self._last_analysis: AIAnalysisResponse | None = None
@@ -180,13 +185,19 @@ class AIService:
 
             # 基础指标
             if "total_return" in backtest_results:
-                summary_parts.append(f"总收益率: {backtest_results['total_return']:.2%}")
+                summary_parts.append(
+                    f"总收益率: {backtest_results['total_return']:.2%}"
+                )
 
             if "sharpe_ratio" in backtest_results:
-                summary_parts.append(f"夏普比率: {backtest_results['sharpe_ratio']:.3f}")
+                summary_parts.append(
+                    f"夏普比率: {backtest_results['sharpe_ratio']:.3f}"
+                )
 
             if "max_drawdown" in backtest_results:
-                summary_parts.append(f"最大回撤: {backtest_results['max_drawdown']:.2%}")
+                summary_parts.append(
+                    f"最大回撤: {backtest_results['max_drawdown']:.2%}"
+                )
 
             if "win_rate" in backtest_results:
                 summary_parts.append(f"胜率: {backtest_results['win_rate']:.2%}")
@@ -250,7 +261,9 @@ class AIService:
 
         for attempt in range(self.max_retries):
             try:
-                logger.debug(f"Calling DashScope API, attempt {attempt + 1}/{self.max_retries}")
+                logger.debug(
+                    f"Calling DashScope API, attempt {attempt + 1}/{self.max_retries}"
+                )
 
                 response = Generation.call(
                     model=self.model,
@@ -258,7 +271,7 @@ class AIService:
                     max_tokens=2000,
                     temperature=0.7,
                     top_p=0.9,
-                    timeout=self.timeout
+                    timeout=self.timeout,
                 )
 
                 if response.status_code == 200:
@@ -277,14 +290,18 @@ class AIService:
 
             # 重试前等待
             if attempt < self.max_retries - 1:
-                wait_time = 2 ** attempt  # 指数退避
+                wait_time = 2**attempt  # 指数退避
                 logger.info(f"Retrying in {wait_time} seconds...")
                 time.sleep(wait_time)
 
         # 所有重试都失败
-        raise last_error or ExternalServiceError("DashScope API call failed after all retries")
+        raise last_error or ExternalServiceError(
+            "DashScope API call failed after all retries"
+        )
 
-    def _parse_response(self, response_text: str, request: AIAnalysisRequest) -> AIAnalysisResponse:
+    def _parse_response(
+        self, response_text: str, request: AIAnalysisRequest
+    ) -> AIAnalysisResponse:
         """解析AI响应
 
         Args:
@@ -304,13 +321,23 @@ class AIService:
 
                 # 验证必需字段并设置默认值
                 return AIAnalysisResponse(
-                    strategy_analysis=parsed_data.get("strategy_analysis", "策略分析数据解析失败"),
-                    risk_assessment=parsed_data.get("risk_assessment", "风险评估数据解析失败"),
-                    operation_suggestions=parsed_data.get("operation_suggestions", ["建议数据解析失败"]),
-                    confidence_score=max(0.0, min(1.0, parsed_data.get("confidence_score", 0.5))),
-                    market_outlook=parsed_data.get("market_outlook", "市场展望数据解析失败"),
+                    strategy_analysis=parsed_data.get(
+                        "strategy_analysis", "策略分析数据解析失败"
+                    ),
+                    risk_assessment=parsed_data.get(
+                        "risk_assessment", "风险评估数据解析失败"
+                    ),
+                    operation_suggestions=parsed_data.get(
+                        "operation_suggestions", ["建议数据解析失败"]
+                    ),
+                    confidence_score=max(
+                        0.0, min(1.0, parsed_data.get("confidence_score", 0.5))
+                    ),
+                    market_outlook=parsed_data.get(
+                        "market_outlook", "市场展望数据解析失败"
+                    ),
                     key_factors=parsed_data.get("key_factors", ["关键因子解析失败"]),
-                    warnings=parsed_data.get("warnings", [])
+                    warnings=parsed_data.get("warnings", []),
                 )
             else:
                 # JSON解析失败，使用文本解析
@@ -327,22 +354,22 @@ class AIService:
             import re
 
             # 匹配```json...```格式
-            json_pattern = r'```json\s*([\s\S]*?)\s*```'
+            json_pattern = r"```json\s*([\s\S]*?)\s*```"
             match = re.search(json_pattern, text, re.IGNORECASE)
             if match:
                 return match.group(1).strip()
 
             # 匹配```...```格式
-            code_pattern = r'```\s*([\s\S]*?)\s*```'
+            code_pattern = r"```\s*([\s\S]*?)\s*```"
             match = re.search(code_pattern, text)
             if match:
                 content = match.group(1).strip()
                 # 检查是否是JSON格式
-                if content.startswith('{') and content.endswith('}'):
+                if content.startswith("{") and content.endswith("}"):
                     return content
 
             # 直接查找JSON对象
-            json_pattern = r'\{[\s\S]*\}'
+            json_pattern = r"\{[\s\S]*\}"
             match = re.search(json_pattern, text)
             if match:
                 return match.group(0)
@@ -362,7 +389,7 @@ class AIService:
             confidence_score=0.6,
             market_outlook="市场展望需要进一步分析",
             key_factors=["技术面因子", "基本面因子"],
-            warnings=["AI响应解析不完整,建议人工复核"]
+            warnings=["AI响应解析不完整,建议人工复核"],
         )
 
     def _fallback_analysis(self, request: AIAnalysisRequest) -> AIAnalysisResponse:
@@ -397,7 +424,9 @@ class AIService:
         risk_assessment = self._rule_based_risk_assessment(backtest_results)
 
         # 操作建议
-        operation_suggestions = self._rule_based_operation_suggestions(factor_scores, backtest_results)
+        operation_suggestions = self._rule_based_operation_suggestions(
+            factor_scores, backtest_results
+        )
 
         # 置信度评分（规则引擎置信度较低）
         confidence_score = 0.4
@@ -409,7 +438,7 @@ class AIService:
             confidence_score=confidence_score,
             market_outlook="基于规则引擎的市场分析,建议结合人工判断",
             key_factors=list(factor_scores.keys())[:5],  # 取前5个因子
-            warnings=["AI服务不可用,使用规则引擎降级分析", "建议人工复核分析结果"]
+            warnings=["AI服务不可用,使用规则引擎降级分析", "建议人工复核分析结果"],
         )
 
     def _rule_based_strategy_analysis(self, backtest_results: dict[str, Any]) -> str:
@@ -471,12 +500,16 @@ class AIService:
 
         return "\n".join(risk_parts)
 
-    def _rule_based_operation_suggestions(self, factor_scores: dict[str, float], backtest_results: dict[str, Any]) -> list[str]:
+    def _rule_based_operation_suggestions(
+        self, factor_scores: dict[str, float], backtest_results: dict[str, Any]
+    ) -> list[str]:
         """基于规则的操作建议"""
         suggestions = []
 
         # 基于因子评分的建议
-        avg_score = sum(factor_scores.values()) / len(factor_scores) if factor_scores else 0
+        avg_score = (
+            sum(factor_scores.values()) / len(factor_scores) if factor_scores else 0
+        )
 
         if avg_score > 0.7:
             suggestions.append("因子评分较高,建议适当增加仓位")
@@ -495,11 +528,9 @@ class AIService:
             suggestions.append("回撤较大,建议加强止损机制")
 
         # 通用建议
-        suggestions.extend([
-            "建议定期监控策略表现",
-            "建议结合市场环境调整策略",
-            "建议进行风险管理评估"
-        ])
+        suggestions.extend(
+            ["建议定期监控策略表现", "建议结合市场环境调整策略", "建议进行风险管理评估"]
+        )
 
         return suggestions
 
@@ -516,5 +547,5 @@ class AIService:
             "timeout": self.timeout,
             "max_retries": self.max_retries,
             "has_cached_analysis": self._last_analysis is not None,
-            "status": "healthy" if self.api_key else "degraded"
+            "status": "healthy" if self.api_key else "degraded",
         }

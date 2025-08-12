@@ -16,8 +16,8 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-T = TypeVar('T', bound=BaseModel)
-R = TypeVar('R', bound=BaseModel)
+T = TypeVar("T", bound=BaseModel)
+R = TypeVar("R", bound=BaseModel)
 
 
 class OrchestrationContext(BaseModel):
@@ -60,7 +60,9 @@ class BaseOrchestrator(ABC):
         self.name = self.__class__.__name__
         logger.info(f"Initializing orchestrator: {self.name}")
 
-    async def execute(self, request: T, context: OrchestrationContext) -> OrchestrationResult:
+    async def execute(
+        self, request: T, context: OrchestrationContext
+    ) -> OrchestrationResult:
         """执行编排流程
 
         Args:
@@ -72,7 +74,9 @@ class BaseOrchestrator(ABC):
         """
         start_time = asyncio.get_event_loop().time()
 
-        logger.info(f"Starting orchestration: {self.name}, request_id: {context.request_id}")
+        logger.info(
+            f"Starting orchestration: {self.name}, request_id: {context.request_id}"
+        )
 
         try:
             async with self._manage_context(context) as managed_context:
@@ -91,7 +95,9 @@ class BaseOrchestrator(ABC):
                     result=result,
                     context=managed_context,
                     execution_time=execution_time,
-                    steps_completed=managed_context.intermediate_results.get('completed_steps', [])
+                    steps_completed=managed_context.intermediate_results.get(
+                        "completed_steps", []
+                    ),
                 )
 
         except Exception as e:
@@ -110,11 +116,13 @@ class BaseOrchestrator(ABC):
                 error=str(e),
                 context=context,
                 execution_time=execution_time,
-                steps_failed=context.intermediate_results.get('failed_steps', [])
+                steps_failed=context.intermediate_results.get("failed_steps", []),
             )
 
     @asynccontextmanager
-    async def _manage_context(self, context: OrchestrationContext) -> AsyncGenerator[OrchestrationContext, None]:
+    async def _manage_context(
+        self, context: OrchestrationContext
+    ) -> AsyncGenerator[OrchestrationContext, None]:
         """管理编排上下文
 
         Args:
@@ -125,16 +133,16 @@ class BaseOrchestrator(ABC):
         """
         try:
             # 初始化上下文
-            context.intermediate_results['completed_steps'] = []
-            context.intermediate_results['failed_steps'] = []
-            context.intermediate_results['start_time'] = asyncio.get_event_loop().time()
+            context.intermediate_results["completed_steps"] = []
+            context.intermediate_results["failed_steps"] = []
+            context.intermediate_results["start_time"] = asyncio.get_event_loop().time()
 
             yield context
 
         except Exception as e:
             # 记录错误上下文
-            context.error_context['exception'] = str(e)
-            context.error_context['exception_type'] = type(e).__name__
+            context.error_context["exception"] = str(e)
+            context.error_context["exception_type"] = type(e).__name__
             raise
         finally:
             # 清理资源
@@ -152,15 +160,15 @@ class BaseOrchestrator(ABC):
         """
         # 1. 前置检查
         await self._pre_check(request, context)
-        self._mark_step_completed('pre_check', context)
+        self._mark_step_completed("pre_check", context)
 
         # 2. 服务调用
         service_results = await self._call_services(request, context)
-        self._mark_step_completed('service_calls', context)
+        self._mark_step_completed("service_calls", context)
 
         # 3. 结果聚合
         result = await self._aggregate_results(service_results, context)
-        self._mark_step_completed('result_aggregation', context)
+        self._mark_step_completed("result_aggregation", context)
 
         return result
 
@@ -178,7 +186,9 @@ class BaseOrchestrator(ABC):
         pass
 
     @abstractmethod
-    async def _call_services(self, request: T, context: OrchestrationContext) -> dict[str, Any]:
+    async def _call_services(
+        self, request: T, context: OrchestrationContext
+    ) -> dict[str, Any]:
         """调用服务
 
         Args:
@@ -194,7 +204,9 @@ class BaseOrchestrator(ABC):
         pass
 
     @abstractmethod
-    async def _aggregate_results(self, service_results: dict[str, Any], context: OrchestrationContext) -> R:
+    async def _aggregate_results(
+        self, service_results: dict[str, Any], context: OrchestrationContext
+    ) -> R:
         """聚合结果
 
         Args:
@@ -219,38 +231,48 @@ class BaseOrchestrator(ABC):
             logger.info(f"No rollback actions for request_id: {context.request_id}")
             return
 
-        logger.info(f"Starting rollback for request_id: {context.request_id}, actions: {len(context.rollback_actions)}")
+        logger.info(
+            f"Starting rollback for request_id: {context.request_id}, actions: {len(context.rollback_actions)}"
+        )
 
         # 按逆序执行回滚操作
         for action in reversed(context.rollback_actions):
             try:
                 await self._execute_rollback_action(action, context)
-                logger.info(f"Rollback action completed: {action.get('type', 'unknown')}")
+                logger.info(
+                    f"Rollback action completed: {action.get('type', 'unknown')}"
+                )
             except Exception as e:
-                logger.error(f"Rollback action failed: {action.get('type', 'unknown')}, error: {e!s}")
+                logger.error(
+                    f"Rollback action failed: {action.get('type', 'unknown')}, error: {e!s}"
+                )
                 # 继续执行其他回滚操作
 
         logger.info(f"Rollback completed for request_id: {context.request_id}")
 
-    async def _execute_rollback_action(self, action: dict[str, Any], context: OrchestrationContext) -> None:
+    async def _execute_rollback_action(
+        self, action: dict[str, Any], context: OrchestrationContext
+    ) -> None:
         """执行单个回滚操作
 
         Args:
             action: 回滚操作定义
             context: 编排上下文
         """
-        action_type = action.get('type')
+        action_type = action.get("type")
 
-        if action_type == 'delete_data':
+        if action_type == "delete_data":
             await self._rollback_delete_data(action, context)
-        elif action_type == 'restore_state':
+        elif action_type == "restore_state":
             await self._rollback_restore_state(action, context)
-        elif action_type == 'cleanup_resources':
+        elif action_type == "cleanup_resources":
             await self._rollback_cleanup_resources(action, context)
         else:
             logger.warning(f"Unknown rollback action type: {action_type}")
 
-    async def _rollback_delete_data(self, action: dict[str, Any], context: OrchestrationContext) -> None:
+    async def _rollback_delete_data(
+        self, action: dict[str, Any], context: OrchestrationContext
+    ) -> None:
         """回滚数据删除操作
 
         Args:
@@ -260,7 +282,9 @@ class BaseOrchestrator(ABC):
         # 子类可以重写此方法实现具体的数据删除回滚逻辑
         logger.info(f"Executing delete_data rollback: {action}")
 
-    async def _rollback_restore_state(self, action: dict[str, Any], context: OrchestrationContext) -> None:
+    async def _rollback_restore_state(
+        self, action: dict[str, Any], context: OrchestrationContext
+    ) -> None:
         """回滚状态恢复操作
 
         Args:
@@ -270,7 +294,9 @@ class BaseOrchestrator(ABC):
         # 子类可以重写此方法实现具体的状态恢复回滚逻辑
         logger.info(f"Executing restore_state rollback: {action}")
 
-    async def _rollback_cleanup_resources(self, action: dict[str, Any], context: OrchestrationContext) -> None:
+    async def _rollback_cleanup_resources(
+        self, action: dict[str, Any], context: OrchestrationContext
+    ) -> None:
         """回滚资源清理操作
 
         Args:
@@ -287,25 +313,29 @@ class BaseOrchestrator(ABC):
             context: 编排上下文
         """
         # 清理临时数据
-        if 'temp_data' in context.session_data:
-            del context.session_data['temp_data']
+        if "temp_data" in context.session_data:
+            del context.session_data["temp_data"]
 
         logger.debug(f"Context cleaned up for request_id: {context.request_id}")
 
-    def _mark_step_completed(self, step_name: str, context: OrchestrationContext) -> None:
+    def _mark_step_completed(
+        self, step_name: str, context: OrchestrationContext
+    ) -> None:
         """标记步骤完成
 
         Args:
             step_name: 步骤名称
             context: 编排上下文
         """
-        completed_steps = context.intermediate_results.get('completed_steps', [])
+        completed_steps = context.intermediate_results.get("completed_steps", [])
         completed_steps.append(step_name)
-        context.intermediate_results['completed_steps'] = completed_steps
+        context.intermediate_results["completed_steps"] = completed_steps
 
         logger.debug(f"Step completed: {step_name}, request_id: {context.request_id}")
 
-    def _mark_step_failed(self, step_name: str, context: OrchestrationContext, error: str) -> None:
+    def _mark_step_failed(
+        self, step_name: str, context: OrchestrationContext, error: str
+    ) -> None:
         """标记步骤失败
 
         Args:
@@ -313,15 +343,22 @@ class BaseOrchestrator(ABC):
             context: 编排上下文
             error: 错误信息
         """
-        failed_steps = context.intermediate_results.get('failed_steps', [])
+        failed_steps = context.intermediate_results.get("failed_steps", [])
         failed_steps.append(step_name)
-        context.intermediate_results['failed_steps'] = failed_steps
+        context.intermediate_results["failed_steps"] = failed_steps
 
-        context.error_context[f'{step_name}_error'] = error
+        context.error_context[f"{step_name}_error"] = error
 
-        logger.error(f"Step failed: {step_name}, error: {error}, request_id: {context.request_id}")
+        logger.error(
+            f"Step failed: {step_name}, error: {error}, request_id: {context.request_id}"
+        )
 
-    def _add_rollback_action(self, action_type: str, action_data: dict[str, Any], context: OrchestrationContext) -> None:
+    def _add_rollback_action(
+        self,
+        action_type: str,
+        action_data: dict[str, Any],
+        context: OrchestrationContext,
+    ) -> None:
         """添加回滚操作
 
         Args:
@@ -330,16 +367,20 @@ class BaseOrchestrator(ABC):
             context: 编排上下文
         """
         rollback_action = {
-            'type': action_type,
-            'data': action_data,
-            'timestamp': asyncio.get_event_loop().time()
+            "type": action_type,
+            "data": action_data,
+            "timestamp": asyncio.get_event_loop().time(),
         }
 
         context.rollback_actions.append(rollback_action)
 
-        logger.debug(f"Rollback action added: {action_type}, request_id: {context.request_id}")
+        logger.debug(
+            f"Rollback action added: {action_type}, request_id: {context.request_id}"
+        )
 
-    async def _safe_service_call(self, service_name: str, service_call, context: OrchestrationContext) -> Any:
+    async def _safe_service_call(
+        self, service_name: str, service_call, context: OrchestrationContext
+    ) -> Any:
         """安全的服务调用
 
         Args:
@@ -354,11 +395,15 @@ class BaseOrchestrator(ABC):
             OrchestrationError: 服务调用失败
         """
         try:
-            logger.debug(f"Calling service: {service_name}, request_id: {context.request_id}")
+            logger.debug(
+                f"Calling service: {service_name}, request_id: {context.request_id}"
+            )
 
             result = await service_call()
 
-            logger.debug(f"Service call completed: {service_name}, request_id: {context.request_id}")
+            logger.debug(
+                f"Service call completed: {service_name}, request_id: {context.request_id}"
+            )
 
             return result
 
@@ -366,7 +411,7 @@ class BaseOrchestrator(ABC):
             error_msg = f"Service call failed: {service_name}, error: {e!s}"
             logger.error(f"{error_msg}, request_id: {context.request_id}")
 
-            self._mark_step_failed(f'service_{service_name}', context, str(e))
+            self._mark_step_failed(f"service_{service_name}", context, str(e))
 
             raise OrchestrationError(error_msg) from e
 
@@ -388,7 +433,9 @@ class BaseOrchestrator(ABC):
 
         logger.debug(f"Request validation passed, request_id: {context.request_id}")
 
-    def _get_context_data(self, key: str, context: OrchestrationContext, default: Any = None) -> Any:
+    def _get_context_data(
+        self, key: str, context: OrchestrationContext, default: Any = None
+    ) -> Any:
         """获取上下文数据
 
         Args:
@@ -401,7 +448,9 @@ class BaseOrchestrator(ABC):
         """
         return context.intermediate_results.get(key, default)
 
-    def _set_context_data(self, key: str, value: Any, context: OrchestrationContext) -> None:
+    def _set_context_data(
+        self, key: str, value: Any, context: OrchestrationContext
+    ) -> None:
         """设置上下文数据
 
         Args:

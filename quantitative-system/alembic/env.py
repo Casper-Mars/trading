@@ -13,10 +13,13 @@ project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+
 # 延迟导入以避免E402错误
 def get_db_url():
     from config.database import get_database_url
+
     return get_database_url()
+
 
 # 导入所有模型以确保它们被注册
 with contextlib.suppress(ImportError):
@@ -82,9 +85,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

@@ -32,29 +32,26 @@ class TaskScheduler:
             data_collection_orchestrator: 数据采集编排器实例
         """
         # 配置调度器
-        jobstores = {
-            'default': MemoryJobStore()
-        }
-        executors = {
-            'default': AsyncIOExecutor()
-        }
-        job_defaults = {
-            'coalesce': False,
-            'max_instances': 3
-        }
+        jobstores = {"default": MemoryJobStore()}
+        executors = {"default": AsyncIOExecutor()}
+        job_defaults = {"coalesce": False, "max_instances": 3}
 
         self.scheduler = AsyncIOScheduler(
             jobstores=jobstores,
             executors=executors,
             job_defaults=job_defaults,
-            timezone='Asia/Shanghai'
+            timezone="Asia/Shanghai",
         )
 
         # 初始化任务管理器
         self.task_manager = TaskManager(self.scheduler)
 
         # 初始化任务集合
-        self.data_collection_jobs = DataCollectionJobs(data_collection_orchestrator) if data_collection_orchestrator else None
+        self.data_collection_jobs = (
+            DataCollectionJobs(data_collection_orchestrator)
+            if data_collection_orchestrator
+            else None
+        )
         self.system_maintenance_jobs = SystemMaintenanceJobs()
         self.health_check_jobs = HealthCheckJobs()
 
@@ -93,78 +90,90 @@ class TaskScheduler:
         # 数据采集任务
         if self.data_collection_jobs:
             # 日度股票数据采集 - 每个交易日18:00执行
-            self.task_manager.register_job(JobConfig(
-                job_id="daily_stock_data_collection",
-                job_name="日度股票数据采集",
-                job_func=self.data_collection_jobs.daily_stock_data_collection,
-                trigger_type="cron",
-                trigger_args={"hour": 18, "minute": 0, "day_of_week": "mon-fri"},
-                max_retries=3,
-                timeout=3600,  # 1小时超时
-                metadata={"category": "data_collection", "priority": "high"}
-            ))
+            self.task_manager.register_job(
+                JobConfig(
+                    job_id="daily_stock_data_collection",
+                    job_name="日度股票数据采集",
+                    job_func=self.data_collection_jobs.daily_stock_data_collection,
+                    trigger_type="cron",
+                    trigger_args={"hour": 18, "minute": 0, "day_of_week": "mon-fri"},
+                    max_retries=3,
+                    timeout=3600,  # 1小时超时
+                    metadata={"category": "data_collection", "priority": "high"},
+                )
+            )
 
             # 周度股票基础信息更新 - 每周一09:00执行
-            self.task_manager.register_job(JobConfig(
-                job_id="weekly_stock_basic_info_update",
-                job_name="周度股票基础信息更新",
-                job_func=self.data_collection_jobs.weekly_stock_basic_info_update,
-                trigger_type="cron",
-                trigger_args={"hour": 9, "minute": 0, "day_of_week": "mon"},
-                max_retries=2,
-                timeout=1800,  # 30分钟超时
-                metadata={"category": "data_collection", "priority": "medium"}
-            ))
+            self.task_manager.register_job(
+                JobConfig(
+                    job_id="weekly_stock_basic_info_update",
+                    job_name="周度股票基础信息更新",
+                    job_func=self.data_collection_jobs.weekly_stock_basic_info_update,
+                    trigger_type="cron",
+                    trigger_args={"hour": 9, "minute": 0, "day_of_week": "mon"},
+                    max_retries=2,
+                    timeout=1800,  # 30分钟超时
+                    metadata={"category": "data_collection", "priority": "medium"},
+                )
+            )
 
             # 月度财务数据采集 - 每月1日10:00执行
-            self.task_manager.register_job(JobConfig(
-                job_id="monthly_financial_data_collection",
-                job_name="月度财务数据采集",
-                job_func=self.data_collection_jobs.monthly_financial_data_collection,
-                trigger_type="cron",
-                trigger_args={"hour": 10, "minute": 0, "day": 1},
-                max_retries=3,
-                timeout=7200,  # 2小时超时
-                metadata={"category": "data_collection", "priority": "medium"}
-            ))
+            self.task_manager.register_job(
+                JobConfig(
+                    job_id="monthly_financial_data_collection",
+                    job_name="月度财务数据采集",
+                    job_func=self.data_collection_jobs.monthly_financial_data_collection,
+                    trigger_type="cron",
+                    trigger_args={"hour": 10, "minute": 0, "day": 1},
+                    max_retries=3,
+                    timeout=7200,  # 2小时超时
+                    metadata={"category": "data_collection", "priority": "medium"},
+                )
+            )
 
         # 系统维护任务
         # 日度日志清理 - 每日02:00执行
-        self.task_manager.register_job(JobConfig(
-            job_id="daily_log_cleanup",
-            job_name="日度日志清理",
-            job_func=self.system_maintenance_jobs.daily_log_cleanup,
-            trigger_type="cron",
-            trigger_args={"hour": 2, "minute": 0},
-            max_retries=1,
-            timeout=600,  # 10分钟超时
-            metadata={"category": "maintenance", "priority": "low"}
-        ))
+        self.task_manager.register_job(
+            JobConfig(
+                job_id="daily_log_cleanup",
+                job_name="日度日志清理",
+                job_func=self.system_maintenance_jobs.daily_log_cleanup,
+                trigger_type="cron",
+                trigger_args={"hour": 2, "minute": 0},
+                max_retries=1,
+                timeout=600,  # 10分钟超时
+                metadata={"category": "maintenance", "priority": "low"},
+            )
+        )
 
         # 周度缓存清理 - 每周日03:00执行
-        self.task_manager.register_job(JobConfig(
-            job_id="weekly_cache_cleanup",
-            job_name="周度缓存清理",
-            job_func=self.system_maintenance_jobs.weekly_cache_cleanup,
-            trigger_type="cron",
-            trigger_args={"hour": 3, "minute": 0, "day_of_week": "sun"},
-            max_retries=1,
-            timeout=1800,  # 30分钟超时
-            metadata={"category": "maintenance", "priority": "low"}
-        ))
+        self.task_manager.register_job(
+            JobConfig(
+                job_id="weekly_cache_cleanup",
+                job_name="周度缓存清理",
+                job_func=self.system_maintenance_jobs.weekly_cache_cleanup,
+                trigger_type="cron",
+                trigger_args={"hour": 3, "minute": 0, "day_of_week": "sun"},
+                max_retries=1,
+                timeout=1800,  # 30分钟超时
+                metadata={"category": "maintenance", "priority": "low"},
+            )
+        )
 
         # 健康检查任务
         # 小时级系统健康检查 - 每小时执行
-        self.task_manager.register_job(JobConfig(
-            job_id="hourly_system_health_check",
-            job_name="小时级系统健康检查",
-            job_func=self.health_check_jobs.hourly_system_health_check,
-            trigger_type="cron",
-            trigger_args={"minute": 0},  # 每小时的0分执行
-            max_retries=1,
-            timeout=300,  # 5分钟超时
-            metadata={"category": "health_check", "priority": "high"}
-        ))
+        self.task_manager.register_job(
+            JobConfig(
+                job_id="hourly_system_health_check",
+                job_name="小时级系统健康检查",
+                job_func=self.health_check_jobs.hourly_system_health_check,
+                trigger_type="cron",
+                trigger_args={"minute": 0},  # 每小时的0分执行
+                max_retries=1,
+                timeout=300,  # 5分钟超时
+                metadata={"category": "health_check", "priority": "high"},
+            )
+        )
 
         logger.info("预定义任务注册完成")
 
@@ -174,7 +183,7 @@ class TaskScheduler:
         job_id: str,
         name: str,
         cron_expression: str | None = None,
-        **cron_kwargs
+        **cron_kwargs,
     ) -> bool:
         """添加Cron定时任务
 
@@ -195,11 +204,11 @@ class TaskScheduler:
                 if len(parts) == 5:
                     minute, hour, day, month, day_of_week = parts
                     trigger_args = {
-                        'minute': minute,
-                        'hour': hour,
-                        'day': day,
-                        'month': month,
-                        'day_of_week': day_of_week
+                        "minute": minute,
+                        "hour": hour,
+                        "day": day,
+                        "month": month,
+                        "day_of_week": day_of_week,
                     }
                 else:
                     raise ValueError(f"无效的Cron表达式: {cron_expression}")
@@ -212,7 +221,7 @@ class TaskScheduler:
                 job_name=name,
                 job_func=func,
                 trigger_type="cron",
-                trigger_args=trigger_args
+                trigger_args=trigger_args,
             )
 
             return self.task_manager.register_job(config)
@@ -230,7 +239,7 @@ class TaskScheduler:
         minutes: int = 0,
         hours: int = 0,
         days: int = 0,
-        **kwargs
+        **kwargs,
     ) -> bool:
         """添加间隔定时任务
 
@@ -249,10 +258,10 @@ class TaskScheduler:
         """
         try:
             trigger_args = {
-                'seconds': seconds,
-                'minutes': minutes,
-                'hours': hours,
-                'days': days
+                "seconds": seconds,
+                "minutes": minutes,
+                "hours": hours,
+                "days": days,
             }
 
             # 使用任务管理器注册任务
@@ -261,7 +270,7 @@ class TaskScheduler:
                 job_name=name,
                 job_func=func,
                 trigger_type="interval",
-                trigger_args=trigger_args
+                trigger_args=trigger_args,
             )
 
             return self.task_manager.register_job(config)
@@ -271,12 +280,7 @@ class TaskScheduler:
             return False
 
     def add_date_job(
-        self,
-        func: Callable,
-        job_id: str,
-        name: str,
-        run_date: datetime,
-        **kwargs
+        self, func: Callable, job_id: str, name: str, run_date: datetime, **kwargs
     ) -> bool:
         """添加一次性定时任务
 
@@ -291,7 +295,7 @@ class TaskScheduler:
             是否添加成功
         """
         try:
-            trigger_args = {'run_date': run_date}
+            trigger_args = {"run_date": run_date}
 
             # 使用任务管理器注册任务
             config = JobConfig(
@@ -299,7 +303,7 @@ class TaskScheduler:
                 job_name=name,
                 job_func=func,
                 trigger_type="date",
-                trigger_args=trigger_args
+                trigger_args=trigger_args,
             )
 
             return self.task_manager.register_job(config)
@@ -360,7 +364,9 @@ class TaskScheduler:
         """
         return self.task_manager.list_jobs()
 
-    def get_execution_history(self, job_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    def get_execution_history(
+        self, job_id: str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
         """获取任务执行历史
 
         Args:
@@ -375,15 +381,15 @@ class TaskScheduler:
         # 转换为字典格式以保持兼容性
         return [
             {
-                'job_id': record.job_id,
-                'job_name': record.job_name,
-                'status': record.status.value,
-                'start_time': record.start_time.isoformat(),
-                'end_time': record.end_time.isoformat() if record.end_time else None,
-                'duration': record.duration,
-                'error_message': record.error_message,
-                'retry_count': record.retry_count,
-                'metadata': record.metadata
+                "job_id": record.job_id,
+                "job_name": record.job_name,
+                "status": record.status.value,
+                "start_time": record.start_time.isoformat(),
+                "end_time": record.end_time.isoformat() if record.end_time else None,
+                "duration": record.duration,
+                "error_message": record.error_message,
+                "retry_count": record.retry_count,
+                "metadata": record.metadata,
             }
             for record in records
         ]
@@ -398,11 +404,11 @@ class TaskScheduler:
 
         return [
             {
-                'job_id': record.job_id,
-                'job_name': record.job_name,
-                'status': record.status.value,
-                'start_time': record.start_time.isoformat(),
-                'metadata': record.metadata
+                "job_id": record.job_id,
+                "job_name": record.job_name,
+                "status": record.status.value,
+                "start_time": record.start_time.isoformat(),
+                "metadata": record.metadata,
             }
             for record in records
         ]
@@ -426,7 +432,9 @@ class TaskScheduler:
         """
         return await self.task_manager.trigger_job(job_id)
 
-    async def trigger_emergency_data_collection(self, task_type, force_update: bool = True) -> bool:
+    async def trigger_emergency_data_collection(
+        self, task_type, force_update: bool = True
+    ) -> bool:
         """触发紧急数据采集
 
         Args:
@@ -441,7 +449,9 @@ class TaskScheduler:
             return False
 
         try:
-            result = await self.data_collection_jobs.emergency_data_collection(task_type, force_update)
+            result = await self.data_collection_jobs.emergency_data_collection(
+                task_type, force_update
+            )
             logger.info(f"紧急数据采集触发成功: {result}")
             return True
         except Exception as e:

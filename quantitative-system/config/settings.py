@@ -11,7 +11,9 @@ class Settings(BaseSettings):
     environment: str = "development"  # development, staging, production
 
     # 数据库配置 (使用MySQL数据库)
-    database_url: str = "mysql+pymysql://root:root123@localhost:3306/trading_data?charset=utf8mb4"
+    database_url: str = (
+        "mysql+pymysql://root:root123@localhost:3306/trading_data?charset=utf8mb4"
+    )
     database_echo: bool = False
     database_pool_size: int = 10
     database_max_overflow: int = 20

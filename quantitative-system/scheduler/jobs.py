@@ -50,22 +50,24 @@ class DataCollectionJobs:
                 data_source=DataSource.TUSHARE,
                 target_date=datetime.now().date(),
                 force_update=False,
-                batch_size=1000
+                batch_size=1000,
             )
 
             # 执行数据采集
             result = await self.orchestrator.execute(request)
 
-            logger.info(f"日度股票数据采集任务完成, job_id: {job_id}, 任务ID: {result.task_id}")
+            logger.info(
+                f"日度股票数据采集任务完成, job_id: {job_id}, 任务ID: {result.task_id}"
+            )
 
             return {
-                'job_id': job_id,
-                'task_id': result.task_id,
-                'status': 'completed',
-                'records_processed': result.records_processed,
-                'quality_score': result.quality_score,
-                'execution_time': result.execution_time,
-                'completed_at': datetime.now()
+                "job_id": job_id,
+                "task_id": result.task_id,
+                "status": "completed",
+                "records_processed": result.records_processed,
+                "quality_score": result.quality_score,
+                "execution_time": result.execution_time,
+                "completed_at": datetime.now(),
             }
 
         except Exception as e:
@@ -91,22 +93,24 @@ class DataCollectionJobs:
                 task_type=TaskType.STOCK_BASIC_INFO,
                 data_source=DataSource.TUSHARE,
                 force_update=True,
-                batch_size=500
+                batch_size=500,
             )
 
             # 执行数据采集
             result = await self.orchestrator.execute(request)
 
-            logger.info(f"周度股票基础信息更新任务完成, job_id: {job_id}, 任务ID: {result.task_id}")
+            logger.info(
+                f"周度股票基础信息更新任务完成, job_id: {job_id}, 任务ID: {result.task_id}"
+            )
 
             return {
-                'job_id': job_id,
-                'task_id': result.task_id,
-                'status': 'completed',
-                'records_processed': result.records_processed,
-                'quality_score': result.quality_score,
-                'execution_time': result.execution_time,
-                'completed_at': datetime.now()
+                "job_id": job_id,
+                "task_id": result.task_id,
+                "status": "completed",
+                "records_processed": result.records_processed,
+                "quality_score": result.quality_score,
+                "execution_time": result.execution_time,
+                "completed_at": datetime.now(),
             }
 
         except Exception as e:
@@ -132,29 +136,33 @@ class DataCollectionJobs:
                 task_type=TaskType.FINANCIAL_DATA,
                 data_source=DataSource.TUSHARE,
                 force_update=False,
-                batch_size=200
+                batch_size=200,
             )
 
             # 执行数据采集
             result = await self.orchestrator.execute(request)
 
-            logger.info(f"月度财务数据采集任务完成, job_id: {job_id}, 任务ID: {result.task_id}")
+            logger.info(
+                f"月度财务数据采集任务完成, job_id: {job_id}, 任务ID: {result.task_id}"
+            )
 
             return {
-                'job_id': job_id,
-                'task_id': result.task_id,
-                'status': 'completed',
-                'records_processed': result.records_processed,
-                'quality_score': result.quality_score,
-                'execution_time': result.execution_time,
-                'completed_at': datetime.now()
+                "job_id": job_id,
+                "task_id": result.task_id,
+                "status": "completed",
+                "records_processed": result.records_processed,
+                "quality_score": result.quality_score,
+                "execution_time": result.execution_time,
+                "completed_at": datetime.now(),
             }
 
         except Exception as e:
             logger.error(f"月度财务数据采集任务失败, job_id: {job_id}, 错误: {e}")
             raise JobExecutionError(f"月度财务数据采集失败: {e}") from e
 
-    async def emergency_data_collection(self, task_type: TaskType, force_update: bool = True) -> dict[str, Any]:
+    async def emergency_data_collection(
+        self, task_type: TaskType, force_update: bool = True
+    ) -> dict[str, Any]:
         """紧急数据采集任务
 
         用于手动触发的紧急数据采集，支持强制更新。
@@ -166,32 +174,38 @@ class DataCollectionJobs:
         Returns:
             任务执行结果
         """
-        job_id = f"emergency_{task_type.value}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        job_id = (
+            f"emergency_{task_type.value}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        )
 
         try:
-            logger.info(f"开始执行紧急数据采集任务, job_id: {job_id}, 任务类型: {task_type}")
+            logger.info(
+                f"开始执行紧急数据采集任务, job_id: {job_id}, 任务类型: {task_type}"
+            )
 
             # 创建数据采集请求
             request = DataCollectionRequest(
                 task_type=task_type,
                 data_source=DataSource.TUSHARE,
                 force_update=force_update,
-                batch_size=1000
+                batch_size=1000,
             )
 
             # 执行数据采集
             result = await self.orchestrator.execute(request)
 
-            logger.info(f"紧急数据采集任务完成, job_id: {job_id}, 任务ID: {result.task_id}")
+            logger.info(
+                f"紧急数据采集任务完成, job_id: {job_id}, 任务ID: {result.task_id}"
+            )
 
             return {
-                'job_id': job_id,
-                'task_id': result.task_id,
-                'status': 'completed',
-                'records_processed': result.records_processed,
-                'quality_score': result.quality_score,
-                'execution_time': result.execution_time,
-                'completed_at': datetime.now()
+                "job_id": job_id,
+                "task_id": result.task_id,
+                "status": "completed",
+                "records_processed": result.records_processed,
+                "quality_score": result.quality_score,
+                "execution_time": result.execution_time,
+                "completed_at": datetime.now(),
             }
 
         except Exception as e:
@@ -231,11 +245,11 @@ class SystemMaintenanceJobs:
             logger.info(f"日度日志清理任务完成, job_id: {job_id}")
 
             return {
-                'job_id': job_id,
-                'status': 'completed',
-                'files_cleaned': 0,  # TODO: 实际清理的文件数量
-                'space_freed': 0,    # TODO: 释放的存储空间
-                'completed_at': datetime.now()
+                "job_id": job_id,
+                "status": "completed",
+                "files_cleaned": 0,  # TODO: 实际清理的文件数量
+                "space_freed": 0,  # TODO: 释放的存储空间
+                "completed_at": datetime.now(),
             }
 
         except Exception as e:
@@ -264,10 +278,10 @@ class SystemMaintenanceJobs:
             logger.info(f"周度缓存清理任务完成, job_id: {job_id}")
 
             return {
-                'job_id': job_id,
-                'status': 'completed',
-                'cache_entries_cleaned': 0,  # TODO: 实际清理的缓存条目数
-                'completed_at': datetime.now()
+                "job_id": job_id,
+                "status": "completed",
+                "cache_entries_cleaned": 0,  # TODO: 实际清理的缓存条目数
+                "completed_at": datetime.now(),
             }
 
         except Exception as e:
@@ -309,12 +323,12 @@ class HealthCheckJobs:
             logger.info(f"系统健康检查任务完成, job_id: {job_id}")
 
             return {
-                'job_id': job_id,
-                'status': 'completed',
-                'health_status': 'healthy',  # TODO: 实际健康状态
-                'checks_performed': 5,       # TODO: 执行的检查项数量
-                'issues_found': 0,           # TODO: 发现的问题数量
-                'completed_at': datetime.now()
+                "job_id": job_id,
+                "status": "completed",
+                "health_status": "healthy",  # TODO: 实际健康状态
+                "checks_performed": 5,  # TODO: 执行的检查项数量
+                "issues_found": 0,  # TODO: 发现的问题数量
+                "completed_at": datetime.now(),
             }
 
         except Exception as e:

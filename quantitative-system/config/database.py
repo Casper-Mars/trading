@@ -17,11 +17,7 @@ def get_database_url() -> str:
         return settings.database_url
 
     # 如果没有明确指定，且MySQL配置完整，则构建MySQL URL
-    if (
-        settings.mysql_host and
-        settings.mysql_user and
-        settings.mysql_database
-    ):
+    if settings.mysql_host and settings.mysql_user and settings.mysql_database:
         # 构建MySQL连接URL
         password_part = f":{settings.mysql_password}" if settings.mysql_password else ""
         return (

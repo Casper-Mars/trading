@@ -45,7 +45,7 @@ class CrawlerConfig(BaseModel):
 
     user_agent: str = Field(
         default="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-        description="用户代理"
+        description="用户代理",
     )
     request_delay: float = Field(default=1.0, description="请求间隔(秒)")
     timeout: int = Field(default=30, description="请求超时时间(秒)")
@@ -89,7 +89,10 @@ class RobotsChecker:
             base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
 
             # 检查缓存
-            if base_url in self._robots_cache and datetime.now() < self._cache_expiry[base_url]:
+            if (
+                base_url in self._robots_cache
+                and datetime.now() < self._cache_expiry[base_url]
+            ):
                 rp = self._robots_cache[base_url]
                 return rp.can_fetch(user_agent, url)
 
@@ -118,44 +121,44 @@ class NewsContentExtractor:
     def __init__(self):
         # 常见的新闻内容选择器
         self.content_selectors = [
-            'article',
-            '.article-content',
-            '.news-content',
-            '.content',
-            '.post-content',
-            '#content',
-            '.entry-content',
-            '.article-body'
+            "article",
+            ".article-content",
+            ".news-content",
+            ".content",
+            ".post-content",
+            "#content",
+            ".entry-content",
+            ".article-body",
         ]
 
         # 常见的标题选择器
         self.title_selectors = [
-            'h1',
-            '.article-title',
-            '.news-title',
-            '.title',
-            '.post-title',
-            '.entry-title'
+            "h1",
+            ".article-title",
+            ".news-title",
+            ".title",
+            ".post-title",
+            ".entry-title",
         ]
 
         # 需要移除的元素
         self.remove_selectors = [
-            'script',
-            'style',
-            '.advertisement',
-            '.ad',
-            '.sidebar',
-            '.related',
-            '.comments',
-            'nav',
-            'footer',
-            'header'
+            "script",
+            "style",
+            ".advertisement",
+            ".ad",
+            ".sidebar",
+            ".related",
+            ".comments",
+            "nav",
+            "footer",
+            "header",
         ]
 
     def extract_article(self, html: str, url: str) -> dict[str, Any]:
         """从HTML中提取新闻文章信息"""
         try:
-            soup = BeautifulSoup(html, 'html.parser')
+            soup = BeautifulSoup(html, "html.parser")
 
             # 移除不需要的元素
             for selector in self.remove_selectors:
@@ -178,12 +181,12 @@ class NewsContentExtractor:
             summary = self._extract_summary(soup, content)
 
             return {
-                'title': title,
-                'content': content,
-                'url': url,
-                'publish_time': publish_time,
-                'author': author,
-                'summary': summary
+                "title": title,
+                "content": content,
+                "url": url,
+                "publish_time": publish_time,
+                "author": author,
+                "summary": summary,
             }
 
         except Exception as e:
@@ -198,7 +201,7 @@ class NewsContentExtractor:
                 return element.get_text(strip=True)
 
         # 回退到页面标题
-        title_tag = soup.find('title')
+        title_tag = soup.find("title")
         if title_tag:
             return title_tag.get_text(strip=True)
 
@@ -214,35 +217,37 @@ class NewsContentExtractor:
                     for nested in element.select(remove_sel):
                         nested.decompose()
 
-                text = element.get_text(separator='\n', strip=True)
+                text = element.get_text(separator="\n", strip=True)
                 if len(text) > 100:  # 确保内容足够长
                     return text
 
         # 回退到body内容
-        body = soup.find('body')
+        body = soup.find("body")
         if body:
-            return body.get_text(separator='\n', strip=True)
+            return body.get_text(separator="\n", strip=True)
 
         return ""
 
     def _extract_publish_time(self, soup: BeautifulSoup) -> datetime | None:
         """提取发布时间"""
         time_selectors = [
-            'time[datetime]',
-            '.publish-time',
-            '.date',
-            '.time',
-            '.article-date'
+            "time[datetime]",
+            ".publish-time",
+            ".date",
+            ".time",
+            ".article-date",
         ]
 
         for selector in time_selectors:
             element = soup.select_one(selector)
             if element:
                 # 尝试从datetime属性获取
-                datetime_attr = element.get('datetime')
+                datetime_attr = element.get("datetime")
                 if datetime_attr:
                     try:
-                        return datetime.fromisoformat(datetime_attr.replace('Z', '+00:00'))
+                        return datetime.fromisoformat(
+                            datetime_attr.replace("Z", "+00:00")
+                        )
                     except ValueError:
                         pass
 
@@ -255,12 +260,7 @@ class NewsContentExtractor:
 
     def _extract_author(self, soup: BeautifulSoup) -> str | None:
         """提取作者"""
-        author_selectors = [
-            '.author',
-            '.byline',
-            '.writer',
-            '[rel="author"]'
-        ]
+        author_selectors = [".author", ".byline", ".writer", '[rel="author"]']
 
         for selector in author_selectors:
             element = soup.select_one(selector)
@@ -272,9 +272,9 @@ class NewsContentExtractor:
     def _extract_summary(self, soup: BeautifulSoup, content: str) -> str | None:
         """提取摘要"""
         # 尝试从meta标签获取
-        meta_desc = soup.find('meta', attrs={'name': 'description'})
-        if meta_desc and meta_desc.get('content'):
-            return meta_desc['content']
+        meta_desc = soup.find("meta", attrs={"name": "description"})
+        if meta_desc and meta_desc.get("content"):
+            return meta_desc["content"]
 
         # 从内容中生成摘要（前200字符）
         if content:
@@ -289,9 +289,9 @@ class NewsContentExtractor:
         """解析时间文本"""
         # 常见的时间格式模式
         patterns = [
-            r'(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})',
-            r'(\d{4})/(\d{2})/(\d{2})\s+(\d{2}):(\d{2})',
-            r'(\d{2})-(\d{2})-(\d{4})\s+(\d{2}):(\d{2})'
+            r"(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})",
+            r"(\d{4})/(\d{2})/(\d{2})\s+(\d{2}):(\d{2})",
+            r"(\d{2})-(\d{2})-(\d{4})\s+(\d{2}):(\d{2})",
         ]
 
         for pattern in patterns:
@@ -301,7 +301,9 @@ class NewsContentExtractor:
                     groups = match.groups()
                     if len(groups) >= 5:
                         year, month, day, hour, minute = groups[:5]
-                        return datetime(int(year), int(month), int(day), int(hour), int(minute))
+                        return datetime(
+                            int(year), int(month), int(day), int(hour), int(minute)
+                        )
                 except ValueError:
                     continue
 
@@ -320,30 +322,27 @@ class NewsCrawler:
 
         # 金融新闻网站配置
         self.news_sources = {
-            'sina_finance': {
-                'base_url': 'https://finance.sina.com.cn',
-                'list_urls': [
-                    'https://finance.sina.com.cn/stock/',
-                    'https://finance.sina.com.cn/money/'
+            "sina_finance": {
+                "base_url": "https://finance.sina.com.cn",
+                "list_urls": [
+                    "https://finance.sina.com.cn/stock/",
+                    "https://finance.sina.com.cn/money/",
                 ],
-                'source_name': '新浪财经'
+                "source_name": "新浪财经",
             },
-            'eastmoney': {
-                'base_url': 'https://finance.eastmoney.com',
-                'list_urls': [
-                    'https://finance.eastmoney.com/news/',
-                    'https://stock.eastmoney.com/news/'
+            "eastmoney": {
+                "base_url": "https://finance.eastmoney.com",
+                "list_urls": [
+                    "https://finance.eastmoney.com/news/",
+                    "https://stock.eastmoney.com/news/",
                 ],
-                'source_name': '东方财富'
+                "source_name": "东方财富",
             },
-            'hexun': {
-                'base_url': 'https://www.hexun.com',
-                'list_urls': [
-                    'https://stock.hexun.com/',
-                    'https://finance.hexun.com/'
-                ],
-                'source_name': '和讯网'
-            }
+            "hexun": {
+                "base_url": "https://www.hexun.com",
+                "list_urls": ["https://stock.hexun.com/", "https://finance.hexun.com/"],
+                "source_name": "和讯网",
+            },
         }
 
     async def __aenter__(self):
@@ -361,13 +360,13 @@ class NewsCrawler:
             timeout = aiohttp.ClientTimeout(total=self.config.timeout)
             connector = aiohttp.TCPConnector(
                 limit=self.config.max_concurrent_requests,
-                limit_per_host=self.config.max_concurrent_requests
+                limit_per_host=self.config.max_concurrent_requests,
             )
 
             self.session = aiohttp.ClientSession(
                 timeout=timeout,
                 connector=connector,
-                headers={'User-Agent': self.config.user_agent}
+                headers={"User-Agent": self.config.user_agent},
             )
 
             logger.info("新闻爬虫会话已启动")
@@ -388,7 +387,7 @@ class NewsCrawler:
         news_urls = []
 
         try:
-            for list_url in source_config['list_urls']:
+            for list_url in source_config["list_urls"]:
                 if len(news_urls) >= limit:
                     break
 
@@ -411,7 +410,9 @@ class NewsCrawler:
         try:
             # 检查robots.txt
             if self.config.respect_robots_txt:
-                can_fetch = await self.robots_checker.can_fetch(url, self.config.user_agent)
+                can_fetch = await self.robots_checker.can_fetch(
+                    url, self.config.user_agent
+                )
                 if not can_fetch:
                     raise CrawlerError(f"robots.txt禁止访问: {url}")
 
@@ -423,7 +424,9 @@ class NewsCrawler:
 
             # 提取文章信息
             article_data = self.content_extractor.extract_article(html, url)
-            article_data['source'] = self.news_sources.get(source, {}).get('source_name', source)
+            article_data["source"] = self.news_sources.get(source, {}).get(
+                "source_name", source
+            )
 
             return NewsArticle(**article_data)
 
@@ -463,16 +466,20 @@ class NewsCrawler:
             logger.error(f"批量爬取新闻失败: {e}")
             raise CrawlerError(f"批量爬取新闻失败: {e}") from e
 
-    async def _crawl_article_with_semaphore(self, semaphore: asyncio.Semaphore, url: str, source: str) -> NewsArticle:
+    async def _crawl_article_with_semaphore(
+        self, semaphore: asyncio.Semaphore, url: str, source: str
+    ) -> NewsArticle:
         """使用信号量控制并发的文章爬取"""
         async with semaphore:
             return await self.crawl_article(url, source)
 
-    async def _extract_news_urls_from_page(self, list_url: str, source_config: dict) -> list[str]:
+    async def _extract_news_urls_from_page(
+        self, list_url: str, source_config: dict
+    ) -> list[str]:
         """从列表页提取新闻链接"""
         try:
             html = await self._fetch_page(list_url)
-            soup = BeautifulSoup(html, 'html.parser')
+            soup = BeautifulSoup(html, "html.parser")
 
             # 查找新闻链接
             news_urls = []
@@ -483,20 +490,20 @@ class NewsCrawler:
                 'a[href*="/stock/"]',
                 'a[href*="/finance/"]',
                 'a[href*="/money/"]',
-                '.news-item a',
-                '.article-item a',
-                '.title a'
+                ".news-item a",
+                ".article-item a",
+                ".title a",
             ]
 
             for selector in link_selectors:
                 links = soup.select(selector)
                 for link in links:
-                    href = link.get('href')
+                    href = link.get("href")
                     if href:
                         # 转换为绝对URL
-                        if href.startswith('/'):
-                            href = urljoin(source_config['base_url'], href)
-                        elif not href.startswith('http'):
+                        if href.startswith("/"):
+                            href = urljoin(source_config["base_url"], href)
+                        elif not href.startswith("http"):
                             continue
 
                         # 过滤有效的新闻链接
@@ -515,15 +522,15 @@ class NewsCrawler:
         """检查是否为有效的新闻URL"""
         # 排除不相关的链接
         exclude_patterns = [
-            r'/video/',
-            r'/live/',
-            r'/comment/',
-            r'/user/',
-            r'/login',
-            r'/register',
-            r'\.(jpg|png|gif|pdf|doc)$',
-            r'javascript:',
-            r'mailto:'
+            r"/video/",
+            r"/live/",
+            r"/comment/",
+            r"/user/",
+            r"/login",
+            r"/register",
+            r"\.(jpg|png|gif|pdf|doc)$",
+            r"javascript:",
+            r"mailto:",
         ]
 
         for pattern in exclude_patterns:
@@ -532,11 +539,11 @@ class NewsCrawler:
 
         # 包含关键词的链接
         include_patterns = [
-            r'/news/',
-            r'/stock/',
-            r'/finance/',
-            r'/money/',
-            r'/article/'
+            r"/news/",
+            r"/stock/",
+            r"/finance/",
+            r"/money/",
+            r"/article/",
         ]
 
         for pattern in include_patterns:
@@ -564,20 +571,20 @@ class NewsCrawler:
 
                     # 尝试获取正确的编码
                     content = await response.read()
-                    encoding = response.charset or 'utf-8'
+                    encoding = response.charset or "utf-8"
 
                     try:
                         return content.decode(encoding)
                     except UnicodeDecodeError:
                         # 回退到常见编码
-                        for fallback_encoding in ['gbk', 'gb2312', 'utf-8']:
+                        for fallback_encoding in ["gbk", "gb2312", "utf-8"]:
                             try:
                                 return content.decode(fallback_encoding)
                             except UnicodeDecodeError:
                                 continue
 
                         # 最后使用错误忽略模式
-                        return content.decode('utf-8', errors='ignore')
+                        return content.decode("utf-8", errors="ignore")
 
             except (aiohttp.ClientError, RateLimitError) as e:
                 if attempt == self.config.max_retries - 1:
@@ -591,10 +598,12 @@ class NewsCrawler:
 
 
 # 便捷函数
-async def crawl_financial_news(sources: list[str] | None = None, limit_per_source: int = 20) -> list[NewsArticle]:
+async def crawl_financial_news(
+    sources: list[str] | None = None, limit_per_source: int = 20
+) -> list[NewsArticle]:
     """爬取金融新闻的便捷函数"""
     if sources is None:
-        sources = ['sina_finance', 'eastmoney', 'hexun']
+        sources = ["sina_finance", "eastmoney", "hexun"]
 
     all_articles = []
 
@@ -615,7 +624,7 @@ if __name__ == "__main__":
     # 测试代码
     async def test_crawler():
         """测试爬虫功能"""
-        articles = await crawl_financial_news(['sina_finance'], 5)
+        articles = await crawl_financial_news(["sina_finance"], 5)
         for article in articles:
             print(f"标题: {article.title}")
             print(f"来源: {article.source}")

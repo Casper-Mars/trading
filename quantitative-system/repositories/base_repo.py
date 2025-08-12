@@ -10,7 +10,7 @@ from typing import Generic, TypeVar
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class BaseRepository(ABC, Generic[T]):

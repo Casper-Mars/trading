@@ -371,7 +371,9 @@ class FinancialDataBase(BaseSchema):
     total_revenue: Decimal | None = Field(None, description="营业总收入")
     revenue: Decimal | None = Field(None, description="营业收入")
     n_income: Decimal | None = Field(None, description="净利润")
-    n_income_attr_p: Decimal | None = Field(None, description="净利润(不含少数股东损益)")
+    n_income_attr_p: Decimal | None = Field(
+        None, description="净利润(不含少数股东损益)"
+    )
     total_profit: Decimal | None = Field(None, description="利润总额")
     operate_profit: Decimal | None = Field(None, description="营业利润")
     ebit: Decimal | None = Field(None, description="息税前利润")
@@ -398,11 +400,15 @@ class FinancialDataCreate(FinancialDataBase):
     reins_income: Decimal | None = Field(None, description="其中:分保费收入")
     n_sec_tb_income: Decimal | None = Field(None, description="代理买卖证券业务净收入")
     n_sec_uw_income: Decimal | None = Field(None, description="证券承销业务净收入")
-    n_asset_mg_income: Decimal | None = Field(None, description="受托客户资产管理业务净收入")
+    n_asset_mg_income: Decimal | None = Field(
+        None, description="受托客户资产管理业务净收入"
+    )
     oth_b_income: Decimal | None = Field(None, description="其他业务收入")
     fv_value_chg_gain: Decimal | None = Field(None, description="加:公允价值变动净收益")
     invest_income: Decimal | None = Field(None, description="加:投资净收益")
-    ass_invest_income: Decimal | None = Field(None, description="其中:对联营企业和合营企业的投资收益")
+    ass_invest_income: Decimal | None = Field(
+        None, description="其中:对联营企业和合营企业的投资收益"
+    )
     forex_gain: Decimal | None = Field(None, description="加:汇兑净收益")
     total_cogs: Decimal | None = Field(None, description="营业总成本")
     oper_cost: Decimal | None = Field(None, description="减:营业成本")
@@ -417,8 +423,12 @@ class FinancialDataCreate(FinancialDataBase):
     minority_gain: Decimal | None = Field(None, description="少数股东损益")
     oth_compr_income: Decimal | None = Field(None, description="其他综合收益")
     t_compr_income: Decimal | None = Field(None, description="综合收益总额")
-    compr_inc_attr_p: Decimal | None = Field(None, description="归属于母公司(或股东)的综合收益总额")
-    compr_inc_attr_m_s: Decimal | None = Field(None, description="归属于少数股东的综合收益总额")
+    compr_inc_attr_p: Decimal | None = Field(
+        None, description="归属于母公司(或股东)的综合收益总额"
+    )
+    compr_inc_attr_m_s: Decimal | None = Field(
+        None, description="归属于少数股东的综合收益总额"
+    )
 
 
 class FinancialDataUpdate(BaseSchema):
@@ -432,7 +442,9 @@ class FinancialDataUpdate(BaseSchema):
     total_revenue: Decimal | None = Field(None, description="营业总收入")
     revenue: Decimal | None = Field(None, description="营业收入")
     n_income: Decimal | None = Field(None, description="净利润")
-    n_income_attr_p: Decimal | None = Field(None, description="净利润(不含少数股东损益)")
+    n_income_attr_p: Decimal | None = Field(
+        None, description="净利润(不含少数股东损益)"
+    )
     total_profit: Decimal | None = Field(None, description="利润总额")
     operate_profit: Decimal | None = Field(None, description="营业利润")
     ebit: Decimal | None = Field(None, description="息税前利润")

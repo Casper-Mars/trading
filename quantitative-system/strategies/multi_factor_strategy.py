@@ -358,7 +358,9 @@ class MultiFactorStrategy(BaseStrategy):
             # 新闻热度 (30%) - 使用成交量变化作为代理
             if len(volumes) >= 5:
                 recent_volume = np.mean(volumes[-3:])
-                avg_volume = np.mean(volumes[:-3]) if len(volumes) > 3 else recent_volume
+                avg_volume = (
+                    np.mean(volumes[:-3]) if len(volumes) > 3 else recent_volume
+                )
                 volume_ratio = recent_volume / avg_volume if avg_volume > 0 else 1
                 heat_score = min(volume_ratio / 2, 1)  # 成交量放大2倍得满分
                 score += heat_score * 0.3
@@ -438,7 +440,9 @@ class MultiFactorStrategy(BaseStrategy):
             if len(closes) >= 20:
                 long_return = (closes[-1] - closes[-20]) / closes[-20]
                 short_return = (closes[-1] - closes[-5]) / closes[-5]
-                relative_strength = short_return - long_return * 0.25  # 短期相对长期的强度
+                relative_strength = (
+                    short_return - long_return * 0.25
+                )  # 短期相对长期的强度
                 rotation_score = min(max(relative_strength * 4 + 0.5, 0), 1)
                 score += rotation_score * 0.1
             else:
@@ -631,7 +635,9 @@ class MultiFactorStrategy(BaseStrategy):
 
     # ===== 从FactorService迁移的详细因子计算方法 =====
 
-    def _calculate_momentum_factor(self, closes: np.ndarray, volumes: np.ndarray) -> float:
+    def _calculate_momentum_factor(
+        self, closes: np.ndarray, volumes: np.ndarray
+    ) -> float:
         """计算动量因子"""
         try:
             score = 0.0
@@ -647,7 +653,9 @@ class MultiFactorStrategy(BaseStrategy):
             # 成交量动量 (40%)
             if len(volumes) >= 5:
                 recent_volume = np.mean(volumes[-3:])
-                avg_volume = np.mean(volumes[:-3]) if len(volumes) > 3 else recent_volume
+                avg_volume = (
+                    np.mean(volumes[:-3]) if len(volumes) > 3 else recent_volume
+                )
                 volume_ratio = recent_volume / avg_volume if avg_volume > 0 else 1
                 volume_score = min(volume_ratio / 3, 1)  # 成交量放大3倍得满分
                 score += volume_score * 0.4
@@ -678,7 +686,9 @@ class MultiFactorStrategy(BaseStrategy):
         except Exception:
             return 0.5
 
-    def _calculate_volatility_factor(self, closes: np.ndarray, volumes: np.ndarray) -> float:
+    def _calculate_volatility_factor(
+        self, closes: np.ndarray, volumes: np.ndarray
+    ) -> float:
         """计算波动率因子"""
         try:
             score = 0.0
@@ -705,7 +715,11 @@ class MultiFactorStrategy(BaseStrategy):
             return 0.5
 
     def _calculate_technical_indicators(
-        self, closes: np.ndarray, highs: np.ndarray, lows: np.ndarray, volumes: np.ndarray
+        self,
+        closes: np.ndarray,
+        highs: np.ndarray,
+        lows: np.ndarray,
+        volumes: np.ndarray,
     ) -> float:
         """计算技术指标因子"""
         try:

@@ -19,17 +19,19 @@ from utils.exceptions import TaskManagerError
 
 class JobStatus(Enum):
     """任务状态枚举"""
-    PENDING = "pending"      # 等待执行
-    RUNNING = "running"      # 正在执行
+
+    PENDING = "pending"  # 等待执行
+    RUNNING = "running"  # 正在执行
     COMPLETED = "completed"  # 执行完成
-    FAILED = "failed"        # 执行失败
+    FAILED = "failed"  # 执行失败
     CANCELLED = "cancelled"  # 已取消
-    PAUSED = "paused"        # 已暂停
+    PAUSED = "paused"  # 已暂停
 
 
 @dataclass
 class JobExecutionRecord:
     """任务执行记录"""
+
     job_id: str
     job_name: str
     status: JobStatus
@@ -52,6 +54,7 @@ class JobExecutionRecord:
 @dataclass
 class JobConfig:
     """任务配置"""
+
     job_id: str
     job_name: str
     job_func: Callable
@@ -103,29 +106,29 @@ class TaskManager:
             wrapped_func = self._wrap_job_function(config)
 
             # 根据触发器类型添加任务
-            if config.trigger_type == 'cron':
+            if config.trigger_type == "cron":
                 self.scheduler.add_job(
                     wrapped_func,
-                    'cron',
+                    "cron",
                     id=config.job_id,
                     name=config.job_name,
-                    **config.trigger_args
+                    **config.trigger_args,
                 )
-            elif config.trigger_type == 'interval':
+            elif config.trigger_type == "interval":
                 self.scheduler.add_job(
                     wrapped_func,
-                    'interval',
+                    "interval",
                     id=config.job_id,
                     name=config.job_name,
-                    **config.trigger_args
+                    **config.trigger_args,
                 )
-            elif config.trigger_type == 'date':
+            elif config.trigger_type == "date":
                 self.scheduler.add_job(
                     wrapped_func,
-                    'date',
+                    "date",
                     id=config.job_id,
                     name=config.job_name,
-                    **config.trigger_args
+                    **config.trigger_args,
                 )
             else:
                 raise TaskManagerError(f"不支持的触发器类型: {config.trigger_type}")
@@ -153,6 +156,7 @@ class TaskManager:
         Returns:
             包装后的任务函数
         """
+
         async def wrapped_function():
             job_id = config.job_id
             start_time = datetime.now()
@@ -163,7 +167,7 @@ class TaskManager:
                 job_name=config.job_name,
                 status=JobStatus.RUNNING,
                 start_time=start_time,
-                metadata=config.metadata.copy()
+                metadata=config.metadata.copy(),
             )
 
             # 记录正在运行的任务
@@ -344,23 +348,37 @@ class TaskManager:
         last_execution = recent_records[-1] if recent_records else None
 
         return {
-            'job_id': job_id,
-            'job_name': config.job_name,
-            'status': status.value if status else 'unknown',
-            'enabled': config.enabled,
-            'trigger_type': config.trigger_type,
-            'next_run_time': job.next_run_time.isoformat() if job and job.next_run_time else None,
-            'last_execution': {
-                'start_time': last_execution.start_time.isoformat() if last_execution else None,
-                'end_time': last_execution.end_time.isoformat() if last_execution and last_execution.end_time else None,
-                'status': last_execution.status.value if last_execution else None,
-                'duration': last_execution.duration if last_execution else None,
-                'error_message': last_execution.error_message if last_execution else None
-            } if last_execution else None,
-            'execution_count': len(recent_records),
-            'success_count': len([r for r in recent_records if r.status == JobStatus.COMPLETED]),
-            'failure_count': len([r for r in recent_records if r.status == JobStatus.FAILED]),
-            'metadata': config.metadata
+            "job_id": job_id,
+            "job_name": config.job_name,
+            "status": status.value if status else "unknown",
+            "enabled": config.enabled,
+            "trigger_type": config.trigger_type,
+            "next_run_time": job.next_run_time.isoformat()
+            if job and job.next_run_time
+            else None,
+            "last_execution": {
+                "start_time": last_execution.start_time.isoformat()
+                if last_execution
+                else None,
+                "end_time": last_execution.end_time.isoformat()
+                if last_execution and last_execution.end_time
+                else None,
+                "status": last_execution.status.value if last_execution else None,
+                "duration": last_execution.duration if last_execution else None,
+                "error_message": last_execution.error_message
+                if last_execution
+                else None,
+            }
+            if last_execution
+            else None,
+            "execution_count": len(recent_records),
+            "success_count": len(
+                [r for r in recent_records if r.status == JobStatus.COMPLETED]
+            ),
+            "failure_count": len(
+                [r for r in recent_records if r.status == JobStatus.FAILED]
+            ),
+            "metadata": config.metadata,
         }
 
     def list_jobs(self) -> list[dict[str, Any]]:
@@ -376,7 +394,9 @@ class TaskManager:
                 jobs.append(job_info)
         return jobs
 
-    def get_execution_history(self, job_id: str | None = None, limit: int = 100) -> list[JobExecutionRecord]:
+    def get_execution_history(
+        self, job_id: str | None = None, limit: int = 100
+    ) -> list[JobExecutionRecord]:
         """获取执行历史
 
         Args:
@@ -417,25 +437,32 @@ class TaskManager:
         # 最近24小时的执行统计
         now = datetime.now()
         recent_records = [
-            r for r in self.execution_records
+            r
+            for r in self.execution_records
             if r.start_time > now - timedelta(hours=24)
         ]
 
-        successful_executions = len([r for r in recent_records if r.status == JobStatus.COMPLETED])
-        failed_executions = len([r for r in recent_records if r.status == JobStatus.FAILED])
+        successful_executions = len(
+            [r for r in recent_records if r.status == JobStatus.COMPLETED]
+        )
+        failed_executions = len(
+            [r for r in recent_records if r.status == JobStatus.FAILED]
+        )
 
         return {
-            'total_jobs': total_jobs,
-            'enabled_jobs': enabled_jobs,
-            'disabled_jobs': total_jobs - enabled_jobs,
-            'running_jobs': running_jobs,
-            'recent_24h': {
-                'total_executions': len(recent_records),
-                'successful_executions': successful_executions,
-                'failed_executions': failed_executions,
-                'success_rate': successful_executions / len(recent_records) * 100 if recent_records else 0
+            "total_jobs": total_jobs,
+            "enabled_jobs": enabled_jobs,
+            "disabled_jobs": total_jobs - enabled_jobs,
+            "running_jobs": running_jobs,
+            "recent_24h": {
+                "total_executions": len(recent_records),
+                "successful_executions": successful_executions,
+                "failed_executions": failed_executions,
+                "success_rate": successful_executions / len(recent_records) * 100
+                if recent_records
+                else 0,
             },
-            'total_execution_records': len(self.execution_records)
+            "total_execution_records": len(self.execution_records),
         }
 
     async def trigger_job(self, job_id: str) -> bool:
