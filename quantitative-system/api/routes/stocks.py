@@ -116,10 +116,10 @@ async def get_stocks_basic(
 
         # 执行查询
         result = await query_service.query_stocks(
+            session=db,
             pagination=pagination,
+            filters=filter_params,
             sort_params=sort_params,
-            filter_params=filter_params,
-            extra_filters=extra_filters,
         )
 
         # 转换为响应模型
@@ -203,10 +203,11 @@ async def get_stocks_daily(
         query_service = QueryService(db)
 
         # 执行查询
-        result = await query_service.query_stock_daily_data(
+        result = await query_service.query_stock_daily(
+            session=db,
             pagination=pagination,
+            filters=filter_params,
             sort_params=sort_params,
-            filter_params=filter_params,
         )
 
         # 转换为响应模型
@@ -301,10 +302,10 @@ async def get_stocks_financial(
         # 执行财务数据查询（需要在QueryService中实现）
         # 这里暂时使用通用查询方法，实际应该实现专门的财务数据查询方法
         result = await query_service.query_stocks(
+            session=db,
             pagination=pagination,
+            filters=filter_params,
             sort_params=sort_params,
-            filter_params=filter_params,
-            extra_filters=extra_filters,
         )
 
         # 转换为响应模型
@@ -371,9 +372,10 @@ async def get_stock_basic(
 
         # 执行查询
         result = await query_service.query_stocks(
+            session=db,
             pagination=pagination,
+            filters=filter_params,
             sort_params=sort_params,
-            filter_params=filter_params,
         )
 
         if not result.items:
@@ -433,10 +435,11 @@ async def get_stock_latest_daily(
         query_service = QueryService(db)
 
         # 执行查询
-        result = await query_service.query_stock_daily_data(
+        result = await query_service.query_stock_daily(
+            session=db,
             pagination=pagination,
+            filters=filter_params,
             sort_params=sort_params,
-            filter_params=filter_params,
         )
 
         if not result.items:

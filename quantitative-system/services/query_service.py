@@ -63,6 +63,24 @@ class SortParams(BaseModel):
             "market_cap",
             "sentiment_score",
             "published_at",
+            # 股票相关字段
+            "ts_code",
+            "symbol",
+            "name",
+            "industry",
+            "market",
+            "list_date",
+            "list_status",
+            # 股票价格相关字段
+            "open",
+            "high",
+            "low",
+            "close",
+            "pre_close",
+            "change",
+            "pct_chg",
+            "vol",
+            "amount",
         }
         if v not in allowed_fields:
             raise ValueError(f"不支持的排序字段: {v}")
