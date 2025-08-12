@@ -98,6 +98,22 @@
 5. **REQ-5.5** WHEN 客户端请求情感分析数据时 THEN 系统 SHALL 支持按股票代码和时间范围查询
 6. **REQ-5.6** WHEN API请求参数错误时 THEN 系统 SHALL 返回明确的错误信息和状态码
 7. **REQ-5.7** WHEN API服务正常运行时 THEN 系统 SHALL 提供系统状态和数据同步状态查询接口
+
+### Requirement 6: 手动数据采集触发
+
+**User Story:** 作为系统管理员，我希望能够手动触发数据采集任务，以便我可以在需要时主动更新特定的数据。
+
+#### Acceptance Criteria
+
+1. **REQ-6.1** WHEN 管理员触发全量数据采集时 THEN 系统 SHALL 采集全A股的历史数据
+2. **REQ-6.2** WHEN 管理员触发增量数据采集时 THEN 系统 SHALL 采集指定日期的增量数据
+3. **REQ-6.3** WHEN 管理员指定股票代码时 THEN 系统 SHALL 仅采集指定股票的数据
+4. **REQ-6.4** WHEN 管理员指定日期范围时 THEN 系统 SHALL 采集该时间范围内的数据
+5. **REQ-6.5** WHEN 手动采集任务启动时 THEN 系统 SHALL 返回任务ID和初始状态
+6. **REQ-6.6** WHEN 采集任务执行中时 THEN 系统 SHALL 提供任务进度和状态查询接口
+7. **REQ-6.7** WHEN 采集任务完成时 THEN 系统 SHALL 更新任务状态并记录采集结果统计
+8. **REQ-6.8** IF 手动采集任务失败 THEN 系统 SHALL 记录失败原因并支持任务重试
+9. **REQ-6.9** WHEN 多个采集任务并发时 THEN 系统 SHALL 支持任务队列管理和优先级控制
 8. **REQ-5.8** IF 数据库查询超时 THEN 系统 SHALL 返回超时错误并记录日志
 9. **REQ-5.9** WHEN 查询大量数据时 THEN 系统 SHALL 支持分页查询功能
 

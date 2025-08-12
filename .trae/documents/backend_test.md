@@ -143,6 +143,143 @@
 - 返回状态码200
 - 统计数据包含各情感类型的数量和比例
 
+### 2.3 手动数据采集API接口测试
+
+#### DEV_API_COLLECTION_001: 全量数据采集触发
+
+**测试目标**: 验证手动触发全量数据采集接口的功能
+
+**接口信息**:
+- 路径: `POST /api/v1/collection/full`
+- 文件: `api/routes/collection.py`
+
+**测试步骤**:
+1. 发送POST请求: `POST /api/v1/collection/full`
+2. 检查响应中的task_id
+3. 验证任务状态: `GET /api/v1/collection/tasks/{task_id}`
+4. 监控任务执行进度
+5. 验证数据库中数据更新情况
+
+**预期结果**:
+- 返回状态码202 (Accepted)
+- 响应包含task_id和任务状态
+- 任务能够正常执行
+- 数据库中数据得到更新
+
+#### DEV_API_COLLECTION_002: 增量数据采集触发
+
+**测试目标**: 验证手动触发增量数据采集接口的功能
+
+**接口信息**:
+- 路径: `POST /api/v1/collection/incremental`
+- 文件: `api/routes/collection.py`
+
+**测试步骤**:
+1. 发送POST请求: `POST /api/v1/collection/incremental`
+2. 检查响应中的task_id
+3. 验证任务状态和进度
+4. 确认只采集最新数据
+
+**预期结果**:
+- 返回状态码202
+- 任务正常执行
+- 只更新增量数据
+
+#### DEV_API_COLLECTION_003: 指定股票数据采集
+
+**测试目标**: 验证指定股票代码的数据采集功能
+
+**接口信息**:
+- 路径: `POST /api/v1/collection/stocks`
+- 文件: `api/routes/collection.py`
+
+**测试步骤**:
+1. 准备请求体: `{"stock_codes": ["000001.SZ", "000002.SZ"]}`
+2. 发送POST请求
+3. 验证任务创建和执行
+4. 确认只采集指定股票数据
+
+**预期结果**:
+- 返回状态码202
+- 任务针对指定股票执行
+- 数据采集范围正确
+
+#### DEV_API_COLLECTION_004: 日期范围数据采集
+
+**测试目标**: 验证指定日期范围的数据采集功能
+
+**接口信息**:
+- 路径: `POST /api/v1/collection/range`
+- 文件: `api/routes/collection.py`
+
+**测试步骤**:
+1. 准备请求体: `{"start_date": "2024-01-01", "end_date": "2024-01-31"}`
+2. 发送POST请求
+3. 验证任务创建和执行
+4. 确认采集指定日期范围的数据
+
+**预期结果**:
+- 返回状态码202
+- 任务按日期范围执行
+- 数据时间范围正确
+
+#### DEV_API_COLLECTION_005: 采集任务状态查询
+
+**测试目标**: 验证采集任务状态查询功能
+
+**接口信息**:
+- 路径: `GET /api/v1/collection/tasks/{task_id}`
+- 文件: `api/routes/collection.py`
+
+**测试步骤**:
+1. 先创建一个采集任务获取task_id
+2. 查询任务状态: `GET /api/v1/collection/tasks/{task_id}`
+3. 验证状态信息的完整性
+4. 测试无效task_id的错误处理
+
+**预期结果**:
+- 有效task_id返回状态码200
+- 响应包含status, progress, created_at等字段
+- 无效task_id返回404错误
+
+#### DEV_API_COLLECTION_006: 采集任务列表查询
+
+**测试目标**: 验证采集任务列表查询功能
+
+**接口信息**:
+- 路径: `GET /api/v1/collection/tasks`
+- 文件: `api/routes/collection.py`
+
+**测试步骤**:
+1. 创建多个采集任务
+2. 查询任务列表: `GET /api/v1/collection/tasks?limit=10`
+3. 测试状态过滤: `GET /api/v1/collection/tasks?status=running`
+4. 测试分页功能
+
+**预期结果**:
+- 返回状态码200
+- 响应格式符合分页结构
+- 过滤和分页功能正常
+
+#### DEV_API_COLLECTION_007: 采集任务取消
+
+**测试目标**: 验证采集任务取消功能
+
+**接口信息**:
+- 路径: `DELETE /api/v1/collection/tasks/{task_id}`
+- 文件: `api/routes/collection.py`
+
+**测试步骤**:
+1. 创建一个长时间运行的采集任务
+2. 发送取消请求: `DELETE /api/v1/collection/tasks/{task_id}`
+3. 验证任务状态变为cancelled
+4. 确认任务实际停止执行
+
+**预期结果**:
+- 返回状态码200
+- 任务状态更新为cancelled
+- 任务实际停止执行
+
 ## 3. 数据处理自测用例
 
 ### 3.1 数据采集服务测试
@@ -221,7 +358,105 @@
 - 关键词提取合理
 - 股票关联逻辑正确
 
-### 3.3 数据质量服务测试
+### 3.3 手动数据采集服务测试
+
+#### DEV_DT_MANUAL_001: 手动全量采集服务
+
+**测试目标**: 验证手动触发全量数据采集的服务层逻辑
+
+**相关文件**: `services/collection_service.py`, `biz/data_collection_orchestrator.py`
+
+**测试步骤**:
+1. 调用手动全量采集: `collection_service.trigger_full_collection()`
+2. 验证任务创建: 检查任务记录是否正确创建
+3. 监控采集进度: 验证进度更新机制
+4. 检查数据完整性: 验证所有股票基础信息和历史数据
+5. 验证任务状态: 确认任务状态正确更新
+
+**预期结果**:
+- 任务成功创建并分配唯一ID
+- 采集进度实时更新
+- 数据库中数据完整更新
+- 任务状态正确流转(pending→running→completed)
+
+#### DEV_DT_MANUAL_002: 手动增量采集服务
+
+**测试目标**: 验证手动触发增量数据采集的服务层逻辑
+
+**相关文件**: `services/collection_service.py`
+
+**测试步骤**:
+1. 调用手动增量采集: `collection_service.trigger_incremental_collection()`
+2. 验证时间范围: 确认只采集最新数据
+3. 检查数据去重: 验证重复数据处理
+4. 监控采集效率: 验证增量采集的性能
+5. 验证数据一致性: 确认增量数据与存量数据一致
+
+**预期结果**:
+- 只采集指定时间范围的新数据
+- 重复数据被正确处理
+- 采集效率明显优于全量采集
+- 数据一致性得到保证
+
+#### DEV_DT_MANUAL_003: 指定股票采集服务
+
+**测试目标**: 验证指定股票代码的数据采集功能
+
+**相关文件**: `services/collection_service.py`
+
+**测试步骤**:
+1. 准备股票代码列表: `['000001.SZ', '000002.SZ', '600000.SH']`
+2. 调用指定采集: `collection_service.trigger_stocks_collection(stock_codes)`
+3. 验证采集范围: 确认只采集指定股票
+4. 检查数据完整性: 验证指定股票的所有相关数据
+5. 测试错误处理: 验证无效股票代码的处理
+
+**预期结果**:
+- 只采集指定股票的数据
+- 数据完整性符合要求
+- 无效股票代码被正确处理
+- 任务执行效率高
+
+#### DEV_DT_MANUAL_004: 日期范围采集服务
+
+**测试目标**: 验证指定日期范围的数据采集功能
+
+**相关文件**: `services/collection_service.py`
+
+**测试步骤**:
+1. 设定日期范围: `start_date='2024-01-01', end_date='2024-01-31'`
+2. 调用范围采集: `collection_service.trigger_range_collection(start_date, end_date)`
+3. 验证时间范围: 确认采集数据的时间范围正确
+4. 检查数据连续性: 验证日期范围内数据的连续性
+5. 测试边界条件: 验证开始和结束日期的处理
+
+**预期结果**:
+- 采集数据的时间范围准确
+- 数据连续性良好
+- 边界日期处理正确
+- 任务执行稳定
+
+#### DEV_DT_MANUAL_005: 采集任务管理服务
+
+**测试目标**: 验证采集任务的管理和状态跟踪功能
+
+**相关文件**: `services/task_service.py`, `repositories/task_repo.py`
+
+**测试步骤**:
+1. 创建多个采集任务: 测试并发任务管理
+2. 查询任务状态: `task_service.get_task_status(task_id)`
+3. 更新任务进度: `task_service.update_progress(task_id, progress)`
+4. 取消运行任务: `task_service.cancel_task(task_id)`
+5. 清理完成任务: 验证任务清理机制
+
+**预期结果**:
+- 支持多任务并发管理
+- 任务状态查询准确
+- 进度更新实时有效
+- 任务取消功能正常
+- 任务清理机制完善
+
+### 3.4 数据质量服务测试
 
 #### DEV_DT_QUALITY_001: 数据验证
 
@@ -241,7 +476,7 @@
 - 异常检测合理
 - 数据清洗正确
 
-### 3.4 查询服务测试
+### 3.5 查询服务测试
 
 #### DEV_DT_QUERY_001: 缓存机制
 
@@ -404,3 +639,36 @@ uv sync --reinstall
 - 符合FastAPI + SQLAlchemy + Redis技术栈
 - 支持FinBERT模型的NLP处理测试
 - 遵循Python开发最佳实践
+
+### [2024-12-19] v1.1 手动数据采集功能测试用例新增
+
+**新增内容**：
+1. **手动采集API接口测试**：新增7个API接口测试用例（DEV_API_COLLECTION_001-007）
+   - 全量数据采集触发测试
+   - 增量数据采集触发测试
+   - 指定股票数据采集测试
+   - 日期范围数据采集测试
+   - 采集任务状态查询测试
+   - 采集任务列表查询测试
+   - 采集任务取消测试
+
+2. **手动采集服务层测试**：新增5个数据处理测试用例（DEV_DT_MANUAL_001-005）
+   - 手动全量采集服务测试
+   - 手动增量采集服务测试
+   - 指定股票采集服务测试
+   - 日期范围采集服务测试
+   - 采集任务管理服务测试
+
+3. **测试结构优化**：重新组织测试用例结构，将数据质量测试调整为3.4节
+
+**测试覆盖增强**：
+- 新增手动数据采集API的完整接口测试
+- 增强了采集任务管理和状态跟踪的测试
+- 完善了服务层业务逻辑的验证测试
+- 加强了错误处理和异常情况的测试覆盖
+
+**开发自测支持**：
+- 提供具体的API测试步骤和curl命令
+- 包含服务层方法调用的测试指导
+- 支持快速验证手动采集功能的正确性
+- 确保开发阶段的质量保证

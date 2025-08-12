@@ -535,7 +535,43 @@ GET /api/v1/news/sentiment?symbol={symbol}&start_date={date}&end_date={date}
 Response: APIResponse[List[SentimentAnalysis]]
 ```
 
-#### 3.3.3 系统状态接口
+#### 3.3.3 手动数据采集接口
+
+```python
+# 触发全量数据采集
+POST /api/v1/collection/full
+Request: {"data_types": ["basic", "daily", "financial"], "force_update": false}
+Response: APIResponse[TaskInfo]
+
+# 触发增量数据采集
+POST /api/v1/collection/incremental
+Request: {"target_date": "2024-01-01", "data_types": ["daily"]}
+Response: APIResponse[TaskInfo]
+
+# 触发指定股票数据采集
+POST /api/v1/collection/stocks
+Request: {"symbols": ["000001.SZ", "000002.SZ"], "data_types": ["basic", "daily"], "start_date": "2024-01-01", "end_date": "2024-01-31"}
+Response: APIResponse[TaskInfo]
+
+# 触发日期范围数据采集
+POST /api/v1/collection/range
+Request: {"start_date": "2024-01-01", "end_date": "2024-01-31", "data_types": ["daily"], "symbols": []}
+Response: APIResponse[TaskInfo]
+
+# 获取采集任务状态
+GET /api/v1/collection/tasks/{task_id}
+Response: APIResponse[TaskStatus]
+
+# 获取采集任务列表
+GET /api/v1/collection/tasks?status={status}&limit={int}&offset={int}
+Response: APIResponse[List[TaskInfo]]
+
+# 取消采集任务
+DELETE /api/v1/collection/tasks/{task_id}
+Response: APIResponse[TaskInfo]
+```
+
+#### 3.3.4 系统状态接口
 
 ```python
 # 获取系统状态
