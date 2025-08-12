@@ -199,9 +199,7 @@ class FinBERTClient:
             logger.error(f"情感预测失败: {e}")
             return None
 
-    def batch_predict(
-        self, texts: list[str]
-    ) -> list[dict[str, str | float] | None]:
+    def batch_predict(self, texts: list[str]) -> list[dict[str, str | float] | None]:
         """批量预测文本情感
 
         Args:

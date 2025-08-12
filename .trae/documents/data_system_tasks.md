@@ -121,7 +121,7 @@
   - 集成到数据采集编排器的新闻采集流程中
   - _Requirements: REQ-2.1, REQ-2.5, REQ-2.6_
 
-- [ ] 12. FinBERT模型和文本处理器集成
+- [x] 12. FinBERT模型和文本处理器集成
   - 调研和选择合适的FinBERT开源模型实现（本地部署）
   - 实现FinBERT客户端 (clients/finbert_client.py)
   - 实现文本预处理器 (utils/text_processor.py)
@@ -130,7 +130,7 @@
   - 优化模型推理性能（批处理、模型量化等）
   - _Requirements: REQ-3.1, REQ-3.6_
 
-- [ ] 13. 统一NLP处理服务实现
+- [x] 13. 统一NLP处理服务实现
   - 实现统一的NLP处理服务 (services/nlp_service.py)
   - 按照时序图实现：获取待处理新闻→文本预处理→FinBERT情感分析→存储结果
   - 实现新闻文本清洗和去重功能
@@ -140,7 +140,7 @@
   - 创建新闻数据仓库 (repositories/news_repo.py)
   - _Requirements: REQ-2.2, REQ-2.3, REQ-2.4, REQ-3.1, REQ-3.2, REQ-3.3_
 
-- [ ] 14. NLP处理编排器实现
+- [x] 14. NLP处理编排器实现
   - 实现NLP处理业务编排器 (biz/nlp_processing_orchestrator.py)
   - 按照时序图协调：定时调度器→NLP服务→文本处理器→FinBERT模型→数据库存储
   - 实现批量处理和循环处理逻辑（loop处理每条新闻）
